@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "party-pos"
+version = "0.1.0"
+description = "Lightweight POS for parties/events"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "flask>=2.3.0",
+    "pywebview>=4.0.0",
+    "flask-cors>=4.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

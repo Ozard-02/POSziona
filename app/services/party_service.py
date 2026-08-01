@@ -1,0 +1,296 @@
+"""
+Party service for Party POS.
+Handles party creation from templates, settings, and party lifecycle.
+"""
+
+import os
+import sqlite3
+import shutil
+from datetime import datetime
+
+from app.database.connection import PartyDatabase, TEMPLATES_DB
+from app.database import templates_db
+from app.utils.config import PARTY_DB_DIR
+from app.utils.logger import get_logger
+
+logger = get_logger('services.parties')
+
+
+# ============================================================
+# PARTY CRUD
+# ============================================================
+
+def create_party_from_template(party_name, template_id, start_date=None, end_date=None):
+    """
+    Create a new party database from a template.
+    Copies template's products, sections, subsections, tags, and settings.
+    Returns the party DB name.
+    """
+    # Get template data
+    template = templates_db.get_template(template_id)
+    if not template:
+        raise ValueError(f"Template id={template_id} not found")
+
+    template_products = templates_db.get_template_products(template_id)
+    template_settings = templates_db.get_template_settings(template_id)
+    template_tags = templates_db.get_template_tags(template_id)
+    template_product_tag_names = templates_db.get_template_product_tag_names(template_id)
+    # Determine DB filename from party name
+    safe_name = "".join(c for c in party_name if c.isalnum() or c in (' ', '-', '_'))
+    db_name = f"{safe_name}"
+
+    # Create party DB using PartyDatabase context manager
+    from app.database.schema import get_party_schema
+
+    db_path = os.path.join(PARTY_DB_DIR, f"{db_name}.db")
+
+    # Remove existing DB if it exists (fresh creation from template)
+    if os.path.exists(db_path):
+        os.remove(db_path)
+        for ext in ['-wal', '-shm']:
+            ext_path = db_path + ext
+            if os.path.exists(ext_path):
+                os.remove(ext_path)
+
+    with sqlite3.connect(db_path) as conn:
+        # Apply schema
+        conn.executescript(get_party_schema())
+        conn.execute('PRAGMA journal_mode=WAL')
+
+        # Copy sections and subsections
+        section_map = {}  # template_section_id -> new_section_id
+        subsection_map = {}  # template_subsection_id -> new_subsection_id
+
+        # Collect unique sections from template products
+        sections_seen = {}
+        for product in template_products:
+            sec_name = product['section']
+            if sec_name and sec_name not in sections_seen:
+                cur = conn.execute(
+                    "INSERT INTO sections (name) VALUES (?)", (sec_name,)
+                )
+                sections_seen[sec_name] = cur.lastrowid
+
+        # Collect unique subsections
+        sub_seen = {}
+        for product in template_products:
+            sub_name = product['subsection']
+            sec_name = product['section']
+            sec_id = sections_seen.get(sec_name)
+            key = (sec_name, sub_name)
+            if key not in sub_seen:
+                cur = conn.execute(
+                    "INSERT INTO subsections (name, section_id) VALUES (?, ?)",
+                    (sub_name, sec_id)
+                )
+                sub_seen[key] = cur.lastrowid
+
+        # Copy template tags to party tags
+        template_tag_id_map = {}  # template_tag_id -> party_tag_id
+        for ttag in template_tags:
+            cur = conn.execute(
+                "INSERT INTO tags (name, color, bg_color, text_color) VALUES (?, ?, ?, ?)",
+                (ttag['name'], ttag['color'], ttag['bg_color'], ttag['text_color'])
+            )
+            template_tag_id_map[ttag['id']] = cur.lastrowid
+
+        # Insert products and track their new IDs
+        template_product_id_map = {}  # template_product_id -> party_product_id
+        for product in template_products:
+            sec_id = sections_seen.get(product['section'])
+            sub_id = sub_seen.get((product['section'], product['subsection']))
+            cur = conn.execute(
+                """INSERT INTO products (name, price, sku, section_id, subsection_id, stock_count)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (product['name'], product['price'], product['sku'],
+                 sec_id, sub_id, product['stock_count'])
+            )
+            template_product_id_map[product['template_product_id']] = cur.lastrowid
+
+        # Link products to their tags (resolved via tag name)
+        # Build a name -> party_tag_id map
+        tag_name_to_party_id = {}
+        for ttag in template_tags:
+            tag_name_to_party_id[ttag['name']] = template_tag_id_map[ttag['id']]
+
+        for tpl_product_id, tag_names in template_product_tag_names.items():
+            party_product_id = template_product_id_map.get(tpl_product_id)
+            if party_product_id is None:
+                continue
+            for tag_name in tag_names:
+                party_tag_id = tag_name_to_party_id.get(tag_name)
+                if party_tag_id:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO product_tags (product_id, tag_id) VALUES (?, ?)",
+                        (party_product_id, party_tag_id)
+                    )
+
+        # Copy settings
+        for key, value in template_settings.items():
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                (key, value)
+            )
+
+        # Set party metadata
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?)",
+            ('party_name', party_name)
+        )
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?)",
+            ('start_date', start_date or datetime.now().strftime('%Y-%m-%d'))
+        )
+        if end_date:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                ('end_date', end_date)
+            )
+
+        conn.commit()
+
+    logger.info(f"Created party '{party_name}' from template id={template_id}")
+    return db_name
+
+
+def get_party_settings(db_name):
+    """Get all settings for a party."""
+    with PartyDatabase(db_name) as conn:
+        rows = conn.execute("SELECT key, value FROM settings").fetchall()
+        return {row[0]: row[1] for row in rows}
+
+
+def update_party_setting(db_name, key, value):
+    """Update a party setting."""
+    with PartyDatabase(db_name) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+            (key, value)
+        )
+        conn.commit()
+
+
+def list_parties():
+    """List all party database files."""
+    if not os.path.exists(PARTY_DB_DIR):
+        return []
+
+    parties = []
+    for filename in os.listdir(PARTY_DB_DIR):
+        if filename.endswith('.db'):
+            party_name = filename[:-3]
+            filepath = os.path.join(PARTY_DB_DIR, filename)
+            stats = os.stat(filepath)
+            parties.append({
+                'name': party_name,
+                'modified': datetime.fromtimestamp(stats.st_mtime).isoformat(),
+                'size': stats.st_size
+            })
+    return parties
+
+
+def delete_party(db_name):
+    """Delete a party database and its associated files."""
+    db_path = os.path.join(PARTY_DB_DIR, f"{db_name}.db")
+
+    if os.path.exists(db_path):
+        os.remove(db_path)
+        # Remove WAL and SHM files if they exist
+        for ext in ['-wal', '-shm']:
+            path = db_path + ext
+            if os.path.exists(path):
+                os.remove(path)
+        logger.info(f"Deleted party '{db_name}'")
+
+
+def create_empty_party(party_name, start_date=None, end_date=None):
+    """
+    Create a new empty party database (no template required).
+    Returns the party DB name.
+    """
+    safe_name = "".join(c for c in party_name if c.isalnum() or c in (' ', '-', '_'))
+    db_name = f"{safe_name}"
+
+    db_path = os.path.join(PARTY_DB_DIR, f"{db_name}.db")
+
+    # Remove existing DB if it exists
+    if os.path.exists(db_path):
+        os.remove(db_path)
+        for ext in ['-wal', '-shm']:
+            ext_path = db_path + ext
+            if os.path.exists(ext_path):
+                os.remove(ext_path)
+
+    with sqlite3.connect(db_path) as conn:
+        from app.database.schema import get_party_schema
+        conn.executescript(get_party_schema())
+        conn.execute('PRAGMA journal_mode=WAL')
+        conn.commit()
+
+    # Initialize default operators and seed products
+    from app.database.connection import init_default_operators
+    init_default_operators(db_name)
+
+    # Set party metadata
+    with PartyDatabase(db_name) as conn:
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?)",
+            ('party_name', party_name)
+        )
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?)",
+            ('start_date', start_date or datetime.now().strftime('%Y-%m-%d'))
+        )
+        if end_date:
+            conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?)",
+                ('end_date', end_date)
+            )
+        conn.commit()
+
+    logger.info(f"Created empty party '{party_name}' (db={db_name})")
+    return db_name
+
+
+def duplicate_party(original_name, new_name):
+    """
+    Duplicate an existing party by copying its database file.
+    (Note: templates are preferred for new parties, but this is useful
+    for copying a party that has already accumulated some data.)
+    """
+    # Sanitize new_name to match _get_party_db_path behavior
+    safe_name = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_'))
+    src_path = os.path.join(PARTY_DB_DIR, f"{safe_name}.db" if original_name.endswith('.db') 
+                            else f"{original_name}.db")
+    dst_path = os.path.join(PARTY_DB_DIR, f"{safe_name}.db")
+
+    if not os.path.exists(src_path):
+        raise FileNotFoundError(f"Party '{original_name}' not found")
+
+    # Remove destination if it already exists (fresh copy)
+    if os.path.exists(dst_path):
+        for ext in ['', '-wal', '-shm']:
+            p = dst_path + ext
+            if os.path.exists(p):
+                os.remove(p)
+
+    shutil.copy2(src_path, dst_path)
+
+    # Copy WAL/SHM files if they exist
+    for ext in ['-wal', '-shm']:
+        src = src_path + ext
+        dst = dst_path + ext
+        if os.path.exists(src):
+            shutil.copy2(src, dst)
+
+    # Update party name in settings using the correct DB name
+    db_name_for_path = safe_name.replace('.db', '') if safe_name.endswith('.db') else safe_name
+    with PartyDatabase(db_name_for_path) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+            ('party_name', new_name)
+        )
+        conn.commit()
+
+    logger.info(f"Duplicated party '{original_name}' to '{safe_name}'")
+    return safe_name

@@ -1,0 +1,662 @@
+/* Party POS Styles */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f5f5f5;
+    color: #333;
+    overflow: hidden;
+}
+
+/* ===== POS Layout ===== */
+.pos-layout {
+    display: flex;
+    height: 100vh;
+}
+
+/* ===== Left Sidebar: Sections ===== */
+.sidebar-left {
+    width: 220px;
+    background: #2c3e50;
+    color: white;
+    padding: 10px;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.party-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.party-header h2 {
+    font-size: 20px;
+}
+
+.btn-sm {
+    padding: 5px 10px;
+    font-size: 12px;
+}
+
+.sections-tree .section h3 {
+    font-size: 16px;
+    margin: 10px 0 5px 0;
+    cursor: pointer;
+}
+
+.subsection {
+    padding: 8px 10px;
+    margin: 2px 0;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.subsection:hover {
+    background: #34495f;
+}
+
+.subsection.active {
+    background: #3498db;
+}
+
+/* ===== Main Content: Products ===== */
+.main-content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+}
+
+.product-btn {
+    padding: 20px;
+    font-size: 16px;
+    text-align: center;
+    border: 1px solid #ddd;
+    background: white;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s;
+    min-height: 80px;
+    position: relative;
+}
+
+.product-btn:hover {
+    background: #e8f4f8;
+    transform: translateY(-2px);
+}
+
+/* Tag-styled product buttons override default background */
+.product-btn[data-tag-styled] {
+    border-color: #ccc;
+}
+
+/* Product name and price layout with tags */
+.product-name {
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.product-price {
+    font-size: 14px;
+    color: #555;
+}
+
+/* Tag badge on product buttons */
+.product-tags {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    display: flex;
+    gap: 2px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.tag-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+    color: white;
+    white-space: nowrap;
+}
+
+/* ===== Right Sidebar: Cart ===== */
+.sidebar-right {
+    width: 300px;
+    background: #ecf0f1;
+    padding: 20px;
+    flex-shrink: 0;
+}
+
+.order-summary h3 {
+    margin-bottom: 15px;
+    color: #2c3e50;
+}
+
+.cart-items {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 15px;
+}
+
+.cart-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #ddd;
+    font-size: 14px;
+}
+
+.cart-totals {
+    margin-bottom: 15px;
+}
+
+.total-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+}
+
+.total-row.grand-total {
+    font-size: 20px;
+    font-weight: bold;
+    border-top: 2px solid #333;
+    margin-top: 5px;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-primary, .btn-secondary {
+    padding: 10px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    flex: 1;
+}
+
+.btn-primary {
+    background: #27ae60;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #219a52;
+}
+
+.btn-secondary {
+    background: #e74c3c;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #c0392b;
+}
+
+.btn-large {
+    padding: 15px;
+    font-size: 18px;
+}
+
+/* ===== Modals ===== */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-content {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    min-width: 300px;
+    max-width: 500px;
+}
+
+.modal-content h3 {
+    margin-bottom: 15px;
+    color: #2c3e50;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+/* ===== Login Screen ===== */
+.login-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background: #2c3e50;
+    color: white;
+}
+
+.login-screen h1 {
+    font-size: 32px;
+    margin-bottom: 30px;
+}
+
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 300px;
+}
+
+.login-form input {
+    padding: 10px;
+    font-size: 16px;
+    border: none;
+    border-radius: 5px;
+    text-align: center;
+}
+
+.btn-primary, .btn-secondary {
+    padding: 10px 15px;
+    font-size: 16px;
+}
+
+/* ===== Admin Panel ===== */
+.admin-layout {
+    display: flex;
+    height: 100vh;
+}
+
+.admin-sidebar {
+    width: 220px;
+    background: #2c3e50;
+    color: white;
+    padding: 15px;
+}
+
+.admin-sidebar h2 {
+    font-size: 20px;
+    margin-bottom: 20px;
+}
+
+.admin-nav ul {
+    list-style: none;
+}
+
+.admin-nav li {
+    margin-bottom: 8px;
+}
+
+.admin-nav a {
+    color: #ecf0f1;
+    text-decoration: none;
+    padding: 8px;
+    display: block;
+    border-radius: 3px;
+}
+
+.admin-nav a:hover {
+    background: #34495f;
+}
+
+.admin-content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.admin-section {
+    display: none;
+}
+
+.admin-section.active {
+    display: block;
+}
+
+.stat-card {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.stat-label {
+    display: block;
+    font-size: 14px;
+    color: #7f8c8d;
+}
+
+.stat-value {
+    display: block;
+    font-size: 24px;
+    font-weight: bold;
+    color: #2c3e50;
+}
+
+.dashboard-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.data-table th, .data-table td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+.data-table th {
+    background: #bdc3c7;
+    font-weight: bold;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.form-group input, .form-group select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 14px;
+}
+
+.payment-option {
+    margin: 10px 0;
+}
+
+.payment-option button {
+    width: 100%;
+    padding: 15px;
+    font-size: 16px;
+}
+
+/* ===== Receipt ===== */
+.receipt {
+    background: #fff;
+    padding: 15px;
+    font-family: 'Courier New', monospace;
+    white-space: pre;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+/* ===== Payment Tabs ===== */
+.payment-tabs {
+    margin-top: 15px;
+}
+
+.payment-tab-nav {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+.tab-btn {
+    padding: 8px 15px;
+    font-size: 14px;
+    border: 1px solid #ddd;
+    background: #f8f9fa;
+    cursor: pointer;
+    border-radius: 5px 5px 0 0;
+    border-bottom: none;
+    transition: all 0.2s;
+}
+
+.tab-btn.active {
+    background: #2c3e50;
+    color: white;
+    border-bottom: 2px solid transparent;
+}
+
+.tab-btn:hover:not(.active) {
+    background: #e9ecef;
+}
+
+.payment-tab-content {
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-top: none;
+    border-radius: 0 5px 5px 5px;
+}
+
+.tender-amount {
+    margin: 15px 0;
+}
+
+.tender-amount input {
+    width: 100%;
+    padding: 12px;
+    font-size: 24px;
+    text-align: right;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    margin: 10px 0 5px 0;
+}
+
+/* ===== Cart Item Controls ===== */
+.cart-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #ddd;
+    font-size: 14px;
+}
+
+.item-info {
+    flex: 1;
+}
+
+.item-name {
+    display: block;
+    font-weight: bold;
+    color: #2c3e50;
+}
+
+.item-price {
+    display: block;
+    font-size: 12px;
+    color: #7f8d8d;
+}
+
+.item-controls {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.qty-btn {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    font-size: 16px;
+    font-weight: bold;
+    border: 1px solid #bdc3c7;
+    background: #ecf0f1;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.qty-btn:hover {
+    background: #d5dbdb;
+}
+
+.remove-btn {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    font-size: 14px;
+    font-weight: bold;
+    border: 1px solid #e74c3c;
+    background: #fff;
+    color: #e74c3c;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.remove-btn:hover {
+    background: #e74c3c;
+    color: white;
+}
+
+.item-total {
+    font-weight: bold;
+    margin-left: 5px;
+}
+
+.checkout-totals {
+    margin: 10px 0;
+}
+
+.discount-modal {
+    background: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    min-width: 300px;
+    max-width: 400px;
+}
+
+.discount-modal .form-group {
+    margin-bottom: 15px;
+}
+
+.discount-modal .discount-type {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.discount-modal .discount-type label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: normal;
+    cursor: pointer;
+}
+
+/* ===== Tag Management ===== */
+.tag-form {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.tag-form input[type="text"],
+.tag-form input[type="color"] {
+    padding: 8px;
+    font-size: 14px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+.tag-form input[type="color"] {
+    width: 40px;
+    padding: 0;
+    cursor: pointer;
+}
+
+.tag-form button {
+    padding: 8px 15px;
+    font-size: 14px;
+}
+
+.tag-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tag-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+.tag-item .tag-color-preview {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    border: 1px solid #ccc;
+}
+
+.tag-item .tag-name {
+    flex: 1;
+    font-weight: bold;
+}
+
+.tag-item .tag-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.tag-item .tag-actions button {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+/* Product-tag assignment in admin */
+.product-tag-form {
+    margin-bottom: 15px;
+}
+
+.product-tag-form select {
+    padding: 5px;
+    font-size: 14px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+}

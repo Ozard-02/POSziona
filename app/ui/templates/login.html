@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Party POS - Login{% endblock %}
+
+{% block content %}
+<div class="login-screen">
+    <h1>Party POS</h1>
+    <div class="login-form">
+        <input type="text" id="operator-name" placeholder="Operator Name" autocomplete="off">
+        <input type="password" id="pin-input" placeholder="PIN" maxlength="4" autocomplete="off">
+        <button id="login-btn" class="btn-primary">Login</button>
+        <button id="admin-login-btn" class="btn-secondary">Admin Login</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const pinInput = document.getElementById('pin-input');
+    const loginBtn = document.getElementById('login-btn');
+    const adminBtn = document.getElementById('admin-login-btn');
+
+    // Auto-focus PIN input
+    pinInput.focus();
+
+    function attemptLogin(isAdmin) {
+        const pin = pinInput.value.trim();
+        if (!pin || pin.length < 4) return;
+
+        fetch(`/api/auth/login${isAdmin ? '/admin' : ''}?db=default`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({pin: pin})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                alert(data.error);
+                pinInput.value = '';
+                pinInput.focus();
+            } else {
+                window.location.href = '/pos';
+            }
+        });
+    }
+
+    loginBtn.addEventListener('click', () => attemptLogin(false));
+    adminBtn.addEventListener('click', () => attemptLogin(true));
+    pinInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') attemptLogin(false);
+    });
+});
+</script>
+{% endblock %}

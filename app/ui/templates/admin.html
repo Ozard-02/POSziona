@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Party POS - Admin{% endblock %}
+
+{% block content %}
+<div class="admin-layout">
+    <div class="admin-sidebar">
+        <h2>Admin Panel</h2>
+        <ul class="admin-nav">
+            <li><a href="#" data-section="dashboard">Dashboard</a></li>
+            <li><a href="#" data-section="products">Products</a></li>
+            <li><a href="#" data-section="parties">Parties & Templates</a></li>
+            <li><a href="#" data-section="operators">Operators</a></li>
+            <li><a href="#" data-section="settings">Settings</a></li>
+            <li><a href="#" data-section="tags">Tags</a></li>
+            <li><button id="logout-admin" class="btn-secondary btn-sm">Logout</button></li>
+        </ul>
+    </div>
+    <div class="admin-content">
+        <!-- Dashboard -->
+        <div id="admin-dashboard" class="admin-section active">
+            <h3>Sales Dashboard</h3>
+            <div class="dashboard-stats">
+                <div class="stat-card">
+                    <span class="stat-label">Total Revenue</span>
+                    <span class="stat-value" id="stat-revenue">€0.00</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Total Orders</span>
+                    <span class="stat-value" id="stat-orders">0</span>
+                </div>
+            </div>
+            <h4>Items Sold</h4>
+            <table class="data-table" id="items-sold-table">
+                <thead><tr><th>Product</th><th>Qty</th><th>Amount</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- Products -->
+        <div id="admin-products" class="admin-section">
+            <h3>Products
+                <button id="add-product-btn" class="btn-primary btn-sm" style="float:right; margin-top:-5px;">Add Product</button>
+                <button id="import-csv-btn" class="btn-secondary btn-sm" style="float:right; margin-top:-5px; margin-right:5px;">Import CSV</button>
+                <button id="export-csv-btn" class="btn-secondary btn-sm" style="float:right; margin-top:-5px; margin-right:5px;">Export CSV</button>
+            </h3>
+            <table class="data-table" id="products-table">
+                <thead><tr><th>Name</th><th>Price</th><th>Section > Subsection</th><th>Stock</th><th>Actions</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- Parties -->
+        <div id="admin-parties" class="admin-section">
+            <h3>Parties & Templates</h3>
+            <button id="create-party-btn" class="btn-primary btn-sm">New Party</button>
+            <table class="data-table" id="parties-table">
+                <thead><tr><th>Name</th><th>Dates</th><th>Actions</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- Operators -->
+        <div id="admin-operators" class="admin-section">
+            <h3>Operators</h3>
+            <button id="add-operator-btn" class="btn-primary btn-sm">Add Operator</button>
+            <table class="data-table" id="operators-table">
+                <thead><tr><th>Name</th><th>Role</th><th>PIN</th><th>Actions</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- Settings -->
+        <div id="admin-settings" class="admin-section">
+            <h3>Settings</h3>
+            <form id="settings-form">
+                <div class="form-group">
+                    <label>Currency:</label>
+                    <input type="text" name="currency" value="€">
+                </div>
+                <div class="form-group">
+                    <label>Default Payment Method:</label>
+                    <select name="default_payment_method">
+                        <option value="">None (always ask)</option>
+                        <option value="cash">Cash</option>
+                        <option value="card">Card</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Snapshot Interval (minutes):</label>
+                    <input type="number" name="snapshot_interval_minutes" value="5">
+                </div>
+                <button type="submit" class="btn-primary">Save Settings</button>
+            </form>
+        </div>
+
+        <!-- Tags -->
+        <div id="admin-tags" class="admin-section">
+            <h3>Tags &amp; Styling Rules</h3>
+            <p style="font-size:14px; color:#7f8c8d; margin-bottom:15px;">
+              Tags are assigned to products. Each tag can have a background color
+              and text color that will be applied to products carrying that tag.
+            </p>
+
+            <!-- Create New Tag -->
+            <div class="tag-form">
+                <input type="text" id="new-tag-name" placeholder="Tag name (e.g. Hot, Alcohol, etc.)">
+                <input type="color" id="new-tag-color" value="#3498db">
+                <input type="color" id="new-tag-bg-color" value="#ffffff">
+                <input type="color" id="new-tag-text-color" value="#333333">
+                <button id="create-tag-btn" class="btn-primary">Create Tag</button>
+            </div>
+
+            <!-- Tag List -->
+            <div class="tag-list" id="tag-list">
+                <!-- Tags will be populated here -->
+            </div>
+
+            <!-- Assign Tags to Products -->
+            <h4 style="margin-top:20px; margin-bottom:10px;">Assign Tags to Products</h4>
+            <div class="form-group">
+                <label for="product-select">Product:</label>
+                <select id="product-select">
+                    <option value="">-- Select a product --</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="tag-select">Add Tag:</label>
+                <select id="tag-select">
+                    <option value="">-- Select a tag --</option>
+                </select>
+                <button id="assign-tag-btn" class="btn-primary btn-sm">Assign</button>
+            </div>
+            <div id="product-tags-display" style="margin-top:10px;">
+                <!-- Current tags for selected product -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+<script src="/static/js/admin.js"></script>
+{% endblock %}
