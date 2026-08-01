@@ -37,7 +37,17 @@ function fetchJSON(url, options = {}) {
             ...options.headers
         }
     };
-    return fetch(url, config).then(r => r.json());
+    return fetch(url, config).then(r => {
+        if (!r.ok) {
+            return r.json().then(data => {
+                const err = new Error(data.error || `HTTP ${r.status}`);
+                err.status = r.status;
+                err.data = data;
+                throw err;
+            });
+        }
+        return r.json();
+    });
 }
 
 // Load app settings on startup
