@@ -26,25 +26,27 @@
     <div class="sidebar-right">
         <div class="order-summary">
             <h3>Current Order</h3>
-            <div class="cart-items" id="cart-items"></div>
-            <div class="cart-totals">
-                <div class="total-row">
-                    <span>Subtotal:</span>
-                    <span id="cart-subtotal">€0.00</span>
+            <div class="cart-scroll">
+                <div class="cart-items" id="cart-items"></div>
+                <div class="cart-totals">
+                    <div class="total-row">
+                        <span>Subtotal:</span>
+                        <span id="cart-subtotal">€0.00</span>
+                    </div>
+                    <div class="total-row" id="discount-row" style="display:none;">
+                        <span>Discount:</span>
+                        <span id="cart-discount">-€0.00</span>
+                    </div>
+                    <div class="total-row grand-total">
+                        <span>Total:</span>
+                        <span id="cart-total">€0.00</span>
+                    </div>
                 </div>
-                <div class="total-row" id="discount-row" style="display:none;">
-                    <span>Discount:</span>
-                    <span id="cart-discount">-€0.00</span>
+                <div class="action-buttons">
+                    <button id="checkout-btn" class="btn-primary btn-large">Checkout</button>
+                    <button id="discount-btn" class="btn-secondary">Discount</button>
+                    <button id="clear-btn" class="btn-secondary">Clear</button>
                 </div>
-                <div class="total-row grand-total">
-                    <span>Total:</span>
-                    <span id="cart-total">€0.00</span>
-                </div>
-            </div>
-            <div class="action-buttons">
-                <button id="checkout-btn" class="btn-primary btn-large">Checkout</button>
-                <button id="discount-btn" class="btn-secondary">Discount</button>
-                <button id="clear-btn" class="btn-secondary">Clear</button>
             </div>
             <div class="nav-buttons">
                 <button id="dashboard-btn" class="btn-sm btn-secondary">Reports</button>
