@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Party POS - Reports{% endblock %}
+
+{% block content %}
+<div class="pos-layout">
+    <!-- Left Sidebar -->
+    <div class="sidebar-left">
+        <div class="party-header">
+            <h2>Reports</h2>
+            <div class="header-actions">
+                <button id="back-to-pos" class="btn-sm btn-secondary">← Back</button>
+                <button id="print-receipt-btn" class="btn-sm btn-secondary">Print</button>
+            </div>
+        </div>
+        <div class="sections-tree">
+            <div class="report-filters">
+                <div class="form-group">
+                    <label for="report-type">Report Type:</label>
+                    <select id="report-type">
+                        <option value="day">Today</option>
+                        <option value="party">Whole Party</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="report-date">Date (for Today):</label>
+                    <input type="date" id="report-date">
+                </div>
+                <button id="generate-report" class="btn-primary btn-sm btn-block">Generate Report</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content: Report Output -->
+    <div class="main-content">
+        <div id="report-content">
+            <div id="report-summary"></div>
+            <div id="report-tables"></div>
+        </div>
+    </div>
+
+    <!-- Right Sidebar: Summary stats -->
+    <div class="sidebar-right">
+        <div class="order-summary">
+            <h3>Report Summary</h3>
+            <div class="cart-totals" id="report-totals">
+                <div class="total-row">
+                    <span>Total Revenue:</span>
+                    <span id="report-revenue">€0.00</span>
+                </div>
+                <div class="total-row">
+                    <span>Total Orders:</span>
+                    <span id="report-orders">0</span>
+                </div>
+                <div class="total-row">
+                    <span>Total Discounts:</span>
+                    <span id="report-discounts">€0.00</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Receipt Print Modal -->
+<div id="print-receipt-modal" class="modal hidden">
+    <div class="modal-content">
+        <h3>Print Summary Report</h3>
+        <pre id="print-receipt-content" class="receipt"></pre>
+        <div class="modal-buttons">
+            <button id="print-now-btn" class="btn-primary">Print</button>
+            <button id="close-print-modal" class="btn-secondary">Close</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+<script src="/static/js/dashboard.js"></script>
+{% endblock %}

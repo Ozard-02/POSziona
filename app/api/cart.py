@@ -5,7 +5,6 @@ Manages the in-progress cart (session-based, not persisted to DB until checkout)
 
 from flask import Blueprint, request, jsonify, session
 from app.services.product_service import get_product_by_id
-from app.services.settings_service import get_effective_settings
 from app.utils.logger import get_logger
 
 logger = get_logger('api.cart')
@@ -29,8 +28,16 @@ def add_to_cart():
     """Add a product to the cart."""
     db = request.args.get('db', 'default')
     data = request.get_json()
+    if data is None:
+        return jsonify({'error': 'Request body is required'}), 400
     product_id = data.get('product_id')
-    quantity = int(data.get('quantity', 1))
+    quantity_raw = data.get('quantity', 1)
+    try:
+        quantity = int(quantity_raw)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Quantity must be a valid integer'}), 400
+    if quantity < 1:
+        return jsonify({'error': 'Quantity must be at least 1'}), 400
 
     if not product_id:
         return jsonify({'error': 'product_id is required'}), 400
@@ -88,9 +95,14 @@ def remove_from_cart():
 def update_quantity():
     """Update quantity of an item in the cart."""
     data = request.get_json()
+    if data is None:
+        return jsonify({'error': 'Request body is required'}), 400
     product_id = data.get('product_id')
-    quantity = int(data.get('quantity', 1))
-
+    quantity_raw = data.get('quantity', 1)
+    try:
+        quantity = int(quantity_raw)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Quantity must be a valid integer'}), 400
     if quantity < 1:
         quantity = 1
 
@@ -116,16 +128,23 @@ def clear_cart():
 def apply_discount():
     """Apply a discount to the cart."""
     data = request.get_json()
+    if data is None:
+        return jsonify({'error': 'Request body is required'}), 400
     discount_type = data.get('type')  # 'percentage' or 'fixed'
-    discount_value = float(data.get('value', 0))
+    try:
+        discount_value = float(data.get('value', 0))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Discount value must be a number'}), 400
+    if discount_value < 0:
+        return jsonify({'error': 'Discount value must be non-negative'}), 400
 
-    settings = get_effective_settings(request.args.get('db', 'default'))
     cart = session.get('cart', [])
     subtotal = _calculate_total(cart)
 
     discount_amount = 0
     if discount_type == 'percentage':
-        discount_amount = subtotal * (discount_value / 100)
+        # Clamp to 100% to prevent negative totals from direct API calls
+        discount_amount = subtotal * (min(discount_value, 100) / 100)
     elif discount_type == 'fixed':
         discount_amount = min(discount_value, subtotal)
 

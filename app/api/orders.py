@@ -11,6 +11,7 @@ from app.services.order_service import (
     get_order_details,
     get_sales_summary,
     get_items_sold_summary,
+    delete_order_by_id,
 )
 from app.services.settings_service import get_default_payment_method
 from app.utils.logger import get_logger
@@ -51,6 +52,11 @@ def checkout():
         else:
             return jsonify({'error': 'Payment method required'}), 400
 
+    # Validate payment method
+    valid_methods = ['cash', 'card', 'wallet', 'tab']
+    if payment_method not in valid_methods:
+        return jsonify({'error': f'Invalid payment method. Must be one of: {", ".join(valid_methods)}'}), 400
+
     # Get discount info from session
     cart_discount = session.get('cart_discount', {})
     discount_amount = cart_discount.get('amount', 0.0)
@@ -75,6 +81,12 @@ def checkout():
         # Record payment if provided
         total = sum(item['line_total'] for item in cart) - discount_amount
         tendered = data.get('tendered')
+
+        if tendered is not None:
+            if tendered < 0:
+                return jsonify({'error': 'Tendered amount must be non-negative'}), 400
+            if payment_method == 'cash' and tendered < total:
+                return jsonify({'error': 'Tendered amount must be at least the total due'}), 400
 
         if tendered is not None:
             record_payment(db, order_id, payment_method, total, tendered)
@@ -118,18 +130,58 @@ def order_details(order_id):
 
 
 # ============================================================
-# REPORTS (Admin)
+# ORDER MANAGEMENT (Admin)
 # ============================================================
+
+@orders_bp.route('/<int:order_id>', methods=['DELETE'])
+def delete_order(order_id):
+    """Delete or revoke an order (admin only).
+    If the order has stock-counted products, stock is restored."""
+    db = request.args.get('db', 'default')
+    if session.get('operator_role') != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
+    try:
+        result = delete_order_by_id(db, order_id)
+        if result:
+            return jsonify({'message': f'Order {order_id} revoked'})
+        else:
+            return jsonify({'error': 'Order not found'}), 404
+    except Exception as e:
+        logger.error(f"Order deletion error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @orders_bp.route('/report/summary', methods=['GET'])
 def sales_report():
-    """Get sales summary."""
+    """Get sales summary. Optional ?date=YYYY-MM-DD for daily filter."""
     db = request.args.get('db', 'default')
-    return jsonify(get_sales_summary(db))
+    date_filter = request.args.get('date')
+    return jsonify(get_sales_summary(db, date_filter))
 
 
 @orders_bp.route('/report/items', methods=['GET'])
 def items_report():
-    """Get recap of all items sold."""
+    """Get recap of all items sold. Optional ?date=YYYY-MM-DD for daily filter."""
     db = request.args.get('db', 'default')
-    return jsonify(get_items_sold_summary(db))
+    date_filter = request.args.get('date')
+    return jsonify(get_items_sold_summary(db, date_filter))
+
+
+@orders_bp.route('/report/recent', methods=['GET'])
+def recent_orders_report():
+    """Get recent orders for the report view. Optional ?date=YYYY-MM-DD."""
+    db = request.args.get('db', 'default')
+    date_filter = request.args.get('date')
+    limit = int(request.args.get('limit', 50))
+    return jsonify(get_recent_orders(db, limit, date_filter))
+
+
+@orders_bp.route('/log-receipt', methods=['POST'])
+def log_receipt():
+    """Log a recovery receipt to server logs (always saved, regardless of
+    whether it is displayed to the user)."""
+    db = request.args.get('db', 'default')
+    data = request.get_json() or {}
+    order_id = data.get('order_id')
+    receipt_text = data.get('receipt', '')
+    logger.info(f"Recovery receipt saved — order_id={order_id}\n{receipt_text}")
+    return jsonify({'message': 'Receipt logged'}), 200

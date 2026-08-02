@@ -23,6 +23,9 @@ def create_order(db_name, cart_items, payment_method, operator_id,
     with PartyDatabase(db_name) as conn:
         # Calculate totals
         subtotal = sum(item['quantity'] * item['unit_price'] for item in cart_items)
+        # Clamp discount to subtotal to prevent negative totals from
+        # direct API calls that bypass the frontend's Math.min guard
+        discount_amount = min(discount_amount, subtotal)
         total = subtotal - discount_amount
 
         # Create order
@@ -42,11 +45,14 @@ def create_order(db_name, cart_items, payment_method, operator_id,
                 (order_id, item['product_id'], item['quantity'], item['unit_price'])
             )
 
-            # Decrement stock if product has a stock count
+            # Decrement stock if product has a stock count.
+            # Guard against negative stock (defensive — add_to_cart checks, but
+            # the cart is session-based and could be stale if stock was edited
+            # between adding to cart and checkout).
             conn.execute(
                 """UPDATE products
                    SET stock_count = CASE
-                       WHEN stock_count IS NOT NULL THEN stock_count - ?
+                       WHEN stock_count IS NOT NULL THEN MAX(0, stock_count - ?)
                        ELSE NULL
                    END
                    WHERE id = ?""",
@@ -62,6 +68,8 @@ def record_payment(db_name, order_id, method, amount, tendered=None):
     """Record a payment for an order."""
     change_due = None
     if tendered is not None and method == 'cash':
+        if tendered < amount:
+            raise ValueError('Tendered amount must be at least the total due')
         change_due = tendered - amount
 
     with PartyDatabase(db_name) as conn:
@@ -100,45 +108,61 @@ def get_sales_summary(db_name, date_filter=None):
         }
 
 
-def get_items_sold_summary(db_name):
-    """Get a recap of all items sold with quantities and totals."""
+def get_items_sold_summary(db_name, date_filter=None):
+    """Get a recap of all items sold with quantities and totals.
+    Optionally filter by a specific date (YYYY-MM-DD).
+    """
     with PartyDatabase(db_name) as conn:
+        date_clause = "WHERE DATE(o.timestamp) = ?" if date_filter else ""
+        params = [date_filter] if date_filter else []
+
         rows = conn.execute(
-            """
+            f"""
             SELECT
+                p.id as product_id,
                 p.name as product_name,
                 p.sku,
                 s.name as section,
                 ss.name as subsection,
                 SUM(oi.quantity) as total_quantity,
-                SUM(oi.quantity * oi.unit_price) as total_amount
+                SUM(oi.quantity * oi.unit_price) as total_amount,
+                p.price as current_price,
+                p.stock_count,
+                p.is_active
             FROM order_items oi
+            JOIN orders o ON oi.order_id = o.id
             JOIN products p ON oi.product_id = p.id
             JOIN sections s ON p.section_id = s.id
             JOIN subsections ss ON p.subsection_id = ss.id
+            {date_clause}
             GROUP BY p.id
             ORDER BY total_amount DESC
-            """
+            """,
+            params
         ).fetchall()
 
         return [dict(row) for row in rows]
 
 
-def get_recent_orders(db_name, limit=50):
-    """Get recent orders for admin review."""
+def get_recent_orders(db_name, limit=50, date_filter=None):
+    """Get recent orders for admin review. Optionally filter by date."""
     with PartyDatabase(db_name) as conn:
+        date_clause = "WHERE DATE(o.timestamp) = ?" if date_filter else ""
+        date_param = [date_filter] if date_filter else []
+
         rows = conn.execute(
-            """
+            f"""
             SELECT
                 o.id, o.timestamp, o.total, o.payment_method,
                 o.subtotal, o.discount_amount,
                 op.name as operator_name
             FROM orders o
             LEFT JOIN operators op ON o.operator_id = op.id
+            {date_clause}
             ORDER BY o.timestamp DESC
             LIMIT ?
             """,
-            (limit,)
+            date_param + [limit]
         ).fetchall()
         return [dict(row) for row in rows]
 
@@ -172,3 +196,51 @@ def get_order_details(db_name, order_id):
             'items': [dict(item) for item in items],
             'payments': [dict(p) for p in payments]
         }
+
+
+# ============================================================
+# ORDER MANAGEMENT
+# ============================================================
+
+def delete_order_by_id(db_name, order_id):
+    """Delete or revoke an order.
+    Restores stock for products that have a stock count.
+    Returns True if the order was found and deleted, False otherwise.
+    """
+    with PartyDatabase(db_name) as conn:
+        # Check if order exists
+        order = conn.execute(
+            "SELECT * FROM orders WHERE id = ?", (order_id,)
+        ).fetchone()
+
+        if not order:
+            return False
+
+        # Restore stock for products with stock_count
+        conn.execute(
+            """
+            UPDATE products
+            SET stock_count = CASE
+                WHEN stock_count IS NOT NULL THEN stock_count + (
+                    SELECT oi.quantity
+                    FROM order_items oi
+                    WHERE oi.product_id = products.id
+                      AND oi.order_id = ?
+                )
+                ELSE NULL
+            END
+            WHERE id IN (
+                SELECT product_id FROM order_items WHERE order_id = ?
+            )
+            """,
+            (order_id, order_id)
+        )
+
+        # Delete related records first (payments, order_items), then the order
+        conn.execute("DELETE FROM payments WHERE order_id = ?", (order_id,))
+        conn.execute("DELETE FROM order_items WHERE order_id = ?", (order_id,))
+        conn.execute("DELETE FROM orders WHERE id = ?", (order_id,))
+
+        conn.commit()
+        logger.info(f"Order deleted: id={order_id}")
+        return True

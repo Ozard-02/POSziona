@@ -4,19 +4,13 @@ Database connection management for Party POS.
 
 import sqlite3
 import os
-import shutil
-from datetime import datetime
 
-from app.utils.config import PARTY_DB_DIR, BACKUP_DIR, TEMPLATES_DB
+from app.utils.config import PARTY_DB_DIR, TEMPLATES_DB
 from app.utils.logger import get_logger
 from app.database.schema import get_party_schema, get_templates_schema
 
 logger = get_logger('database')
 
-
-# ============================================================
-# PATH & INITIALIZATION HELPERS
-# ============================================================
 
 def _get_party_db_path(db_name):
     """Get the full path for a party database file."""
@@ -47,8 +41,29 @@ def _ensure_party_db_exists(db_name):
         conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ('party_name', party_label))
         conn.commit()
         conn.close()
+    else:
+        # Run migrations on existing databases
+        _run_migrations(db_path)
 
     return db_path
+
+
+def _run_migrations(db_path):
+    """Run lightweight migrations on existing party databases."""
+    conn = sqlite3.connect(db_path)
+    try:
+        # Add sort_order column to sections if it doesn't exist
+        columns = [row[1] for row in conn.execute("PRAGMA table_info(sections)").fetchall()]
+        if 'sort_order' not in columns:
+            conn.execute("ALTER TABLE sections ADD COLUMN sort_order INTEGER DEFAULT 0")
+            # Set initial sort_order based on existing row order
+            rows = conn.execute("SELECT id FROM sections ORDER BY id").fetchall()
+            for idx, (sid,) in enumerate(rows):
+                conn.execute("UPDATE sections SET sort_order = ? WHERE id = ?", (idx, sid))
+            conn.commit()
+            logger.info(f"Migration: added sort_order to sections in {db_path}")
+    finally:
+        conn.close()
 
 
 def _init_default_operators(db_path):
@@ -75,7 +90,7 @@ def _init_default_operators(db_path):
 
 def _init_default_products(db_path):
     """Initialize default products and sections for a new party DB.
-    
+
     This ensures the POS interface has visible content on first launch
     instead of rendering an empty product grid.
     """
@@ -189,9 +204,28 @@ def _enable_wal(db_path):
         conn.close()
 
 
-# ============================================================
-# PARTY DATABASE CONTEXT MANAGER
-# ============================================================
+def init_default_operators(db_name):
+    """Initialize default operators (admin + default operator) and seed
+    default products/sections for a new party DB."""
+    from app.services.auth_service import hash_pin
+    with PartyDatabase(db_name) as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO operators (name, pin_hash, role, is_active) "
+            "VALUES (?, ?, ?, 1)",
+            ('admin', hash_pin('0000'), 'admin')
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO operators (name, pin_hash, role, is_active) "
+            "VALUES (?, ?, ?, 1)",
+            ('operator', hash_pin('1234'), 'operator')
+        )
+        conn.commit()
+        logger.info(f"Initialized default operators for {db_name}")
+
+    # Seed default products if the DB is empty
+    db_path = _get_party_db_path(db_name)
+    _init_default_products(db_path)
+
 
 class PartyDatabase:
     """Context manager for party database connections."""
@@ -212,31 +246,6 @@ class PartyDatabase:
         if self.conn:
             self.conn.close()
 
-    def snapshot(self, snapshot_name=None):
-        """Create a snapshot of the party database."""
-        if not self.db_path or not os.path.exists(self.db_path):
-            return None
-
-        if snapshot_name is None:
-            snapshot_name = f"snapshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-        snapshot_path = os.path.join(BACKUP_DIR, f"{snapshot_name}.db")
-        os.makedirs(BACKUP_DIR, exist_ok=True)
-
-        # Copy database files (including WAL if active)
-        for ext in ['', '-wal', '-shm']:
-            src = self.db_path + ext
-            dst = snapshot_path + ext
-            if os.path.exists(src):
-                shutil.copy2(src, dst)
-
-        logger.info(f"Database snapshot created: {snapshot_path}")
-        return snapshot_path
-
-
-# ============================================================
-# TEMPLATES DATABASE CONTEXT MANAGER
-# ============================================================
 
 class TemplatesDatabase:
     """Context manager for the shared templates database."""
@@ -267,31 +276,3 @@ class TemplatesDatabase:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.conn:
             self.conn.close()
-
-
-# ============================================================
-# HELPER FUNCTIONS
-# ============================================================
-
-def init_default_operators(db_name):
-    """Initialize default operators (admin + default operator) and seed
-    default products/sections for a new party DB."""
-    from app.services.auth_service import hash_pin
-    with PartyDatabase(db_name) as conn:
-        conn.execute(
-            "INSERT OR IGNORE INTO operators (name, pin_hash, role, is_active) "
-            "VALUES (?, ?, ?, 1)",
-            ('admin', hash_pin('0000'), 'admin')
-        )
-        conn.execute(
-            "INSERT OR IGNORE INTO operators (name, pin_hash, role, is_active) "
-            "VALUES (?, ?, ?, 1)",
-            ('operator', hash_pin('1234'), 'operator')
-        )
-        conn.commit()
-        logger.info(f"Initialized default operators for {db_name}")
-
-    # Seed default products if the DB is empty
-    from app.database.connection import _get_party_db_path
-    db_path = _get_party_db_path(db_name)
-    _init_default_products(db_path)

@@ -142,6 +142,39 @@ def test_full_pos_workflow(clean_db, client):
     assert len(items) == 1
     assert items[0]['product_name'] == 'Small Coffee'
     assert items[0]['total_quantity'] == 3
+    # Dashboard fields: price, stock, availability, product_id
+    assert items[0]['product_id'] == 1
+    assert items[0]['current_price'] == 2.50
+    assert items[0]['stock_count'] is None  # unlimited
+    assert items[0]['is_active'] == 1
+
+
+def test_dashboard_item_availability_update(clean_db, client):
+    """Test right-click context menu flow: toggle product availability from the items report."""
+    db_name = clean_db
+
+    # Setup: create product, checkout order so it appears in items report
+    client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
+    client.post(f'/api/products/sections?db={db_name}', json={'name': 'Drinks'})
+    client.post(f'/api/products/subsections?db={db_name}', json={'section_id': 1, 'name': 'Coffee'})
+    client.post(f'/api/products/products?db={db_name}', json={
+        'name': 'Small Coffee', 'price': 2.50,
+        'section_id': 1, 'subsection_id': 1
+    })
+    client.post(f'/api/cart/add?db={db_name}', json={'product_id': 1, 'quantity': 2})
+    client.post(f'/api/orders/checkout?db={db_name}', json={'payment_method': 'cash'})
+
+    # Item should be available
+    resp = client.get(f'/api/orders/report/items?db={db_name}')
+    assert resp.get_json()[0]['is_active'] == 1
+
+    # Disable product via PUT (mirrors the right-click "Set Unavailable" action)
+    resp = client.put(f'/api/products/products/1?db={db_name}', json={'is_active': 0})
+    assert resp.status_code == 200
+
+    # Now item should be unavailable
+    resp = client.get(f'/api/orders/report/items?db={db_name}')
+    assert resp.get_json()[0]['is_active'] == 0
 
 
 def test_clear_cart(clean_db, client):

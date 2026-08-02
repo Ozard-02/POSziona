@@ -100,4 +100,16 @@ TESTS (Priority 6):
 [x] tests/integration/test_parties.py # 2 party creation/duplication tests
 
 NEXT_TASK: None - MVP infrastructure 95% complete, ready for pywebview launcher test
+
+ROADMAP (In Progress):
+[x] Dashboard items sold now displays Price, Stock, and Available columns (in addition to Qty)
+[x] Right-click on any item row in the Sales Dashboard opens a context menu to:
+    - Edit Price (in-place prompt, updates product price live)
+    - Set Available / Set Unavailable (toggles product is_active flag live)
+[x] Product edit API now supports is_active (availability) updates via PUT /products/products/<id>
+
+FUTURE ROADMAP (planned):
+[ ] Operator can edit availability and price directly while viewing item properties in the dashboard
+[ ] Items in the dashboard display both quantity sold and current stock / availability status
+[ ] Right-click on an item in the dashboard to change its properties (price, availability, stock)
 -->

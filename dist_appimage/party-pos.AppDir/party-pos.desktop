@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Party POS
+Comment=Lightweight POS for parties and events
+Exec=party-pos
+Type=Application
+Terminal=false
+Categories=AudioVideo;
+Icon=party-pos
+StartupNotify=true

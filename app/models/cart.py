@@ -24,7 +24,9 @@ class Cart(BaseModel):
     @property
     def discount_amount(self):
         if self._discount_type == 'percentage':
-            return self.subtotal * (self._discount_amount / 100)
+            # Clamp to 100% to prevent negative totals
+            pct = min(self._discount_amount, 100)
+            return self.subtotal * (pct / 100)
         elif self._discount_type == 'fixed':
             return min(self._discount_amount, self.subtotal)
         return 0.0

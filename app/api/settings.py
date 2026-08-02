@@ -51,9 +51,11 @@ def update_settings():
     for key, value in data.items():
         if key in [
             'currency', 'tax_rate', 'default_payment_method',
+            'skip_cash_tender', 'auto_checkout', 'language',
             'default_operator_id', 'printer_model',
             'receipt_header', 'receipt_footer',
-            'auto_logout_minutes', 'snapshot_interval_minutes'
+            'auto_logout_minutes', 'snapshot_interval_minutes',
+            'split_receipts', 'print_recovery_receipt',
         ]:
             update_setting(db, key, str(value))
 

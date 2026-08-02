@@ -22,7 +22,7 @@ def test_csv_import(clean_db, client):
         {'name': 'Water', 'price': 1.00, 'section': 'Drinks', 'subsection': 'Cold', 'stock': None},
     ]
     
-    resp = client.post(f'/api/products/import?db={db_name}', json={'rows': csv_rows})
+    resp = client.post(f'/api/products/import-csv?db={db_name}', json={'rows': csv_rows})
     assert resp.status_code == 201
     assert 'Imported 4 products' in resp.get_json()['message']
     
@@ -67,7 +67,7 @@ def test_csv_import_duplicate_sections(clean_db, client):
         {'name': 'Item C', 'price': 3.00, 'section': 'Food', 'subsection': 'Sides'},
     ]
     
-    resp = client.post(f'/api/products/import?db={db_name}', json={'rows': csv_rows})
+    resp = client.post(f'/api/products/import-csv?db={db_name}', json={'rows': csv_rows})
     assert resp.status_code == 201
     
     # Should have 1 section, 2 subsections (Main, Sides)

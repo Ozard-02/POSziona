@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 case 'operators': loadOperators(); break;
                 case 'settings': loadSettings(); break;
                 case 'tags': loadTags(); break;
+                case 'sections': loadSections(); break;
             }
         });
     });
@@ -36,6 +37,13 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(() => { window.location.href = '/'; })
             .catch(() => { window.location.href = '/'; });
     });
+    
+    const backBtn = document.getElementById('back-to-pos');
+    if (backBtn) {
+        backBtn.addEventListener('click', function() {
+            window.location.href = '/pos';
+        });
+    }
     
     // === Dashboard ===
     async function loadDashboard() {
@@ -49,43 +57,186 @@ document.addEventListener('DOMContentLoaded', function() {
             tbody.innerHTML = '';
             items.forEach(item => {
                 const row = tbody.insertRow();
+                row.dataset.productId = item.product_id;
                 row.insertCell(0).textContent = item.product_name;
                 row.insertCell(1).textContent = item.total_quantity;
                 row.insertCell(2).textContent = formatCurrency(item.total_amount);
+                row.insertCell(3).textContent = formatCurrency(item.current_price);
+                const stock = item.stock_count === null ? 'Unlimited' : String(item.stock_count);
+                row.insertCell(4).textContent = stock;
+                const availCell = row.insertCell(5);
+                availCell.textContent = item.is_active ? 'Yes' : 'No';
+                availCell.style.color = item.is_active ? '#27ae60' : '#e74c3c';
+                availCell.style.fontWeight = 'bold';
+            });
+
+            // Right-click context menu on dashboard item rows
+            tbody.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                const row = e.target.closest('tr');
+                if (!row) return;
+                const productId = row.dataset.productId;
+                showItemContextMenu(e.pageX, e.pageY, productId, row);
             });
         } catch (e) {
             console.error('Dashboard load failed:', e);
         }
     }
+
+    function showItemContextMenu(pageX, pageY, productId, row) {
+        // Remove any existing context menu
+        const existing = document.getElementById('item-context-menu');
+        if (existing) existing.remove();
+
+        const menu = document.createElement('div');
+        menu.id = 'item-context-menu';
+        menu.className = 'admin-context-menu';
+        menu.style.left = pageX + 'px';
+        menu.style.top = pageY + 'px';
+
+        const makeItem = (label, onclick) => {
+            const item = document.createElement('div');
+            item.textContent = label;
+            item.className = 'context-menu-item';
+                        item.onclick = () => { menu.remove(); onclick(); };
+            return item;
+        };
+
+        menu.appendChild(makeItem('Edit Price', () => editItemPrice(productId, row)));
+        menu.appendChild(makeItem('Set Available', () => setItemAvailability(productId, true, row)));
+        menu.appendChild(makeItem('Set Unavailable', () => setItemAvailability(productId, false, row)));
+
+        document.body.appendChild(menu);
+
+        const closeMenu = () => { menu.remove(); document.removeEventListener('click', closeMenu); };
+        setTimeout(() => document.addEventListener('click', closeMenu), 0);
+    }
+
+    async function editItemPrice(productId, row) {
+        const currentPriceCell = row.cells[3];
+        const currentPrice = parseFloat(currentPriceCell.textContent.replace(/[€$]/, ''));
+        const newPriceStr = prompt('Enter new price:', String(currentPrice));
+        if (!newPriceStr) return;
+        const newPrice = parseFloat(newPriceStr);
+        if (isNaN(newPrice) || newPrice < 0) {
+            alert('Please enter a valid price');
+            return;
+        }
+        try {
+            await fetchJSON(`${API_BASE}/products/products/${productId}?db=${db}`, {
+                method: 'PUT',
+                body: JSON.stringify({ price: newPrice })
+            });
+            currentPriceCell.textContent = formatCurrency(newPrice);
+        } catch (e) {
+            alert('Failed to update price: ' + (e.message || e));
+        }
+    }
+
+    async function setItemAvailability(productId, available, row) {
+        try {
+            await fetchJSON(`${API_BASE}/products/products/${productId}?db=${db}`, {
+                method: 'PUT',
+                body: JSON.stringify({ is_active: available ? 1 : 0 })
+            });
+            const availCell = row.cells[5];
+            availCell.textContent = available ? 'Yes' : 'No';
+            availCell.className = available ? 'status-active' : 'status-inactive';
+        } catch (e) {
+            alert('Failed to update availability: ' + (e.message || e));
+        }
+    }
     
     // === Products ===
+    let allTags = [];
+    let allSections = [];
+    let selectedProductIds = [];
+
     async function loadProducts() {
         try {
-            const products = await fetchJSON(`${API_BASE}/products/all?db=${db}`);
+            // Build filter query params
+            const params = new URLSearchParams();
+            const search = document.getElementById('product-search').value.trim();
+            if (search) params.set('search', search);
+
+            const sectionId = document.getElementById('filter-section').value;
+            if (sectionId) params.set('section_id', sectionId);
+
+            const subsectionId = document.getElementById('filter-subsection').value;
+            if (subsectionId) params.set('subsection_id', subsectionId);
+
+            const tagId = document.getElementById('filter-tag').value;
+            if (tagId) params.set('tag_ids', tagId);
+
+            const isActive = document.getElementById('filter-active').value;
+            if (isActive) params.set('is_active', isActive);
+
+            let products;
+            if (params.toString()) {
+                products = await fetchJSON(`${API_BASE}/products/search?db=${db}&${params.toString()}`);
+            } else {
+                products = await fetchJSON(`${API_BASE}/products/all?db=${db}`);
+            }
+
             const tbody = document.querySelector('#products-table tbody');
             tbody.innerHTML = '';
+            selectedProductIds = [];
 
             products.forEach(p => {
                 const row = tbody.insertRow();
-                row.insertCell(0).textContent = p.name;
-                row.insertCell(1).textContent = formatCurrency(p.price);
-                row.insertCell(2).textContent = `${p.section_name} > ${p.subsection_name}`;
-                row.insertCell(3).textContent = p.stock_count === null ? 'Unlimited' : p.stock_count;
+                row.dataset.productId = p.id;
 
-                const actionsCell = row.insertCell(4);
+                // Checkbox cell
+                const checkboxCell = row.insertCell(0);
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.className = 'product-checkbox';
+                cb.value = p.id;
+                cb.addEventListener('change', updateBulkEditBar);
+                checkboxCell.appendChild(cb);
+
+                row.insertCell(1).textContent = p.name;
+                row.insertCell(2).textContent = formatCurrency(p.price);
+                row.insertCell(3).textContent = `${p.section_name} > ${p.subsection_name}`;
+
+                // Tags cell
+                const tagsCell = row.insertCell(4);
+                if (p.tags && p.tags.length > 0) {
+                    const tagsHtml = p.tags.map(t =>
+                        `<span class="tag-badge" style="background-color: ${t.color || '#3498db'}">${t.name}</span>`
+                    ).join('');
+                    tagsCell.innerHTML = tagsHtml;
+                } else {
+                    tagsCell.textContent = 'No tags';
+                    tagsCell.classList.add('muted-text');
+                }
+
+                row.insertCell(5).textContent = p.stock_count === null ? 'Unlimited' : p.stock_count;
+                const statusCell = row.insertCell(6);
+                statusCell.textContent = p.is_active ? 'Active' : 'Inactive';
+                statusCell.classList.add(p.is_active ? 'status-active' : 'status-inactive');
+
+                const actionsCell = row.insertCell(7);
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'product-actions';
+                actionsCell.appendChild(actionsDiv);
+                
                 const editBtn = document.createElement('button');
                 editBtn.textContent = 'Edit';
                 editBtn.className = 'btn-sm';
                 editBtn.onclick = () => editProduct(p);
-                actionsCell.appendChild(editBtn);
+                actionsDiv.appendChild(editBtn);
 
                 const delBtn = document.createElement('button');
                 delBtn.textContent = 'Delete';
                 delBtn.className = 'btn-sm btn-secondary';
-                delBtn.style.marginLeft = '5px';
                 delBtn.onclick = () => deleteProduct(p.id, p.name);
-                actionsCell.appendChild(delBtn);
+                actionsDiv.appendChild(delBtn);
             });
+
+            // Reset select-all checkbox
+            const selectAll = document.getElementById('select-all-products');
+            if (selectAll) selectAll.checked = false;
         } catch (e) {
             console.error('Products load failed:', e);
         }
@@ -98,7 +249,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Build section > subsection options
         let sectionOptions = '<option value="">Select Section</option>';
         let subsectionOptions = '<option value="">Select Subsection</option>';
-        let selectedSubsectionId = product.subsection_id;
 
         sections.forEach(section => {
             sectionOptions += `<option value="${section.id}" ${section.id == product.section_id ? 'selected' : ''}>${section.name}</option>`;
@@ -106,67 +256,88 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Get subsections for the product's section
         if (product.section_id) {
-            const subsectionResp = await fetch(`${API_BASE}/products/subsections?db=${db}`);
-            // Actually, subsections are returned within the section object
             const matchingSection = sections.find(s => s.id == product.section_id);
             if (matchingSection && matchingSection.subsections) {
                 matchingSection.subsections.forEach(sub => {
-                    subsectionOptions += `<option value="${sub.id}" ${sub.id == selectedSubsectionId ? 'selected' : ''}>${sub.name}</option>`;
+                    subsectionOptions += `<option value="${sub.id}" ${sub.id == product.subsection_id ? 'selected' : ''}>${sub.name}</option>`;
                 });
             }
         }
 
         const html = `
-            <div style="margin-bottom:10px;">
+            <div class="form-group">
                 <label>Name:</label>
-                <input type="text" id="edit-product-name" value="${product.name}" style="width:100%;">
+                <input type="text" id="edit-product-name" value="${product.name}">
             </div>
-            <div style="margin-bottom:10px;">
+            <div class="form-group">
                 <label>Price (€):</label>
-                <input type="number" id="edit-product-price" value="${product.price}" step="0.01" style="width:100%;">
+                <input type="number" id="edit-product-price" value="${product.price}" step="0.01">
             </div>
-            <div style="margin-bottom:10px;">
+            <div class="form-group">
                 <label>Section:</label>
-                <select id="edit-product-section" style="width:100%;">${sectionOptions}</select>
+                <select id="edit-product-section">${sectionOptions}</select>
             </div>
-            <div style="margin-bottom:10px;">
+            <div class="form-group">
                 <label>Subsection:</label>
-                <select id="edit-product-subsection" style="width:100%;">${subsectionOptions}</select>
+                <select id="edit-product-subsection">${subsectionOptions}</select>
             </div>
-            <div style="margin-bottom:10px;">
+            <div class="form-group">
                 <label>SKU:</label>
-                <input type="text" id="edit-product-sku" value="${product.sku || ''}" style="width:100%;">
+                <input type="text" id="edit-product-sku" value="${product.sku || ''}">
             </div>
-            <div style="margin-bottom:10px;">
+            <div class="form-group">
                 <label>Stock (leave empty for unlimited):</label>
-                <input type="number" id="edit-product-stock" value="${product.stock_count === null ? '' : product.stock_count}" style="width:100%;">
+                <input type="number" id="edit-product-stock" value="${product.stock_count === null ? '' : product.stock_count}">
+            </div>
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="edit-product-active" value="1" ${product.is_active ? 'checked' : ''}>
+                    Active (visible on POS)
+                </label>
             </div>
         `;
 
-        const result = await showDialog('Edit Product', html, 'Save');
-        if (result) {
-            const sectionId = document.getElementById('edit-product-section').value;
-            const subsectionId = document.getElementById('edit-product-subsection').value;
+        // Use onConfirm to collect form values BEFORE the dialog overlay is
+        // removed from the DOM (showDialog destroys the overlay before
+        // resolving, so reading values via getElementById afterwards returns null).
+        let formData = null;
+        const onConfirm = function() {
+            formData = {
+                name: document.getElementById('edit-product-name').value,
+                price: parseFloat(document.getElementById('edit-product-price').value),
+                sectionId: document.getElementById('edit-product-section').value,
+                subsectionId: document.getElementById('edit-product-subsection').value,
+                sku: document.getElementById('edit-product-sku').value || null,
+                stock: document.getElementById('edit-product-stock').value ? parseInt(document.getElementById('edit-product-stock').value) : null,
+                isActive: document.getElementById('edit-product-active').checked ? 1 : 0
+            };
+            if (!formData.name || isNaN(formData.price)) {
+                alert('Name and price are required');
+                return false;
+            }
+        };
+
+        const confirmed = await showDialog('Edit Product', html, 'Save', onConfirm);
+        if (!confirmed || !formData) return;
+
+        try {
+            const sectionId = formData.sectionId;
+            const subsectionId = formData.subsectionId;
             await fetchJSON(`${API_BASE}/products/products/${product.id}?db=${db}`, {
                 method: 'PUT',
                 body: JSON.stringify({
-                    name: document.getElementById('edit-product-name').value,
-                    price: parseFloat(document.getElementById('edit-product-price').value),
+                    name: formData.name,
+                    price: formData.price,
                     section_id: sectionId ? parseInt(sectionId) : null,
                     subsection_id: subsectionId ? parseInt(subsectionId) : null,
-                    sku: document.getElementById('edit-product-sku').value || null,
-                    stock: document.getElementById('edit-product-stock').value ? parseInt(document.getElementById('edit-product-stock').value) : null
+                    sku: formData.sku,
+                    stock: formData.stock,
+                    is_active: formData.isActive
                 })
             });
             loadProducts();
-        }
-
-        // Set up section change handler for edit dialog
-        const editSectionSelect = document.getElementById('edit-product-section');
-        if (editSectionSelect) {
-            editSectionSelect.onchange = async function() {
-                await updateSubsectionDropdown('edit-' + this.value, document.getElementById('edit-product-subsection').value);
-            };
+        } catch (e) {
+            alert('Failed to update product: ' + (e.message || e));
         }
     }
 
@@ -183,16 +354,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Helper to show a simple dialog with custom content
     function showDialog(title, htmlContent, confirmBtnText, onConfirm) {
         const overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:2000; display:flex; align-items:center; justify-content:center;';
+        overlay.className = 'dialog-overlay';
 
         const dialog = document.createElement('div');
-        dialog.style.cssText = 'background:white; padding:20px; border-radius:8px; min-width:350px; max-width:500px;';
+        dialog.className = 'dialog-content';
         dialog.innerHTML = `
             <h3>${title}</h3>
             <div id="dialog-content">${htmlContent}</div>
-            <div style="margin-top:15px; text-align:right;">
+            <div class="dialog-buttons">
                 <button id="dialog-cancel" class="btn-secondary btn-sm">Cancel</button>
-                <button id="dialog-confirm" class="btn-primary btn-sm" style="margin-left:5px;">${confirmBtnText}</button>
+                <button id="dialog-confirm" class="btn-primary btn-sm">${confirmBtnText}</button>
             </div>
         `;
 
@@ -224,32 +395,120 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // === CSV Import ===
+    // Parse CSV text into 2D array of rows (handles quoted fields)
+    function parseCsv(text) {
+        const rows = [];
+        let current = [];
+        let field = '';
+        let inQuotes = false;
+        for (let i = 0; i < text.length; i++) {
+            const char = text[i];
+            const next = text[i + 1];
+            if (inQuotes) {
+                if (char === '"') {
+                    if (next === '"') {
+                        field += '"';
+                        i++;
+                    } else {
+                        inQuotes = false;
+                    }
+                } else {
+                    field += char;
+                }
+            } else {
+                if (char === '"') {
+                    inQuotes = true;
+                } else if (char === ',') {
+                    current.push(field);
+                    field = '';
+                } else if (char === '\n') {
+                    current.push(field);
+                    rows.push(current);
+                    current = [];
+                    field = '';
+                } else if (char === '\r') {
+                    // Handle \r\n — skip \r, \n handles the line break
+                    continue;
+                } else {
+                    field += char;
+                }
+            }
+        }
+        // Don't forget the last field/row
+        current.push(field);
+        if (current.length > 1 || current[0] !== '') {
+            rows.push(current);
+        }
+        return { lines: rows };
+    }
+
     async function importCsv() {
         const csvText = await showCsvImportDialog();
         if (csvText === null) return; // Cancelled
 
-        // Parse CSV into JSON rows
-        const lines = csvText.trim().split('\n');
-        if (lines.length < 2) {
+        // Parse CSV into JSON rows (handles quoted fields with embedded commas/newlines)
+        const result = parseCsv(csvText);
+        if (result.lines.length < 2) {
             alert('CSV must have a header row and at least one data row');
             return;
         }
 
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        const headers = result.lines[0].map(h => h.trim().toLowerCase());
+        // Validate required columns
+        const requiredCols = ['section', 'name', 'price'];
+        const missingCols = requiredCols.filter(c => !headers.includes(c));
+        if (missingCols.length > 0) {
+            alert('CSV is missing required columns: ' + missingCols.join(', ') +
+                  '\n\nExpected columns: section, subsection, name, price, sku (optional), stock_count (optional)');
+            return;
+        }
+        // Warn about unrecognized columns
+        const knownCols = ['section', 'subsection', 'name', 'price', 'sku', 'stock_count'];
+        const unknownCols = headers.filter(h => !knownCols.includes(h));
+        if (unknownCols.length > 0) {
+            console.warn('Unknown CSV columns ignored:', unknownCols.join(', '));
+        }
+
         const rows = [];
-        for (let i = 1; i < lines.length; i++) {
-            const values = lines[i].split(',').map(v => v.trim());
-            if (values.length === headers.length) {
-                const row = {};
-                headers.forEach((h, idx) => {
-                    row[h] = values[idx];
-                });
-                rows.push(row);
+        const errors = [];
+        for (let i = 1; i < result.lines.length; i++) {
+            const values = result.lines[i].map(v => v.trim());
+            if (values.length !== headers.length) {
+                errors.push('Row ' + (i + 1) + ': expected ' + headers.length +
+                            ' columns, got ' + values.length);
+                continue;
+            }
+            const row = {};
+            headers.forEach((h, idx) => {
+                row[h] = values[idx];
+            });
+            // Validate price is numeric
+            if (row.price && isNaN(parseFloat(row.price))) {
+                errors.push('Row ' + (i + 1) + ': price "' + row.price + '" is not a valid number');
+                continue;
+            }
+            // Validate stock_count if present
+            if (row.stock_count !== undefined && row.stock_count !== '' &&
+                isNaN(parseInt(row.stock_count))) {
+                errors.push('Row ' + (i + 1) + ': stock_count "' + row.stock_count + '" is not a valid number');
+                continue;
+            }
+            rows.push(row);
+        }
+
+        if (errors.length > 0) {
+            if (confirm('Found ' + errors.length + ' validation error(s):\n\n' +
+                        errors.slice(0, 10).join('\n') +
+                        (errors.length > 10 ? '\n... and ' + (errors.length - 10) + ' more' : '') +
+                        '\n\nImport the valid rows anyway?')) {
+                // Continue with valid rows
+            } else {
+                return;
             }
         }
 
         if (rows.length === 0) {
-            alert('No valid data rows found');
+            alert('No valid data rows found after validation');
             return;
         }
 
@@ -267,15 +526,38 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function showCsvImportDialog() {
         const html = `
-            <p style="font-size:14px; color:#555; margin-bottom:10px;">
-                Paste CSV content below. Expected columns: section, subsection, name, price, sku (optional), stock_count (optional)
+            <p class="muted-text">
+                Select a CSV file or paste CSV content below.
+                Expected columns: section, subsection, name, price, sku (optional), stock_count (optional)
             </p>
-            <textarea id="csv-input" style="width:100%; height:200px; font-family:monospace; font-size:12px; padding:5px;"></textarea>
+            <input type="file" id="csv-file-input" accept=".csv,.txt" class="form-control" style="margin-bottom: 10px;">
+            <p class="muted-text" style="font-size: 11px;">-- or paste below --</p>
+            <textarea id="csv-input" class="form-control textarea-import"></textarea>
         `;
+        // Read file/textarea value in onConfirm callback (runs before overlay is removed)
+        let csvText = null;
+        const onConfirm = async function() {
+            // Check if a file was selected
+            const fileInput = document.getElementById('csv-file-input');
+            if (fileInput && fileInput.files && fileInput.files.length > 0) {
+                csvText = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = e => resolve(e.target.result);
+                    reader.onerror = reject;
+                    reader.readAsText(fileInput.files[0]);
+                });
+            } else {
+                // Fall back to pasted text
+                csvText = document.getElementById('csv-input').value.trim();
+            }
+            if (!csvText) {
+                alert('Please select a CSV file or paste CSV content');
+                return false; // Don't close the dialog
+            }
+        };
         return new Promise((resolve) => {
-            showDialog('CSV Import', html, 'Import').then(confirmed => {
-                if (confirmed) {
-                    const csvText = document.getElementById('csv-input').value;
+            showDialog('CSV Import', html, 'Import', onConfirm).then(confirmed => {
+                if (confirmed && csvText !== null) {
                     resolve(csvText);
                 } else {
                     resolve(null);
@@ -288,21 +570,31 @@ document.addEventListener('DOMContentLoaded', function() {
     async function exportCsv() {
         try {
             const data = await fetchJSON(`${API_BASE}/products/export?db=${db}`);
-            // Create a blob and download
-            const blob = new Blob([data.csv], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
+            const csv = data.csv;
+            const filename = data.filename;
+
+            // Build a data URL for the CSV
+            const dataUrl = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+
+            // Try the anchor download approach (works in browsers)
+            // In pywebview GTK, this may trigger the browser's download/save dialog
             const a = document.createElement('a');
-            a.href = url;
-            a.download = data.filename;
+            a.href = dataUrl;
+            a.download = filename;
+            a.style.display = 'none';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
+
+            // Clean up
+            setTimeout(() => {
+                URL.revokeObjectURL(dataUrl);
+            }, 5000);
         } catch(e) {
             alert('Export failed: ' + (e.message || e));
         }
     }
-    
+
     // === Parties ===
     async function loadParties() {
         try {
@@ -387,7 +679,10 @@ document.addEventListener('DOMContentLoaded', function() {
             for (const [key, value] of Object.entries(settings)) {
                 const input = form.querySelector(`[name="${key}"]`);
                 if (input) {
-                    if (input.type === 'select-one') {
+                    if (input.type === 'checkbox') {
+                        // Checkboxes: value is '1' or '0'
+                        input.checked = value == '1' || value === true;
+                    } else if (input.type === 'select-one') {
                         // Find and select the option with matching value
                         const option = Array.from(input.options).find(o => o.value === value);
                         if (option) option.selected = true;
@@ -416,7 +711,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 div.innerHTML = `
                     <div class="tag-color-preview" style="background-color: ${tag.color || '#3498db'};"></div>
                     <span class="tag-name">${tag.name}</span>
-                    <span class="tag-bg-info" style="font-size:11px; color:#888;">
+                    <span class="tag-bg-info">
                         bg: ${tag.bg_color || 'none'} | text: ${tag.text_color || 'default'}
                     </span>
                     <div class="tag-actions">
@@ -476,7 +771,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const display = document.getElementById('product-tags-display');
             display.innerHTML = '<h5>Current Tags:</h5>';
             if (productTags.length === 0) {
-                display.innerHTML += '<p style="color:#999;">No tags assigned</p>';
+                display.innerHTML += '<p class="muted-text">No tags assigned</p>';
             } else {
                 productTags.forEach(t => {
                     const span = document.createElement('span');
@@ -532,7 +827,6 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     // === Event Handlers ===
-    // === Event Handlers ===
     document.getElementById('add-product-btn').addEventListener('click', function() {
         addProductDialog();
     });
@@ -550,37 +844,37 @@ document.addEventListener('DOMContentLoaded', function() {
         subsectionOptions += '<option value="__new_subsection__">-- Create new subsection --</option>';
         
         const html = `
-            <div style="margin-bottom:10px;">
+            <div class="form-group">
                 <label>Name:</label>
-                <input type="text" id="new-product-name" style="width:100%;">
+                <input type="text" id="new-product-name" class="form-control">
             </div>
-            <div style="margin-bottom:10px;">
+            <div class="form-group">
                 <label>Price (€):</label>
-                <input type="number" id="new-product-price" step="0.01" style="width:100%;">
+                <input type="number" id="new-product-price" step="0.01" class="form-control">
             </div>
-            <div style="margin-bottom:10px;">
+            <div class="form-group">
                 <label>Section:</label>
-                <select id="new-product-section" style="width:100%;">${sectionOptions}</select>
+                <select id="new-product-section" class="form-control">${sectionOptions}</select>
             </div>
-            <div id="new-section-row" style="margin-bottom:10px; display:none;">
+            <div id="new-section-row" class="form-group hidden">
                 <label>New Section Name:</label>
-                <input type="text" id="new-section-name" style="width:100%;">
+                <input type="text" id="new-section-name" class="form-control">
             </div>
-            <div style="margin-bottom:10px;">
+            <div class="form-group">
                 <label>Subsection:</label>
-                <select id="new-product-subsection" style="width:100%;">${subsectionOptions}</select>
+                <select id="new-product-subsection" class="form-control">${subsectionOptions}</select>
             </div>
-            <div id="new-subsection-row" style="margin-bottom:10px; display:none;">
+            <div id="new-subsection-row" class="form-group hidden">
                 <label>New Subsection Name:</label>
-                <input type="text" id="new-subsection-name" style="width:100%;">
+                <input type="text" id="new-subsection-name" class="form-control">
             </div>
-            <div style="margin-bottom:10px;">
+            <div class="form-group">
                 <label>SKU:</label>
-                <input type="text" id="new-product-sku" style="width:100%;">
+                <input type="text" id="new-product-sku" class="form-control">
             </div>
-            <div style="margin-bottom:10px;">
+            <div class="form-group">
                 <label>Stock (leave empty for unlimited):</label>
-                <input type="number" id="new-product-stock" style="width:100%;">
+                <input type="number" id="new-product-stock" class="form-control">
             </div>
         `;
 
@@ -618,10 +912,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 const newSectionRow = document.getElementById('new-section-row');
                 const newSectionInput = document.getElementById('new-section-name');
                 if (this.value === '__new_section__') {
-                    newSectionRow.style.display = 'block';
+                    newSectionRow.classList.remove('hidden');
                     newSectionInput.required = true;
                 } else {
-                    newSectionRow.style.display = 'none';
+                    newSectionRow.classList.add('hidden');
                     newSectionInput.required = false;
                     await updateSubsectionDropdown(this.value, document.getElementById('new-product-subsection').value);
                 }
@@ -634,10 +928,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 const newSubsectionRow = document.getElementById('new-subsection-row');
                 const newSubsectionInput = document.getElementById('new-subsection-name');
                 if (this.value === '__new_subsection__') {
-                    newSubsectionRow.style.display = 'block';
+                    newSubsectionRow.classList.remove('hidden');
                     newSubsectionInput.required = true;
                 } else {
-                    newSubsectionRow.style.display = 'none';
+                    newSubsectionRow.classList.add('hidden');
                     newSubsectionInput.required = false;
                 }
             };
@@ -721,8 +1015,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Helper: update subsection dropdown based on selected section
     async function updateSubsectionDropdown(sectionId, currentSubId) {
-        const subSelectId = sectionId.startsWith('edit-') ? 'edit-product-subsection' : 'new-product-subsection';
-        const subSelect = document.getElementById(subSelectId);
+        const subSelect = document.getElementById('new-product-subsection');
         if (!subSelect) return;
 
         if (!sectionId) {
@@ -731,7 +1024,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const sections = await fetchJSON(`${API_BASE}/products/?db=${db}`);
-        const section = sections.find(s => s.id == sectionId.replace('edit-', ''));
+        const section = sections.find(s => s.id == sectionId);
         let options = '<option value="">Select Subsection</option>';
         options += '<option value="__new_subsection__">-- Create new subsection --</option>';
         if (section && section.subsections) {
@@ -755,67 +1048,81 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         const html = `
-            <div style="margin-bottom:10px;">
+            <div class="form-group">
                 <label>Party Name:</label>
-                <input type="text" id="new-party-name" style="width:100%;">
+                <input type="text" id="new-party-name" class="form-control">
             </div>
-            <div style="margin-bottom:10px;">
+            <div class="form-group">
                 <label>Template (optional):</label>
-                <select id="new-party-template" style="width:100%;">${templateOptions}</select>
+                <select id="new-party-template" class="form-control">${templateOptions}</select>
             </div>
-            <div style="margin-bottom:10px;">
+            <div class="form-group">
                 <label>Start Date:</label>
-                <input type="date" id="new-party-start-date" style="width:100%;">
+                <input type="date" id="new-party-start-date" class="form-control">
             </div>
-            <div style="margin-bottom:10px;">
+            <div class="form-group">
                 <label>End Date (optional):</label>
-                <input type="date" id="new-party-end-date" style="width:100%;">
+                <input type="date" id="new-party-end-date" class="form-control">
             </div>
         `;
 
-        const confirmed = await showDialog('Create New Party', html, 'Create');
-        if (confirmed) {
-            const name = document.getElementById('new-party-name').value.trim();
-            const templateValue = document.getElementById('new-party-template').value;
-            const startDate = document.getElementById('new-party-start-date').value;
-            const endDate = document.getElementById('new-party-end-date').value;
+        // Read form values in onConfirm callback (runs before overlay is removed)
+        let formData = null;
 
-            if (!name) {
+        const onConfirm = function() {
+            formData = {
+                name: document.getElementById('new-party-name').value.trim(),
+                templateValue: document.getElementById('new-party-template').value,
+                startDate: document.getElementById('new-party-start-date').value,
+                endDate: document.getElementById('new-party-end-date').value
+            };
+
+            if (!formData.name) {
                 alert('Party name is required');
-                return;
+                return false; // Don't close the dialog
             }
+        };
 
-            try {
-                if (templateValue === '__empty__') {
-                    await fetchJSON(`${API_BASE}/parties/create-empty?db=${db}`, {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            name: name,
-                            start_date: startDate,
-                            end_date: endDate || null
-                        })
-                    });
-                } else {
-                    await fetchJSON(`${API_BASE}/parties/?db=${db}`, {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            name: name,
-                            template_id: parseInt(templateValue),
-                            start_date: startDate,
-                            end_date: endDate || null
-                        })
-                    });
-                }
-                loadParties();
-            } catch(e) {
-                alert('Failed to create party: ' + (e.message || e));
+        const confirmed = await showDialog('Create New Party', html, 'Create', onConfirm);
+        if (!confirmed || !formData) return;
+
+        try {
+            if (formData.templateValue === '__empty__') {
+                await fetchJSON(`${API_BASE}/parties/create-empty?db=${db}`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: formData.name,
+                        start_date: formData.startDate,
+                        end_date: formData.endDate || null
+                    })
+                });
+            } else {
+                await fetchJSON(`${API_BASE}/parties/?db=${db}`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: formData.name,
+                        template_id: parseInt(formData.templateValue),
+                        start_date: formData.startDate,
+                        end_date: formData.endDate || null
+                    })
+                });
             }
+            loadParties();
+        } catch(e) {
+            alert('Failed to create party: ' + (e.message || e));
         }
     });
 
     // Wire up CSV import/export buttons
     document.getElementById('import-csv-btn').addEventListener('click', importCsv);
     document.getElementById('export-csv-btn').addEventListener('click', exportCsv);
+
+    // Wire up CSV template download link
+    const templateLink = document.getElementById('download-csv-template-btn');
+    if (templateLink) {
+        const templateCsv = 'section,subsection,name,price,sku,stock_count\n"Drinks","Soft Drinks","Coca Cola",1.50,CC123,100\n"Food","Snacks","Potato Chips",2.00,PC456,50\n';
+        templateLink.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(templateCsv);
+    }
     
     document.getElementById('add-operator-btn').addEventListener('click', () => {
         const name = prompt('Operator name:');
@@ -834,9 +1141,22 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         const formData = new FormData(this);
         const settings = {};
+        
+        // Handle regular inputs and selects
         for (const [key, value] of formData.entries()) {
             settings[key] = value;
         }
+        
+        // Handle checkboxes — set to '0' if unchecked
+        const checkboxes = this.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(cb => {
+            if (!cb.checked) {
+                settings[cb.name] = '0';
+            } else if (cb.value !== 'on') {
+                settings[cb.name] = cb.value;
+            }
+        });
+        
         fetchJSON(`${API_BASE}/settings/?db=${db}`, {
             method: 'POST',
             body: JSON.stringify(settings)
@@ -904,7 +1224,528 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('Failed to assign tag: ' + e);
         }
     });
-    
+
+    // === Filter Event Listeners ===
+    // Populate section filter dropdown
+    async function populateFilterDropdowns() {
+        try {
+            allSections = await fetchJSON(`${API_BASE}/products/?db=${db}`);
+            const sectionFilter = document.getElementById('filter-section');
+            sectionFilter.innerHTML = '<option value="">All Sections</option>';
+            allSections.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = s.name;
+                sectionFilter.appendChild(opt);
+            });
+
+            // Populate tag filter dropdown
+            allTags = await fetchJSON(`${API_BASE}/products/tags?db=${db}`);
+            const tagFilter = document.getElementById('filter-tag');
+            tagFilter.innerHTML = '<option value="">All Tags</option>';
+            allTags.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.id;
+                opt.textContent = t.name;
+                tagFilter.appendChild(opt);
+            });
+        } catch (e) {
+            console.error('Failed to populate filter dropdowns:', e);
+        }
+    }
+
+    // Section filter change → populate subsections
+    document.getElementById('filter-section').addEventListener('change', function() {
+        const subsectionFilter = document.getElementById('filter-subsection');
+        const sectionId = this.value;
+        subsectionFilter.innerHTML = '<option value="">All Subsections</option>';
+        if (sectionId) {
+            const section = allSections.find(s => s.id == sectionId);
+            if (section && section.subsections) {
+                section.subsections.forEach(sub => {
+                    const opt = document.createElement('option');
+                    opt.value = sub.id;
+                    opt.textContent = sub.name;
+                    subsectionFilter.appendChild(opt);
+                });
+            }
+        }
+        loadProducts();
+    });
+
+    // Subsection filter change → reload
+    document.getElementById('filter-subsection').addEventListener('change', loadProducts);
+
+    // Tag filter change → reload
+    document.getElementById('filter-tag').addEventListener('change', loadProducts);
+
+    // Active filter change → reload
+    document.getElementById('filter-active').addEventListener('change', loadProducts);
+
+    // Search input with debounce
+    let searchDebounceTimer;
+    document.getElementById('product-search').addEventListener('input', function() {
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = setTimeout(() => loadProducts(), 300);
+    });
+
+    // Clear filters button
+    document.getElementById('clear-filters-btn').addEventListener('click', function() {
+        document.getElementById('product-search').value = '';
+        document.getElementById('filter-section').value = '';
+        document.getElementById('filter-subsection').innerHTML = '<option value="">All Subsections</option>';
+        document.getElementById('filter-tag').value = '';
+        document.getElementById('filter-active').value = '';
+        loadProducts();
+    });
+
+    // === Select All Checkbox ===
+    document.getElementById('select-all-products').addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('.product-checkbox');
+        checkboxes.forEach(cb => {
+            cb.checked = this.checked;
+            if (this.checked) {
+                if (!selectedProductIds.includes(parseInt(cb.value))) {
+                    selectedProductIds.push(parseInt(cb.value));
+                }
+            } else {
+                selectedProductIds = selectedProductIds.filter(id => id !== parseInt(cb.value));
+            }
+        });
+        updateBulkEditBar();
+    });
+
+    // === Bulk Edit Bar ===
+    function updateBulkEditBar() {
+        const checkboxes = document.querySelectorAll('.product-checkbox:checked');
+        selectedProductIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+        const count = selectedProductIds.length;
+        document.getElementById('bulk-selected-count').textContent = `${count} selected`;
+        document.getElementById('bulk-edit-bar').style.display = count > 0 ? 'block' : 'none';
+    }
+
+    // Clear selection button
+    document.getElementById('bulk-clear-selection').addEventListener('click', function() {
+        selectedProductIds = [];
+        document.querySelectorAll('.product-checkbox').forEach(cb => cb.checked = false);
+        const selectAll = document.getElementById('select-all-products');
+        if (selectAll) selectAll.checked = false;
+        document.getElementById('bulk-edit-bar').style.display = 'none';
+    });
+
+    // Bulk Edit Attributes button
+    document.getElementById('bulk-edit-btn').addEventListener('click', async function() {
+        if (selectedProductIds.length === 0) {
+            alert('No products selected');
+            return;
+        }
+        const updates = await showBulkEditDialog();
+        if (!updates || Object.keys(updates).length === 0) return;
+
+        try {
+            const result = await fetchJSON(`${API_BASE}/products/products/bulk?db=${db}`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    product_ids: selectedProductIds,
+                    updates: updates
+                })
+            });
+            alert(result.message);
+            loadProducts();
+        } catch (e) {
+            alert('Bulk update failed: ' + (e.message || e));
+        }
+    });
+
+    // Bulk Mark Active/Inactive
+    document.getElementById('bulk-active-btn').addEventListener('click', async function() {
+        if (selectedProductIds.length === 0) return;
+        if (!confirm(`Mark ${selectedProductIds.length} product(s) as active?`)) return;
+        try {
+            await fetchJSON(`${API_BASE}/products/products/bulk?db=${db}`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    product_ids: selectedProductIds,
+                    updates: { is_active: true }
+                })
+            });
+            loadProducts();
+        } catch (e) {
+            alert('Failed to update: ' + (e.message || e));
+        }
+    });
+
+    document.getElementById('bulk-inactive-btn').addEventListener('click', async function() {
+        if (selectedProductIds.length === 0) return;
+        if (!confirm(`Mark ${selectedProductIds.length} product(s) as inactive?`)) return;
+        try {
+            await fetchJSON(`${API_BASE}/products/products/bulk?db=${db}`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    product_ids: selectedProductIds,
+                    updates: { is_active: false }
+                })
+            });
+            loadProducts();
+        } catch (e) {
+            alert('Failed to update: ' + (e.message || e));
+        }
+    });
+
+    // Bulk Delete Products
+    document.getElementById('bulk-delete-btn').addEventListener('click', async function() {
+        if (selectedProductIds.length === 0) return;
+        if (!confirm(`Delete ${selectedProductIds.length} product(s)? This cannot be undone.`)) return;
+        try {
+            // Delete each product individually (API supports single-product DELETE)
+            for (const productId of selectedProductIds) {
+                await fetchJSON(`${API_BASE}/products/products/${productId}?db=${db}`, {
+                    method: 'DELETE'
+                });
+            }
+            alert(`Deleted ${selectedProductIds.length} product(s)`);
+            selectedProductIds = [];
+            document.getElementById('bulk-edit-bar').style.display = 'none';
+            loadProducts();
+        } catch(e) {
+            alert('Failed to delete products: ' + (e.message || e));
+        }
+    });
+
+    // === Bulk Edit Dialog ===
+    async function showBulkEditDialog() {
+        // Fetch sections for dropdown
+        await populateFilterDropdowns();
+
+        let sectionOptions = '<option value="">-- No Change --</option>';
+        allSections.forEach(section => {
+            sectionOptions += `<option value="${section.id}">${section.name}</option>`;
+        });
+
+        let subsectionOptions = '<option value="">-- No Change --</option>';
+
+        const html = `
+            <div class="form-group">
+                <label>Name:</label>
+                <input type="text" id="bulk-name" placeholder="Leave blank to keep unchanged" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Price (€):</label>
+                <input type="number" id="bulk-price" step="0.01" placeholder="Leave blank to keep unchanged" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>SKU:</label>
+                <input type="text" id="bulk-sku" placeholder="Leave blank to keep unchanged" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Section:</label>
+                <select id="bulk-section" class="form-control">${sectionOptions}</select>
+            </div>
+            <div class="form-group">
+                <label>Subsection:</label>
+                <select id="bulk-subsection" class="form-control">${subsectionOptions}</select>
+            </div>
+            <div class="form-group">
+                <label>Stock (leave blank for unlimited):</label>
+                <input type="number" id="bulk-stock" placeholder="Leave blank to keep unchanged" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Tags:</label>
+                <select id="bulk-tags" multiple class="form-control form-control-multiselect">
+                    ${allTags.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                </select>
+                <p class="form-help-text">Hold Ctrl/Cmd to select multiple. Leave unselected to keep existing tags.</p>
+            </div>
+        `;
+
+        // Read form values in onConfirm callback (runs before overlay is removed)
+        let updates = null;
+
+        const onConfirm = function() {
+            updates = {};
+
+            const name = document.getElementById('bulk-name').value.trim();
+            if (name) updates.name = name;
+
+            const price = document.getElementById('bulk-price').value;
+            if (price) updates.price = parseFloat(price);
+
+            const sku = document.getElementById('bulk-sku').value.trim();
+            if (sku) updates.sku = sku;
+
+            const sectionId = document.getElementById('bulk-section').value;
+            if (sectionId) {
+                updates.section_id = parseInt(sectionId);
+                const subsectionId = document.getElementById('bulk-subsection').value;
+                if (subsectionId) updates.subsection_id = parseInt(subsectionId);
+            }
+
+            const stock = document.getElementById('bulk-stock').value;
+            if (stock !== '') {
+                updates.stock = parseInt(stock);
+            }
+
+            const selectedTagOpts = document.getElementById('bulk-tags').selectedOptions;
+            if (selectedTagOpts.length > 0) {
+                updates.tags = Array.from(selectedTagOpts).map(opt => parseInt(opt.value));
+            }
+        };
+
+        const confirmed = await showDialog('Bulk Edit Attributes', html, 'Apply Changes', onConfirm);
+        if (!confirmed || !updates) return null;
+
+        return updates;
+    }
+
+    // === Assign Tags to Selected Products ===
+    document.getElementById('bulk-assign-tags-btn').addEventListener('click', async function() {
+        if (selectedProductIds.length === 0) {
+            alert('No products selected');
+            return;
+        }
+
+        await populateFilterDropdowns();
+        const tagOptions = allTags.map(t =>
+            `<option value="${t.id}">${t.name}</option>`
+        ).join('');
+
+        const html = `
+            <p>Select tags to assign to ${selectedProductIds.length} product(s):</p>
+            <select id="bulk-assign-tags-select" multiple class="form-control form-control-multiselect">
+                ${tagOptions}
+            </select>
+        `;
+
+        let selectedTagIds = null;
+
+        const onConfirm = function() {
+            const selectedTagOpts = document.getElementById('bulk-assign-tags-select').selectedOptions;
+            selectedTagIds = Array.from(selectedTagOpts).map(opt => parseInt(opt.value));
+            if (selectedTagIds.length === 0) {
+                alert('Please select at least one tag');
+                return false; // Don't close the dialog
+            }
+        };
+
+        const confirmed = await showDialog('Assign Tags', html, 'Assign', onConfirm);
+        if (!confirmed || !selectedTagIds || selectedTagIds.length === 0) return;
+
+        try {
+            await fetchJSON(`${API_BASE}/products/products/bulk?db=${db}`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    product_ids: selectedProductIds,
+                    updates: { tags: selectedTagIds }
+                })
+            });
+            alert(`Assigned ${selectedTagIds.length} tag(s) to ${selectedProductIds.length} product(s)`);
+            loadProducts();
+        } catch (e) {
+            alert('Failed to assign tags: ' + (e.message || e));
+        }
+    });
+
+    // === Sections Reorder ===
+    async function loadSections() {
+        try {
+            const sections = await fetchJSON(`${API_BASE}/products/?db=${db}`);
+            const listEl = document.getElementById('sections-list');
+            listEl.innerHTML = '';
+            sections.forEach((section, idx) => {
+                const div = document.createElement('div');
+                div.className = 'section-item';
+                div.draggable = true;
+                div.dataset.sectionId = section.id;
+                div.innerHTML = `<span class="drag-handle" style="margin-right:10px;cursor:move;">≡</span>${section.name} (${section.subsections ? section.subsections.length : 0} ${t('subsections')}) <span class="section-arrows" style="margin-left:auto;display:inline-flex;flex-direction:column;"><button type="button" class="section-move-up" title="Move up" style="border:none;background:none;cursor:pointer;font-size:14px;">▲</button><button type="button" class="section-move-down" title="Move down" style="border:none;background:none;cursor:pointer;font-size:14px;">▼</button></span>`;
+                listEl.appendChild(div);
+            });
+            setupDragAndDrop();
+            setupSectionArrows();
+        } catch (e) {
+            console.error('Sections load failed:', e);
+        }
+    }
+
+    function setupDragAndDrop() {
+        var listEl = document.getElementById('sections-list');
+        if (!listEl) return;
+
+        var dragSrcEl = null;
+
+        listEl.addEventListener('dragstart', function(e) {
+            dragSrcEl = e.target.closest('.section-item');
+            if (dragSrcEl) {
+                dragSrcEl.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            }
+        });
+
+        listEl.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            var afterElement = getDragAfterElement(listEl, e.clientY);
+            var draggable = listEl.querySelector('.dragging');
+            if (afterElement == null) {
+                listEl.appendChild(draggable);
+            } else {
+                listEl.insertBefore(draggable, afterElement);
+            }
+        });
+
+        listEl.addEventListener('dragend', function(e) {
+            var item = e.target.closest('.section-item');
+            if (item) {
+                item.classList.remove('dragging');
+            }
+            dragSrcEl = null;
+            // Save new order
+            var orderedIds = Array.from(listEl.querySelectorAll('.section-item'))
+                .map(el => parseInt(el.dataset.sectionId));
+            fetchJSON(`${API_BASE}/products/sections/reorder?db=${db}`, {
+                method: 'POST',
+                body: JSON.stringify({ section_ids: orderedIds })
+            }).catch(e => console.error('Failed to save section order:', e));
+        });
+
+        function getDragAfterElement(container, y) {
+            var draggableElements = container.querySelectorAll('.section-item:not(.dragging)');
+            var afterElement = null;
+            for (var i = 0; i < draggableElements.length; i++) {
+                var el = draggableElements[i];
+                var rect = el.getBoundingClientRect();
+                var offset = y - rect.top - rect.height / 2;
+                if (offset < 0) {
+                    afterElement = el;
+                    break;
+                }
+            }
+            return afterElement;
+        }
+    }
+
+    function setupSectionArrows() {
+        var listEl = document.getElementById('sections-list');
+        if (!listEl) return;
+        listEl.addEventListener('click', function(e) {
+            var upBtn = e.target.closest('.section-move-up');
+            var downBtn = e.target.closest('.section-move-down');
+            if (!upBtn && !downBtn) return;
+            var item = e.target.closest('.section-item');
+            if (!item) return;
+            var items = Array.from(listEl.querySelectorAll('.section-item'));
+            var idx = items.indexOf(item);
+            var targetIdx = upBtn ? idx - 1 : idx + 1;
+            if (targetIdx < 0 || targetIdx >= items.length) return;
+            var target = items[targetIdx];
+            if (upBtn) {
+                listEl.insertBefore(item, target);
+            } else {
+                listEl.insertBefore(target, item);
+            }
+            saveSectionOrder();
+        });
+    }
+
+    async function saveSectionOrder() {
+        var listEl = document.getElementById('sections-list');
+        if (!listEl) return;
+        var orderedIds = Array.from(listEl.querySelectorAll('.section-item'))
+            .map(el => parseInt(el.dataset.sectionId));
+        try {
+            await fetchJSON(`${API_BASE}/products/sections/reorder?db=${db}`, {
+                method: 'POST',
+                body: JSON.stringify({ section_ids: orderedIds })
+            });
+        } catch (e) {
+            console.error('Failed to save section order:', e);
+        }
+    }
+
     // === Init ===
+    initSettings();
     loadDashboard();
+    populateFilterDropdowns();
+
+    // === Translate page on load ===
+    function translatePage() {
+        var backBtn = document.getElementById('back-to-pos');
+        if (backBtn) backBtn.textContent = t('back_to_pos');
+
+        var sidebarH2 = document.querySelector('.admin-sidebar-header h2');
+        if (sidebarH2) sidebarH2.textContent = t('admin_panel');
+
+        var saveBtn = document.querySelector('#settings-form button[type="submit"]');
+        if (saveBtn) saveBtn.textContent = t('save_settings');
+
+        // Translate nav links
+        var navLinks = document.querySelectorAll('.admin-nav a[data-section]');
+        var navLabels = {
+            dashboard: t('dashboard'),
+            products: t('products'),
+            parties: t('parties'),
+            operators: t('operators'),
+            settings: t('settings'),
+            tags: t('tags'),
+            sections: t('sections')
+        };
+        navLinks.forEach(function(link) {
+            var section = link.dataset.section;
+            if (navLabels[section]) link.textContent = navLabels[section];
+        });
+
+        // Update settings form labels (only text content, preserve child elements like checkboxes)
+        var labels = document.querySelectorAll('#settings-form label');
+        labels.forEach(function(label) {
+            // For simple labels (no child elements), replace textContent
+            if (label.children.length === 0) {
+                var text = label.textContent.trim();
+                var simpleKeyMap = {
+                    'Currency:': 'currency_label',
+                    'Language:': 'language_label',
+                    'Default Payment Method:': 'default_payment',
+                    'Snapshot Interval (minutes):': 'snapshot_interval'
+                };
+                if (simpleKeyMap[text]) {
+                    label.textContent = t(simpleKeyMap[text]);
+                }
+            }
+            // For checkbox labels, replace only the text node after the input
+            if (label.children.length > 0 && label.querySelector('input[type="checkbox"]')) {
+                var cbKeyMap = {
+                    'skip_cash_tender': 'skip_cash_tender',
+                    'auto_checkout': 'auto_checkout_label',
+                    'split_receipts': 'split_receipts',
+                    'print_recovery_receipt': 'print_recovery_receipt'
+                };
+                var input = label.querySelector('input[type="checkbox"]');
+                if (input && input.name && cbKeyMap[input.name]) {
+                    // Find the text node after the input
+                    var textNode = null;
+                    for (var i = 0; i < label.childNodes.length; i++) {
+                        if (label.childNodes[i].nodeType === Node.TEXT_NODE) {
+                            textNode = label.childNodes[i];
+                            break;
+                        }
+                    }
+                    if (textNode) {
+                        var trimmed = textNode.textContent.trim();
+                        if (trimmed) {
+                            textNode.textContent = ' ' + t(cbKeyMap[input.name]) + ' ';
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    async function initSettings() {
+        try {
+            AppState.settings = await fetchJSON(`${API_BASE}/settings/?db=${db}`);
+            translatePage();
+        } catch (e) {
+            console.error('Settings load failed:', e);
+            AppState.settings = {};
+            translatePage();
+        }
+    }
 });

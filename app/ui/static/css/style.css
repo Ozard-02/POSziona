@@ -21,12 +21,17 @@ body {
 
 /* ===== Left Sidebar: Sections ===== */
 .sidebar-left {
-    width: 220px;
+    width: 240px;
+    max-width: 25%;
+    min-width: 200px;
     background: #2c3e50;
     color: white;
     padding: 10px;
     overflow-y: auto;
     flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+    overflow-x: hidden;
 }
 
 .party-header {
@@ -34,15 +39,135 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 15px;
+    gap: 10px;
+    flex-wrap: nowrap;
+    width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 .party-header h2 {
     font-size: 20px;
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.btn-sm {
-    padding: 5px 10px;
+.party-status {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #27ae60;
+    flex-shrink: 0;
+}
+
+/* Full-width button for modal content */
+.btn-block {
+    width: 100%;
+    margin-top: 10px;
+}
+
+/* Full-width form input */
+.form-input-block {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+/* Form control for dialog inputs */
+.form-control {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.form-control-multiselect {
+    height: 100px;
+}
+
+.textarea-import {
+    font-family: monospace;
     font-size: 12px;
+    padding: 5px;
+    height: 200px;
+    resize: vertical;
+}
+
+.form-help-text {
+    font-size: 11px;
+    color: #888;
+}
+
+.muted-text {
+    color: #999;
+}
+
+.section-divider {
+    margin-top: 20px;
+    margin-bottom: 10px;
+}
+
+.tag-remove-btn {
+    margin-left: 5px;
+    padding: 0 4px;
+    font-size: 12px;
+}
+
+/* Dialog overlay (for showDialog) */
+.dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dialog-content {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    min-width: 350px;
+    max-width: 500px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Admin context menu (right-click on dashboard items) */
+.admin-context-menu {
+    position: fixed;
+    background: #fff;
+    border: 1px solid #ccc;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    z-index: 3000;
+    min-width: 160px;
+    padding: 4px 0;
+}
+
+.context-menu-item {
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+/* Dialog buttons */
+.dialog-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    justify-content: flex-end;
 }
 
 .sections-tree .section h3 {
@@ -135,6 +260,126 @@ body {
     white-space: nowrap;
 }
 
+/* Out-of-stock product button styling */
+.product-btn.out-of-stock {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #f8f9fa !important;
+    border-color: #dee2e6;
+}
+
+.product-btn.out-of-stock .product-name {
+    text-decoration: line-through;
+    color: #999;
+}
+
+.product-btn.out-of-stock .product-price {
+    color: #999;
+}
+
+/* Stock/unavailability indicators on product buttons */
+.product-stock-row {
+    font-size: 11px;
+    color: #e67e22;
+    margin-top: 2px;
+    font-weight: bold;
+}
+
+.product-avail-row {
+    font-size: 11px;
+    color: #e74c3c;
+    margin-top: 2px;
+    font-weight: bold;
+}
+
+/* Sections reorder list */
+.sections-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.sections-list .section-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin-bottom: 5px;
+    cursor: move;
+    transition: all 0.2s;
+}
+
+.sections-list .section-item:hover {
+    background: #f8f9fa;
+    border-color: #b0b0b0;
+}
+
+.sections-list .section-item.dragging {
+    opacity: 0.5;
+}
+
+/* Availability dot indicator */
+.product-avail-dot {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #27ae60;
+    flex-shrink: 0;
+}
+
+.product-avail-dot.out-of-stock {
+    background: #e74c3c;
+}
+
+/* Context menu for POS product right-click */
+.pos-context-menu {
+    position: fixed;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 3000;
+    min-width: 180px;
+    padding: 4px 0;
+}
+
+.pos-context-menu .menu-item {
+    padding: 6px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pos-context-menu .menu-item:hover {
+    background: #f8f9fa;
+}
+
+.pos-context-menu .menu-item:active {
+    background: #e9ecef;
+}
+
+.pos-context-menu .menu-item.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pos-context-menu .menu-item.disabled:hover {
+    background: transparent;
+}
+
+.pos-context-menu .menu-separator {
+    height: 1px;
+    background: #ddd;
+    margin: 4px 0;
+}
+
 /* ===== Right Sidebar: Cart ===== */
 .sidebar-right {
     width: 300px;
@@ -157,6 +402,7 @@ body {
 .cart-item {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     padding: 8px 0;
     border-bottom: 1px solid #ddd;
     font-size: 14px;
@@ -184,13 +430,50 @@ body {
     gap: 10px;
 }
 
+/* Navigation buttons in the POS sidebar — below cart total, above checkout */
+.nav-buttons {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.nav-buttons .btn-sm {
+    flex: 1;
+    min-width: 80px;
+}
+
 .btn-primary, .btn-secondary {
     padding: 10px 15px;
     border: none;
     border-radius: 5px;
     cursor: pointer;
     font-size: 14px;
-    flex: 1;
+}
+
+/* Small buttons override base button sizing */
+.btn-sm {
+    padding: 5px 10px;
+    font-size: 12px;
+    flex: none !important;
+}
+
+.btn-sm.btn-primary {
+    padding: 5px 10px;
+    font-size: 12px;
+    flex: none !important;
+}
+
+.btn-sm.btn-secondary {
+    padding: 5px 10px;
+    font-size: 12px;
+    flex: none !important;
+}
+
+/* Large buttons for prominent actions */
+.btn-large {
+    padding: 15px;
+    font-size: 18px;
 }
 
 .btn-primary {
@@ -211,9 +494,13 @@ body {
     background: #c0392b;
 }
 
-.btn-large {
-    padding: 15px;
-    font-size: 18px;
+.btn-danger {
+    background: #e74c3c;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #c0392b;
 }
 
 /* ===== Modals ===== */
@@ -234,12 +521,18 @@ body {
     display: none;
 }
 
+/* Generic hide class — used for dynamically showing/hiding form rows */
+.hidden {
+    display: none !important;
+}
+
 .modal-content {
     background: white;
     padding: 20px;
     border-radius: 10px;
     min-width: 300px;
     max-width: 500px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .modal-content h3 {
@@ -251,6 +544,7 @@ body {
     display: flex;
     gap: 10px;
     margin-top: 15px;
+    justify-content: flex-end;
 }
 
 /* ===== Login Screen ===== */
@@ -284,9 +578,11 @@ body {
     text-align: center;
 }
 
-.btn-primary, .btn-secondary {
+.login-form .btn-primary,
+.login-form .btn-secondary {
     padding: 10px 15px;
     font-size: 16px;
+    flex: 1;
 }
 
 /* ===== Admin Panel ===== */
@@ -297,18 +593,105 @@ body {
 
 .admin-sidebar {
     width: 220px;
+    min-width: 200px;
     background: #2c3e50;
     color: white;
     padding: 15px;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+    overflow-y: auto;
+    box-sizing: border-box;
 }
 
-.admin-sidebar h2 {
+.admin-sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 10px;
+    width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.admin-sidebar-header h2 {
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-size: 20px;
-    margin-bottom: 20px;
+    margin-bottom: 0;
 }
 
-.admin-nav ul {
+/* Header button groups — flexible, wraps on small screens */
+.header-actions {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+/* Section header with title + action buttons */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.section-header h3 {
+    margin: 0;
+    flex: 1;
+    min-width: 0;
+}
+
+.section-actions {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+/* Product tags display in tag assignment section */
+.product-tags-display {
+    margin-top: 10px;
+}
+
+/* Buttons that should align to the right side of a heading */
+.action-right {
+    margin-left: auto;
+    margin-top: -5px;
+}
+
+.section-help-text {
+    font-size: 14px;
+    color: #7f8c8d;
+    margin-bottom: 15px;
+}
+
+.bulk-edit-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: #e8f4fd;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.bulk-edit-bar.hidden {
+    display: none;
+}
+
+.admin-nav {
     list-style: none;
+    padding: 0;
+    margin: 0;
 }
 
 .admin-nav li {
@@ -327,10 +710,17 @@ body {
     background: #34495f;
 }
 
+.admin-nav button.btn-sm {
+    width: 100%;
+    box-sizing: border-box;
+}
+
 .admin-content {
     flex: 1;
     padding: 20px;
     overflow-y: auto;
+    min-width: 0;
+    z-index: 1;
 }
 
 .admin-section {
@@ -339,6 +729,11 @@ body {
 
 .admin-section.active {
     display: block;
+}
+
+.admin-section h3 {
+    margin-bottom: 15px;
+    color: #2c3e50;
 }
 
 .stat-card {
@@ -390,6 +785,52 @@ body {
     font-weight: bold;
 }
 
+.data-table td:first-child {
+    text-align: center;
+}
+
+.status-active {
+    color: #27ae60;
+    font-weight: bold;
+}
+
+.status-inactive {
+    color: #999;
+    font-weight: bold;
+}
+
+/* Product actions in admin table */
+.product-actions .btn-sm {
+    margin-left: 5px;
+}
+
+.product-filters {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: #f9f9f9;
+    border-radius: 4px;
+}
+
+.filter-input, .filter-select {
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    font-size: 13px;
+}
+
+.filter-input {
+    width: 200px;
+}
+
+.bulk-edit-bar span {
+    font-weight: bold;
+    color: #2c3e50;
+}
+
 .form-group {
     margin-bottom: 15px;
 }
@@ -406,6 +847,21 @@ body {
     border: 1px solid #ddd;
     border-radius: 5px;
     font-size: 14px;
+    box-sizing: border-box;
+}
+
+/* Checkbox styling for settings form */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: normal;
+    cursor: pointer;
+}
+
+.checkbox-input {
+    margin: 0;
+    cursor: pointer;
 }
 
 .payment-option {
@@ -637,6 +1093,12 @@ body {
 .tag-item .tag-name {
     flex: 1;
     font-weight: bold;
+}
+
+.tag-bg-info {
+    font-size: 11px;
+    color: #888;
+    flex: 1;
 }
 
 .tag-item .tag-actions {

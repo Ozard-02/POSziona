@@ -15,8 +15,8 @@ class Product(BaseModel):
     
     @property
     def display_price(self):
-        from app.utils.config import Config
-        return f"{Config.DEFAULT_CURRENCY}{self.price:.2f}"
+        from app.utils.config import DEFAULT_CURRENCY
+        return f"{DEFAULT_CURRENCY}{self.price:.2f}"
     
     @property
     def is_unlimited(self):

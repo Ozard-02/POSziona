@@ -5,7 +5,10 @@
 {% block content %}
 <div class="admin-layout">
     <div class="admin-sidebar">
-        <h2>Admin Panel</h2>
+            <div class="admin-sidebar-header">
+                <h2>Admin Panel</h2>
+                <button id="back-to-pos" class="btn-secondary btn-sm">← Back to POS</button>
+            </div>
         <ul class="admin-nav">
             <li><a href="#" data-section="dashboard">Dashboard</a></li>
             <li><a href="#" data-section="products">Products</a></li>
@@ -13,6 +16,7 @@
             <li><a href="#" data-section="operators">Operators</a></li>
             <li><a href="#" data-section="settings">Settings</a></li>
             <li><a href="#" data-section="tags">Tags</a></li>
+            <li><a href="#" data-section="sections">Sections</a></li>
             <li><button id="logout-admin" class="btn-secondary btn-sm">Logout</button></li>
         </ul>
     </div>
@@ -32,20 +36,74 @@
             </div>
             <h4>Items Sold</h4>
             <table class="data-table" id="items-sold-table">
-                <thead><tr><th>Product</th><th>Qty</th><th>Amount</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Qty</th>
+                        <th>Amount</th>
+                        <th>Price</th>
+                        <th>Stock</th>
+                        <th>Available</th>
+                    </tr>
+                </thead>
                 <tbody></tbody>
             </table>
         </div>
 
         <!-- Products -->
         <div id="admin-products" class="admin-section">
-            <h3>Products
-                <button id="add-product-btn" class="btn-primary btn-sm" style="float:right; margin-top:-5px;">Add Product</button>
-                <button id="import-csv-btn" class="btn-secondary btn-sm" style="float:right; margin-top:-5px; margin-right:5px;">Import CSV</button>
-                <button id="export-csv-btn" class="btn-secondary btn-sm" style="float:right; margin-top:-5px; margin-right:5px;">Export CSV</button>
-            </h3>
+            <div class="section-header">
+                <h3>Products</h3>
+                <div class="section-actions">
+                    <button id="add-product-btn" class="btn-primary btn-sm">Add Product</button>
+                    <button id="import-csv-btn" class="btn-secondary btn-sm">Import CSV</button>
+                    <a id="download-csv-template-btn" class="btn-secondary btn-sm" href="#" download="products_template.csv">Download Template</a>
+                    <button id="export-csv-btn" class="btn-secondary btn-sm">Export CSV</button>
+                </div>
+            </div>
+
+            <!-- Filter Controls -->
+            <div class="product-filters">
+                <input type="text" id="product-search" placeholder="Search by name or SKU..." class="filter-input">
+                <select id="filter-section" class="filter-select">
+                    <option value="">All Sections</option>
+                </select>
+                <select id="filter-subsection" class="filter-select">
+                    <option value="">All Subsections</option>
+                </select>
+                <select id="filter-tag" class="filter-select">
+                    <option value="">All Tags</option>
+                </select>
+                <select id="filter-active" class="filter-select">
+                    <option value="">All Statuses</option>
+                    <option value="true">Active Only</option>
+                    <option value="false">Inactive Only</option>
+                </select>
+                <button id="clear-filters-btn" class="btn-secondary btn-sm">Clear Filters</button>
+            </div>
+
+            <!-- Bulk Edit Bar -->
+            <div id="bulk-edit-bar" class="bulk-edit-bar">
+                <span id="bulk-selected-count">0 selected</span>
+                <button id="bulk-edit-btn" class="btn-primary btn-sm">Bulk Edit Attributes...</button>
+                <button id="bulk-assign-tags-btn" class="btn-secondary btn-sm">Assign Tags...</button>
+                <button id="bulk-active-btn" class="btn-secondary btn-sm">Mark Active</button>
+                <button id="bulk-inactive-btn" class="btn-secondary btn-sm">Mark Inactive</button>
+                <button id="bulk-delete-btn" class="btn-danger btn-sm">Delete Selected</button>
+                <button id="bulk-clear-selection" class="btn-secondary btn-sm">Clear Selection</button>
+            </div>
+
             <table class="data-table" id="products-table">
-                <thead><tr><th>Name</th><th>Price</th><th>Section > Subsection</th><th>Stock</th><th>Actions</th></tr></thead>
+                <thead><tr>
+                    <th><input type="checkbox" id="select-all-products"></th>
+                    <th>Name</th>
+                    <th>Price</th>
+                    <th>Section > Subsection</th>
+                    <th>Tags</th>
+                    <th>Stock</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr></thead>
                 <tbody></tbody>
             </table>
         </div>
@@ -79,12 +137,43 @@
                     <input type="text" name="currency" value="€">
                 </div>
                 <div class="form-group">
+                    <label>Language:</label>
+                    <select name="language">
+                        <option value="en">English</option>
+                        <option value="it">Italiano</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label>Default Payment Method:</label>
                     <select name="default_payment_method">
                         <option value="">None (always ask)</option>
                         <option value="cash">Cash</option>
                         <option value="card">Card</option>
                     </select>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="skip_cash_tender" value="1" class="checkbox-input">
+                        Skip cash tender screen (auto-accept exact amount)
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="auto_checkout" value="1" class="checkbox-input">
+                        Auto checkout (when both toggles are on, checkout goes straight to receipt)
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="split_receipts" value="1" class="checkbox-input">
+                        Print one receipt per section
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="print_recovery_receipt" value="1" class="checkbox-input">
+                        Print recovery receipt (always saved to logs)
+                    </label>
                 </div>
                 <div class="form-group">
                     <label>Snapshot Interval (minutes):</label>
@@ -97,7 +186,7 @@
         <!-- Tags -->
         <div id="admin-tags" class="admin-section">
             <h3>Tags &amp; Styling Rules</h3>
-            <p style="font-size:14px; color:#7f8c8d; margin-bottom:15px;">
+            <p class="section-help-text">
               Tags are assigned to products. Each tag can have a background color
               and text color that will be applied to products carrying that tag.
             </p>
@@ -117,7 +206,7 @@
             </div>
 
             <!-- Assign Tags to Products -->
-            <h4 style="margin-top:20px; margin-bottom:10px;">Assign Tags to Products</h4>
+            <h4>Assign Tags to Products</h4>
             <div class="form-group">
                 <label for="product-select">Product:</label>
                 <select id="product-select">
@@ -131,8 +220,17 @@
                 </select>
                 <button id="assign-tag-btn" class="btn-primary btn-sm">Assign</button>
             </div>
-            <div id="product-tags-display" style="margin-top:10px;">
+            <div id="product-tags-display" class="product-tags-display">
                 <!-- Current tags for selected product -->
+            </div>
+        </div>
+
+        <!-- Sections -->
+        <div id="admin-sections" class="admin-section">
+            <h3>Sections</h3>
+            <p class="section-help-text">Drag to reorder. Changes are saved automatically.</p>
+            <div id="sections-list" class="sections-list">
+                <!-- Sections will be populated here -->
             </div>
         </div>
     </div>
