@@ -2,7 +2,9 @@
 Party management API endpoints.
 """
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response
+import csv
+import io
 from app.services.party_service import (
     create_party_from_template,
     create_empty_party,
@@ -12,6 +14,7 @@ from app.services.party_service import (
     get_party_settings,
     update_party_setting,
 )
+from app.services.order_service import get_sales_summary, get_items_sold_summary, get_recent_orders
 from app.database import templates_db
 from app.utils.logger import get_logger
 
@@ -237,3 +240,73 @@ def assign_template_product_tag(template_id, product_id):
         return jsonify({'error': 'tag_name is required'}), 400
     templates_db.set_template_product_tags(template_id, product_id, [tag_name])
     return jsonify({'message': 'Tag assigned to template product'})
+
+
+# ============================================================
+# PARTY RECAP EXPORT
+# ============================================================
+@parties_bp.route('/<db_name>/recap', methods=['GET'])
+def export_party_recap(db_name):
+    """Export a party's sales recap as CSV.
+    Optional ?date=YYYY-MM-DD for daily filter.
+    """
+    date_filter = request.args.get('date')
+
+    summary = get_sales_summary(db_name, date_filter)
+    items = get_items_sold_summary(db_name, date_filter)
+    recent = get_recent_orders(db_name, 50, date_filter)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Section 1: Sales Summary
+    writer.writerow(['=== Sales Summary ==='])
+    writer.writerow(['Metric', 'Value'])
+    writer.writerow(['Total Orders', summary.get('total_orders', 0)])
+    writer.writerow(['Total Revenue', summary.get('total_revenue', 0.0)])
+    writer.writerow(['Total Discounts', summary.get('total_discounts', 0.0)])
+    writer.writerow([])
+
+    # Section 2: Items Sold
+    writer.writerow(['=== Items Sold ==='])
+    writer.writerow([
+        'Product Name', 'SKU', 'Section', 'Subsection',
+        'Quantity Sold', 'Total Amount', 'Current Price',
+        'Current Stock', 'Active'
+    ])
+    for item in items:
+        stock = item.get('stock_count')
+        writer.writerow([
+            item.get('product_name', ''),
+            item.get('sku', '') or '',
+            item.get('section', ''),
+            item.get('subsection', ''),
+            item.get('total_quantity', 0),
+            item.get('total_amount', 0.0),
+            item.get('current_price', 0.0),
+            stock if stock is not None else 'Unlimited',
+            'Yes' if item.get('is_active') else 'No'
+        ])
+    writer.writerow([])
+
+    # Section 3: Recent Orders
+    writer.writerow(['=== Recent Orders ==='])
+    writer.writerow(['Order ID', 'Timestamp', 'Operator', 'Total', 'Discount', 'Payment Method'])
+    for order in recent:
+        writer.writerow([
+            order.get('id', ''),
+            order.get('timestamp', ''),
+            order.get('operator_name', '') or 'N/A',
+            order.get('total', 0.0),
+            order.get('discount_amount', 0.0),
+            order.get('payment_method', '')
+        ])
+
+    csv_text = output.getvalue()
+    return Response(
+        csv_text,
+        mimetype='text/csv',
+        headers={
+            'Content-Disposition': f'attachment; filename="{db_name}-recap.csv"'
+        }
+    )

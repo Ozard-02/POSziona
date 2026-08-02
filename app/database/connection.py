@@ -68,9 +68,9 @@ def _run_migrations(db_path):
 
 def _init_default_operators(db_path):
     """Initialize default operators for a new party DB."""
-    import hashlib
-    admin_hash = hashlib.sha256(b'0000').hexdigest()
-    op_hash = hashlib.sha256(b'1234').hexdigest()
+    from app.services.auth_service import hash_pin
+    admin_hash = hash_pin('0000')
+    op_hash = hash_pin('1234')
 
     conn = sqlite3.connect(db_path)
     try:
@@ -204,29 +204,6 @@ def _enable_wal(db_path):
         conn.close()
 
 
-def init_default_operators(db_name):
-    """Initialize default operators (admin + default operator) and seed
-    default products/sections for a new party DB."""
-    from app.services.auth_service import hash_pin
-    with PartyDatabase(db_name) as conn:
-        conn.execute(
-            "INSERT OR IGNORE INTO operators (name, pin_hash, role, is_active) "
-            "VALUES (?, ?, ?, 1)",
-            ('admin', hash_pin('0000'), 'admin')
-        )
-        conn.execute(
-            "INSERT OR IGNORE INTO operators (name, pin_hash, role, is_active) "
-            "VALUES (?, ?, ?, 1)",
-            ('operator', hash_pin('1234'), 'operator')
-        )
-        conn.commit()
-        logger.info(f"Initialized default operators for {db_name}")
-
-    # Seed default products if the DB is empty
-    db_path = _get_party_db_path(db_name)
-    _init_default_products(db_path)
-
-
 class PartyDatabase:
     """Context manager for party database connections."""
 
@@ -240,6 +217,8 @@ class PartyDatabase:
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute('PRAGMA foreign_keys = ON')
+        self.conn.execute('PRAGMA busy_timeout = 5000')
+        self.conn.execute('PRAGMA journal_mode = WAL')
         return self.conn
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -271,6 +250,8 @@ class TemplatesDatabase:
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute('PRAGMA foreign_keys = ON')
+        self.conn.execute('PRAGMA busy_timeout = 5000')
+        self.conn.execute('PRAGMA journal_mode = WAL')
         return self.conn
 
     def __exit__(self, exc_type, exc_val, exc_tb):

@@ -705,10 +705,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    window.cancelCheckout = function() {
-        checkoutModal.classList.add('hidden');
-    };
-
     // Build receipt text using a helper to avoid template literal escaping issues
     function buildReceipt(orderData, items, kitchenSlip) {
         // `items` defaults to the full cart; callers can pass a subset (e.g. one

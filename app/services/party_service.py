@@ -8,8 +8,9 @@ import sqlite3
 import shutil
 from datetime import datetime
 
-from app.database.connection import PartyDatabase, TEMPLATES_DB
+from app.database.connection import PartyDatabase, _init_default_operators, _init_default_products
 from app.database import templates_db
+from app.database.schema import get_party_schema
 from app.utils.config import PARTY_DB_DIR
 from app.utils.logger import get_logger
 
@@ -39,9 +40,7 @@ def create_party_from_template(party_name, template_id, start_date=None, end_dat
     safe_name = "".join(c for c in party_name if c.isalnum() or c in (' ', '-', '_'))
     db_name = f"{safe_name}"
 
-    # Create party DB using PartyDatabase context manager
-    from app.database.schema import get_party_schema
-
+    # Create party DB using schema
     db_path = os.path.join(PARTY_DB_DIR, f"{db_name}.db")
 
     # Remove existing DB if it exists (fresh creation from template)
@@ -222,14 +221,13 @@ def create_empty_party(party_name, start_date=None, end_date=None):
                 os.remove(ext_path)
 
     with sqlite3.connect(db_path) as conn:
-        from app.database.schema import get_party_schema
         conn.executescript(get_party_schema())
         conn.execute('PRAGMA journal_mode=WAL')
         conn.commit()
 
-    # Initialize default operators and seed products
-    from app.database.connection import init_default_operators
-    init_default_operators(db_name)
+    # Seed default operators and products for the new DB
+    _init_default_operators(db_path)
+    _init_default_products(db_path)
 
     # Set party metadata
     with PartyDatabase(db_name) as conn:

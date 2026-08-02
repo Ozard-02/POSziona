@@ -11,7 +11,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app
-from app.database.connection import PartyDatabase, TEMPLATES_DB, PARTY_DB_DIR
+from app.database.connection import PartyDatabase, TEMPLATES_DB, PARTY_DB_DIR, _init_default_operators
 from app.database.schema import get_party_schema, get_templates_schema
 
 
@@ -58,7 +58,6 @@ def clean_db():
     conn.close()
     
     # Initialize default operators
-    from app.database.connection import _init_default_operators
     _init_default_operators(db_full_path)
     
     yield TEST_PARTY_NAME
@@ -87,7 +86,6 @@ def _cleanup_test_templates():
         conn = sqlite3.connect(TEMPLATES_DB)
         try:
             # Ensure all template tables exist (in case DB was created before schema update)
-            from app.database.schema import get_templates_schema
             conn.executescript(get_templates_schema())
             conn.execute('DELETE FROM templates')
             conn.execute('DELETE FROM template_sections')

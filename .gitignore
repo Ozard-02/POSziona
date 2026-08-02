@@ -13,3 +13,9 @@ data/
 !data/.gitkeep
 !data/parties/.gitkeep
 !data/backups/.gitkeep
+
+# Logs
+app/logs/*.log
+
+# Database runtime data
+*.db

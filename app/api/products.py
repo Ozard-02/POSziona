@@ -2,6 +2,8 @@
 Products API endpoints.
 """
 
+import csv
+import io
 from flask import Blueprint, request, jsonify
 from app.services.product_service import (
     get_all_sections_with_subsections,
@@ -456,8 +458,6 @@ def import_csv_file():
 @products_bp.route('/export', methods=['GET'])
 def export_products():
     """Export all products as CSV."""
-    import csv
-    import io
     db = request.args.get('db', 'default')
 
     output = io.StringIO()

@@ -3,7 +3,6 @@ Templates database operations.
 """
 
 from app.database.connection import TemplatesDatabase
-from app.database.schema import get_templates_schema
 from app.utils.logger import get_logger
 
 logger = get_logger('database.templates')

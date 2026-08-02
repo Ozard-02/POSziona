@@ -111,17 +111,6 @@ body {
     color: #999;
 }
 
-.section-divider {
-    margin-top: 20px;
-    margin-bottom: 10px;
-}
-
-.tag-remove-btn {
-    margin-left: 5px;
-    padding: 0 4px;
-    font-size: 12px;
-}
-
 /* Dialog overlay (for showDialog) */
 .dialog-overlay {
     position: fixed;
@@ -290,6 +279,11 @@ body {
     color: #e74c3c;
     margin-top: 2px;
     font-weight: bold;
+}
+
+/* Selected party row in admin table */
+#parties-table tbody tr.selected-party {
+    background-color: #d4edda;
 }
 
 /* Sections reorder list */
@@ -953,16 +947,6 @@ body {
 
 .toggle-switch input:checked + .toggle-slider:before {
     transform: translateX(20px);
-}
-
-.payment-option {
-    margin: 10px 0;
-}
-
-.payment-option button {
-    width: 100%;
-    padding: 15px;
-    font-size: 16px;
 }
 
 /* ===== Receipt ===== */

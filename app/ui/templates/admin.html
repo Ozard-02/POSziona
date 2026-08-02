@@ -6,18 +6,18 @@
 <div class="admin-layout">
     <div class="admin-sidebar">
             <div class="admin-sidebar-header">
-                <h2>Admin Panel</h2>
-                <button id="back-to-pos" class="btn-secondary btn-sm">← Back to POS</button>
+                <h2 data-i18n="admin_panel">Admin Panel</h2>
+                <button id="back-to-pos" class="btn-secondary btn-sm" data-i18n="back_to_pos">← Back to POS</button>
             </div>
         <ul class="admin-nav">
-            <li><a href="#" data-section="dashboard">Dashboard</a></li>
-            <li><a href="#" data-section="products">Products</a></li>
-            <li><a href="#" data-section="parties">Parties & Templates</a></li>
-            <li><a href="#" data-section="operators">Operators</a></li>
-            <li><a href="#" data-section="settings">Settings</a></li>
-            <li><a href="#" data-section="tags">Tags</a></li>
-            <li><a href="#" data-section="sections">Sections</a></li>
-            <li><button id="logout-admin" class="btn-secondary btn-sm">Logout</button></li>
+            <li><a href="#" data-section="dashboard" data-i18n="dashboard">Dashboard</a></li>
+            <li><a href="#" data-section="products" data-i18n="products">Products</a></li>
+            <li><a href="#" data-section="parties" data-i18n="parties">Parties</a></li>
+            <li><a href="#" data-section="operators" data-i18n="operators">Operators</a></li>
+            <li><a href="#" data-section="settings" data-i18n="settings">Settings</a></li>
+            <li><a href="#" data-section="tags" data-i18n="tags">Tags</a></li>
+            <li><a href="#" data-section="sections" data-i18n="sections">Sections</a></li>
+            <li><button id="logout-admin" class="btn-secondary btn-sm" data-i18n="logout">Logout</button></li>
         </ul>
     </div>
     <div class="admin-content">
@@ -35,6 +35,10 @@
                 </div>
             </div>
             <h4>Items Sold</h4>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span></span>
+                <button id="export-recap-btn-dashboard" class="btn-secondary btn-sm">Export Recap CSV</button>
+            </div>
             <table class="data-table" id="items-sold-table">
                 <thead>
                     <tr>
@@ -110,8 +114,14 @@
 
         <!-- Parties -->
         <div id="admin-parties" class="admin-section">
-            <h3>Parties & Templates</h3>
-            <button id="create-party-btn" class="btn-primary btn-sm">New Party</button>
+            <div class="section-header">
+                <h3>Parties</h3>
+                <div class="section-actions">
+                    <button id="create-party-btn" class="btn-primary btn-sm">New Party</button>
+                    <button id="duplicate-party-btn" class="btn-secondary btn-sm">Duplicate</button>
+                    <button id="export-recap-btn-party" class="btn-secondary btn-sm">Export Recap CSV</button>
+                </div>
+            </div>
             <table class="data-table" id="parties-table">
                 <thead><tr><th>Name</th><th>Dates</th><th>Actions</th></tr></thead>
                 <tbody></tbody>
@@ -133,18 +143,18 @@
             <h3>Settings</h3>
             <form id="settings-form">
                 <div class="form-group">
-                    <label>Currency:</label>
+                    <label data-i18n="currency_label">Currency:</label>
                     <input type="text" name="currency" value="€">
                 </div>
                 <div class="form-group">
-                    <label>Language:</label>
+                    <label data-i18n="language_label">Language:</label>
                     <select name="language">
                         <option value="en">English</option>
                         <option value="it">Italiano</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Default Payment Method:</label>
+                    <label data-i18n="default_payment">Default Payment Method:</label>
                     <select name="default_payment_method">
                         <option value="">None (always ask)</option>
                         <option value="cash">Cash</option>
@@ -153,7 +163,7 @@
                 </div>
                 <div class="form-group">
                     <div class="setting-row">
-                        <span class="setting-label">Skip cash tender screen (auto-accept exact amount)</span>
+                        <span class="setting-label" data-i18n="skip_cash_tender">Skip cash tender screen (auto-accept exact amount)</span>
                         <label class="toggle-switch">
                             <input type="checkbox" name="skip_cash_tender" value="1" class="checkbox-input">
                             <span class="toggle-slider"></span>
@@ -162,7 +172,7 @@
                 </div>
                 <div class="form-group">
                     <div class="setting-row">
-                        <span class="setting-label">Auto checkout (when both toggles are on, checkout goes straight to receipt)</span>
+                        <span class="setting-label" data-i18n="auto_checkout_label">Auto checkout (when both toggles are on, checkout goes straight to receipt)</span>
                         <label class="toggle-switch">
                             <input type="checkbox" name="auto_checkout" value="1" class="checkbox-input">
                             <span class="toggle-slider"></span>
@@ -171,7 +181,7 @@
                 </div>
                 <div class="form-group">
                     <div class="setting-row">
-                        <span class="setting-label">Print one receipt per section</span>
+                        <span class="setting-label" data-i18n="split_receipts">Print one receipt per section</span>
                         <label class="toggle-switch">
                             <input type="checkbox" name="split_receipts" value="1" class="checkbox-input">
                             <span class="toggle-slider"></span>
@@ -180,7 +190,7 @@
                 </div>
                 <div class="form-group">
                     <div class="setting-row">
-                        <span class="setting-label">Print recovery receipt (always saved to logs)</span>
+                        <span class="setting-label" data-i18n="print_recovery_receipt">Print recovery receipt (always saved to logs)</span>
                         <label class="toggle-switch">
                             <input type="checkbox" name="print_recovery_receipt" value="1" class="checkbox-input">
                             <span class="toggle-slider"></span>
@@ -188,10 +198,10 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>Snapshot Interval (minutes):</label>
+                    <label data-i18n="snapshot_interval">Snapshot Interval (minutes):</label>
                     <input type="number" name="snapshot_interval_minutes" value="5">
                 </div>
-                <button type="submit" class="btn-primary">Save Settings</button>
+                <button type="submit" class="btn-primary" data-i18n="save_settings">Save Settings</button>
             </form>
         </div>
 

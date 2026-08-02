@@ -78,8 +78,37 @@ document.addEventListener('DOMContentLoaded', function() {
                 const productId = row.dataset.productId;
                 showItemContextMenu(e.pageX, e.pageY, productId, row);
             });
+
+            // Wire up export recap button
+            const exportBtn = document.getElementById('export-recap-btn-dashboard');
+            if (exportBtn) {
+                exportBtn.onclick = () => exportRecapCsv();
+            }
         } catch (e) {
             console.error('Dashboard load failed:', e);
+        }
+    }
+
+    async function exportRecapCsv() {
+        try {
+            const response = await fetch(`${API_BASE}/orders/report/export-csv?db=${db}`, {
+                method: 'GET',
+            });
+            if (!response.ok) {
+                throw new Error('Export failed');
+            }
+            const csvText = await response.text();
+            const blob = new Blob([csvText], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'party-recap.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            alert('Failed to export recap: ' + (e.message || e));
         }
     }
 
@@ -596,25 +625,114 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // === Parties ===
+    let selectedParty = null;
+
     async function loadParties() {
         try {
             const parties = await fetchJSON(`${API_BASE}/parties/?db=${db}`);
             const tbody = document.querySelector('#parties-table tbody');
             tbody.innerHTML = '';
-            
+            selectedParty = null;
+
             parties.forEach(p => {
                 const row = tbody.insertRow();
-                row.insertCell(0).textContent = p.name;
-                row.insertCell(1).textContent = p.modified;
+                row.dataset.partyName = p.name;
+
+                const nameCell = row.insertCell(0);
+                nameCell.textContent = p.name;
+
+                const dateCell = row.insertCell(1);
+                dateCell.textContent = p.modified || '';
+
                 const actionsCell = row.insertCell(2);
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'product-actions';
+
+                // Duplicate button
+                const dupBtn = document.createElement('button');
+                dupBtn.textContent = 'Duplicate';
+                dupBtn.className = 'btn-sm';
+                dupBtn.onclick = () => duplicateParty(p.name);
+                actionsDiv.appendChild(dupBtn);
+
+                // Delete button
                 const delBtn = document.createElement('button');
                 delBtn.textContent = 'Delete';
                 delBtn.className = 'btn-sm btn-secondary';
                 delBtn.onclick = () => deleteParty(p.name);
-                actionsCell.appendChild(delBtn);
+                actionsDiv.appendChild(delBtn);
+
+                // Row click to select
+                row.addEventListener('click', () => {
+                    selectedParty = p.name;
+                    // Highlight selected row
+                    document.querySelectorAll('#parties-table tbody tr').forEach(r => r.classList.remove('selected-party'));
+                    row.classList.add('selected-party');
+                });
+
+                actionsCell.appendChild(actionsDiv);
             });
+
+            // Wire up section-level buttons
+            const sectionDupBtn = document.getElementById('duplicate-party-btn');
+            if (sectionDupBtn) {
+                sectionDupBtn.onclick = () => {
+                    if (!selectedParty) {
+                        alert('Please select a party to duplicate first.');
+                        return;
+                    }
+                    duplicateParty(selectedParty);
+                };
+            }
+
+            const exportBtn = document.getElementById('export-recap-btn-party');
+            if (exportBtn) {
+                exportBtn.onclick = () => exportPartyRecapCsv(selectedParty);
+            }
         } catch (e) {
             console.error('Parties load failed:', e);
+        }
+    }
+
+    async function duplicateParty(partyName) {
+        const newName = prompt('Enter new party name:', partyName + ' (copy)');
+        if (!newName || !newName.trim()) return;
+
+        try {
+            await fetchJSON(`${API_BASE}/parties/${encodeURIComponent(partyName)}/duplicate?db=${db}`, {
+                method: 'POST',
+                body: JSON.stringify({ name: newName.trim() })
+            });
+            loadParties();
+        } catch (e) {
+            alert('Failed to duplicate party: ' + (e.message || e));
+        }
+    }
+
+    async function exportPartyRecapCsv(partyName) {
+        if (!partyName) {
+            alert('Please select a party to export first.');
+            return;
+        }
+        try {
+            const response = await fetch(`${API_BASE}/parties/${encodeURIComponent(partyName)}/recap?db=${db}`, {
+                method: 'GET',
+            });
+            if (!response.ok) {
+                throw new Error('Export failed');
+            }
+            const csvText = await response.text();
+            const blob = new Blob([csvText], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${partyName}-recap.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            alert('Failed to export recap: ' + (e.message || e));
         }
     }
     
@@ -1668,62 +1786,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // === Translate page on load ===
     function translatePage() {
-        var backBtn = document.getElementById('back-to-pos');
-        if (backBtn) backBtn.textContent = t('back_to_pos');
-
-        var sidebarH2 = document.querySelector('.admin-sidebar-header h2');
-        if (sidebarH2) sidebarH2.textContent = t('admin_panel');
-
-        var saveBtn = document.querySelector('#settings-form button[type="submit"]');
-        if (saveBtn) saveBtn.textContent = t('save_settings');
-
-        // Translate nav links
-        var navLinks = document.querySelectorAll('.admin-nav a[data-section]');
-        var navLabels = {
-            dashboard: t('dashboard'),
-            products: t('products'),
-            parties: t('parties'),
-            operators: t('operators'),
-            settings: t('settings'),
-            tags: t('tags'),
-            sections: t('sections')
-        };
-        navLinks.forEach(function(link) {
-            var section = link.dataset.section;
-            if (navLabels[section]) link.textContent = navLabels[section];
-        });
-
-        // Update settings form labels (only text content, preserve child elements like checkboxes)
-        var labels = document.querySelectorAll('#settings-form label');
-        labels.forEach(function(label) {
-            // For simple labels (no child elements), replace textContent
-            if (label.children.length === 0) {
-                var text = label.textContent.trim();
-                var simpleKeyMap = {
-                    'Currency:': 'currency_label',
-                    'Language:': 'language_label',
-                    'Default Payment Method:': 'default_payment',
-                    'Snapshot Interval (minutes):': 'snapshot_interval'
-                };
-                if (simpleKeyMap[text]) {
-                    label.textContent = t(simpleKeyMap[text]);
-                }
-            }
-        });
-
-        // Translate setting-row labels (text on left, toggle on right)
-        var settingLabels = document.querySelectorAll('.setting-label');
-        settingLabels.forEach(function(sl) {
-            var text = sl.textContent.trim();
-            var settingKeyMap = {
-                'Skip cash tender screen (auto-accept exact amount)': 'skip_cash_tender',
-                'Auto checkout (when both toggles are on, checkout goes straight to receipt)': 'auto_checkout_label',
-                'Print one receipt per section': 'split_receipts',
-                'Print recovery receipt (always saved to logs)': 'print_recovery_receipt'
-            };
-            if (settingKeyMap[text]) {
-                sl.textContent = t(settingKeyMap[text]);
-            }
+        document.querySelectorAll('[data-i18n]').forEach(function(el) {
+            el.textContent = t(el.dataset.i18n);
         });
     }
 

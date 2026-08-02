@@ -4,7 +4,14 @@ Handles operator login (PIN-based) and admin access.
 """
 
 from flask import Blueprint, request, jsonify, session
-from app.services.auth_service import authenticate_operator, authenticate_admin, log_audit_event
+from app.services.auth_service import (
+    authenticate_operator,
+    authenticate_admin,
+    log_audit_event,
+    get_all_operators,
+    create_operator as _create_operator,
+    update_operator_pin as _update_operator_pin,
+)
 from app.utils.logger import get_logger
 
 logger = get_logger('api.auth')
@@ -118,7 +125,6 @@ def get_auth_status():
 @auth_bp.route('/operators', methods=['GET'])
 def list_operators():
     """List all operators (admin only)."""
-    from app.services.auth_service import get_all_operators
     db = request.args.get('db', 'default')
 
     if session.get('operator_role') != 'admin':
@@ -130,7 +136,6 @@ def list_operators():
 @auth_bp.route('/operators', methods=['POST'])
 def create_operator():
     """Create a new operator (admin only)."""
-    from app.services.auth_service import create_operator
     db = request.args.get('db', 'default')
 
     if session.get('operator_role') != 'admin':
@@ -145,7 +150,7 @@ def create_operator():
         return jsonify({'error': 'Valid name and 4-digit PIN are required'}), 400
 
     try:
-        create_operator(db, name, pin, role)
+        _create_operator(db, name, pin, role)
         log_audit_event(db, 'operator_created', f"Operator '{name}' created", session.get('operator_id'))
         return jsonify({'message': f'Operator "{name}" created'}), 201
     except Exception as e:
@@ -155,7 +160,6 @@ def create_operator():
 @auth_bp.route('/operators/<int:operator_id>/reset-pin', methods=['POST'])
 def reset_pin(operator_id):
     """Reset an operator's PIN (admin only)."""
-    from app.services.auth_service import update_operator_pin
     db = request.args.get('db', 'default')
 
     if session.get('operator_role') != 'admin':
@@ -168,7 +172,7 @@ def reset_pin(operator_id):
         return jsonify({'error': 'Valid 4-digit PIN is required'}), 400
 
     try:
-        update_operator_pin(db, operator_id, new_pin)
+        _update_operator_pin(db, operator_id, new_pin)
         log_audit_event(db, 'pin_reset', f"PIN reset for operator id={operator_id}", session.get('operator_id'))
         return jsonify({'message': 'PIN updated'})
     except Exception as e:
