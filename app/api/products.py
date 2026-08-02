@@ -443,8 +443,11 @@ def import_csv_file():
         return jsonify({'error': 'No CSV rows provided'}), 400
 
     try:
-        import_products_from_csv(db, csv_rows)
-        return jsonify({'message': f'Imported {len(csv_rows)} products'}), 201
+        imported = import_products_from_csv(db, csv_rows)
+        if isinstance(imported, dict):
+            return jsonify(imported), 201
+        count = len(csv_rows)
+        return jsonify({'message': f'Imported {count} products', 'count': count}), 201
     except Exception as e:
         logger.error(f"CSV import error: {e}")
         return jsonify({'error': str(e)}), 400
@@ -459,17 +462,20 @@ def export_products():
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['section', 'subsection', 'name', 'price', 'sku', 'stock_count'])
+    writer.writerow(['section', 'subsection', 'name', 'price', 'sku', 'stock_count', 'tags'])
 
     products = get_all_products(db)
     for p in products:
+        tags = get_product_tags(db, p['id'])
+        tag_names = ','.join(t['name'] for t in tags)
         writer.writerow([
             p.get('section_name', ''),
             p.get('subsection_name', ''),
             p['name'],
             p['price'],
             p.get('sku', '') or '',
-            p.get('stock_count', '') if p.get('stock_count') is not None else ''
+            p.get('stock_count', '') if p.get('stock_count') is not None else '',
+            tag_names
         ])
 
     # Return as JSON with CSV string

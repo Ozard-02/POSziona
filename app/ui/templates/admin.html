@@ -152,28 +152,40 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="skip_cash_tender" value="1" class="checkbox-input">
-                        Skip cash tender screen (auto-accept exact amount)
-                    </label>
+                    <div class="setting-row">
+                        <span class="setting-label">Skip cash tender screen (auto-accept exact amount)</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" name="skip_cash_tender" value="1" class="checkbox-input">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
                 </div>
                 <div class="form-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="auto_checkout" value="1" class="checkbox-input">
-                        Auto checkout (when both toggles are on, checkout goes straight to receipt)
-                    </label>
+                    <div class="setting-row">
+                        <span class="setting-label">Auto checkout (when both toggles are on, checkout goes straight to receipt)</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" name="auto_checkout" value="1" class="checkbox-input">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
                 </div>
                 <div class="form-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="split_receipts" value="1" class="checkbox-input">
-                        Print one receipt per section
-                    </label>
+                    <div class="setting-row">
+                        <span class="setting-label">Print one receipt per section</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" name="split_receipts" value="1" class="checkbox-input">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
                 </div>
                 <div class="form-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="print_recovery_receipt" value="1" class="checkbox-input">
-                        Print recovery receipt (always saved to logs)
-                    </label>
+                    <div class="setting-row">
+                        <span class="setting-label">Print recovery receipt (always saved to logs)</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" name="print_recovery_receipt" value="1" class="checkbox-input">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Snapshot Interval (minutes):</label>

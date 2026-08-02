@@ -459,11 +459,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const missingCols = requiredCols.filter(c => !headers.includes(c));
         if (missingCols.length > 0) {
             alert('CSV is missing required columns: ' + missingCols.join(', ') +
-                  '\n\nExpected columns: section, subsection, name, price, sku (optional), stock_count (optional)');
+                  '\n\nExpected columns: section, subsection, name, price, sku (optional), stock_count (optional), tags (optional)');
             return;
         }
         // Warn about unrecognized columns
-        const knownCols = ['section', 'subsection', 'name', 'price', 'sku', 'stock_count'];
+        const knownCols = ['section', 'subsection', 'name', 'price', 'sku', 'stock_count', 'tags'];
         const unknownCols = headers.filter(h => !knownCols.includes(h));
         if (unknownCols.length > 0) {
             console.warn('Unknown CSV columns ignored:', unknownCols.join(', '));
@@ -528,7 +528,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const html = `
             <p class="muted-text">
                 Select a CSV file or paste CSV content below.
-                Expected columns: section, subsection, name, price, sku (optional), stock_count (optional)
+                Expected columns: section, subsection, name, price, sku (optional), stock_count (optional), tags (optional)
             </p>
             <input type="file" id="csv-file-input" accept=".csv,.txt" class="form-control" style="margin-bottom: 10px;">
             <p class="muted-text" style="font-size: 11px;">-- or paste below --</p>
@@ -1120,7 +1120,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Wire up CSV template download link
     const templateLink = document.getElementById('download-csv-template-btn');
     if (templateLink) {
-        const templateCsv = 'section,subsection,name,price,sku,stock_count\n"Drinks","Soft Drinks","Coca Cola",1.50,CC123,100\n"Food","Snacks","Potato Chips",2.00,PC456,50\n';
+        const templateCsv = 'section,subsection,name,price,sku,stock_count,tags\n"Drinks","Soft Drinks","Coca Cola",1.50,CC123,100,"Popular,Beverage"\n"Food","Snacks","Potato Chips",2.00,PC456,50,"Popular"\n';
         templateLink.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(templateCsv);
     }
     
@@ -1709,31 +1709,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     label.textContent = t(simpleKeyMap[text]);
                 }
             }
-            // For checkbox labels, replace only the text node after the input
-            if (label.children.length > 0 && label.querySelector('input[type="checkbox"]')) {
-                var cbKeyMap = {
-                    'skip_cash_tender': 'skip_cash_tender',
-                    'auto_checkout': 'auto_checkout_label',
-                    'split_receipts': 'split_receipts',
-                    'print_recovery_receipt': 'print_recovery_receipt'
-                };
-                var input = label.querySelector('input[type="checkbox"]');
-                if (input && input.name && cbKeyMap[input.name]) {
-                    // Find the text node after the input
-                    var textNode = null;
-                    for (var i = 0; i < label.childNodes.length; i++) {
-                        if (label.childNodes[i].nodeType === Node.TEXT_NODE) {
-                            textNode = label.childNodes[i];
-                            break;
-                        }
-                    }
-                    if (textNode) {
-                        var trimmed = textNode.textContent.trim();
-                        if (trimmed) {
-                            textNode.textContent = ' ' + t(cbKeyMap[input.name]) + ' ';
-                        }
-                    }
-                }
+        });
+
+        // Translate setting-row labels (text on left, toggle on right)
+        var settingLabels = document.querySelectorAll('.setting-label');
+        settingLabels.forEach(function(sl) {
+            var text = sl.textContent.trim();
+            var settingKeyMap = {
+                'Skip cash tender screen (auto-accept exact amount)': 'skip_cash_tender',
+                'Auto checkout (when both toggles are on, checkout goes straight to receipt)': 'auto_checkout_label',
+                'Print one receipt per section': 'split_receipts',
+                'Print recovery receipt (always saved to logs)': 'print_recovery_receipt'
+            };
+            if (settingKeyMap[text]) {
+                sl.textContent = t(settingKeyMap[text]);
             }
         });
     }

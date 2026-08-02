@@ -505,23 +505,46 @@ def delete_product(db_name, product_id):
 def import_products_from_csv(db_name, csv_rows):
     """
     Import products from CSV rows.
-    Expected columns: name, price, section, subsection, sku (opt), stock (opt)
+    Expected columns: name, price, section, subsection, sku (opt), stock (opt), tags (opt)
+    Tags should be comma-separated tag names within a single CSV cell.
     Uses a single database connection to avoid FK constraint issues.
     """
     with PartyDatabase(db_name) as conn:
+        imported_count = 0
         for row in csv_rows:
-            name = row.get('name', '').strip()
-            price = float(row.get('price', 0))
-            section = row.get('section', '').strip()
-            subsection = row.get('subsection', '').strip()
+            name = row.get('name', '').strip() if isinstance(row.get('name'), str) else str(row.get('name', '')).strip()
+            if not name:
+                continue  # Skip rows with empty names
+
+            # Resilient price parsing
+            try:
+                price = float(row.get('price', 0))
+            except (TypeError, ValueError):
+                price = 0.0
+
+            if price < 0:
+                price = 0.0
+
+            section = row.get('section', '').strip() if isinstance(row.get('section'), str) else str(row.get('section', '')).strip()
+            subsection = row.get('subsection', '').strip() if isinstance(row.get('subsection'), str) else str(row.get('subsection', '')).strip()
             sku = str(row.get('sku', '')).strip() or None
             stock_val = row.get('stock')
             if stock_val is not None:
                 if isinstance(stock_val, str):
                     stock_val = stock_val.strip()
-                stock = int(stock_val) if stock_val else None
+                try:
+                    stock = int(stock_val) if stock_val else None
+                except (TypeError, ValueError):
+                    stock = None
             else:
                 stock = None
+
+            # Parse tags — comma-separated within the cell, handled by CSV parser
+            tags_raw = row.get('tags', '')
+            if tags_raw and isinstance(tags_raw, str):
+                tag_names = [t.strip() for t in tags_raw.split(',') if t.strip()]
+            else:
+                tag_names = []
 
             # Get or create section
             sec = conn.execute(
@@ -548,14 +571,39 @@ def import_products_from_csv(db_name, csv_rows):
                 subsection_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
             # Insert product
-            conn.execute(
+            cursor = conn.execute(
                 """INSERT INTO products (name, price, sku, section_id, subsection_id, stock_count)
                    VALUES (?, ?, ?, ?, ?, ?)""",
                 (name, price, sku, section_id, subsection_id, stock)
             )
+            product_id = cursor.lastrowid
+
+            # Assign tags — get or create each tag, then link
+            for tag_name in tag_names:
+                tag = conn.execute(
+                    "SELECT id FROM tags WHERE name = ? AND is_active = 1",
+                    (tag_name,)
+                ).fetchone()
+                if tag:
+                    tag_id = tag[0]
+                else:
+                    # Create new tag if it doesn't exist
+                    conn.execute(
+                        "INSERT INTO tags (name, color, bg_color, text_color, is_active) VALUES (?, ?, ?, ?, 1)",
+                        (tag_name, '#ffffff', '#3498db', '#000000')
+                    )
+                    tag_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+                # Link tag to product
+                conn.execute(
+                    "INSERT OR IGNORE INTO product_tags (product_id, tag_id) VALUES (?, ?)",
+                    (product_id, tag_id)
+                )
+
+            imported_count += 1
 
         conn.commit()
-        logger.info(f"Imported {len(csv_rows)} products from CSV")
+        logger.info(f"Imported {imported_count} products from CSV")
 
 
 # ============================================================
