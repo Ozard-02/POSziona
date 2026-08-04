@@ -1062,9 +1062,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- Live availability updates via SSE ---
     // Connect to the server-sent events stream so that when an admin
-    // toggles product availability (active/archived) on another client or
-    // the web admin panel, the change is reflected live on the POS screen
-    // without requiring a page reload.
+    // toggles product availability (active/archived) on the web admin
+    // panel, the change is reflected instantly on the POS screen
+    // without requiring a page reload or cart reset.
     connectSSEEvents();
 
     // Hide admin button if user is not admin
