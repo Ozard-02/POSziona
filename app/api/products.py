@@ -31,6 +31,7 @@ from app.services.product_service import (
     bulk_update_products,
     reorder_sections,
 )
+from app.utils.events import broadcast
 from app.utils.logger import get_logger
 
 logger = get_logger('api.products')
@@ -184,6 +185,14 @@ def bulk_update_products_route():
             return jsonify({'error': 'Price must be a valid number'}), 400
 
     count = bulk_update_products(db, product_ids, updates)
+    # Broadcast availability changes to POS clients
+    if 'is_active' in updates or 'is_archived' in updates:
+        broadcast('bulk_product_update', {
+            'product_ids': product_ids,
+            'db': db,
+            'is_active': updates.get('is_active'),
+            'is_archived': updates.get('is_archived')
+        })
     return jsonify({'message': f'Updated {count} products', 'count': count})
 
 
@@ -206,6 +215,12 @@ def update_product_status_route(product_id):
         is_active=is_active,
         is_archived=is_archived
     )
+    broadcast('product_update', {
+        'product_id': product_id,
+        'db': db,
+        'is_active': is_active,
+        'is_archived': is_archived
+    })
     return jsonify({'message': 'Product status updated'})
 
 
@@ -263,6 +278,11 @@ def add_product():
         tag_ids = data.get('tags') or []
         if tag_ids:
             set_product_tags(db, product_id, [int(t) for t in tag_ids])
+        broadcast('product_update', {
+            'product_id': product_id,
+            'db': db,
+            'created': True
+        })
         return jsonify({'message': 'Product created', 'id': product_id}), 201
     except Exception as e:
         logger.error(f"Error creating product: {e}")
@@ -290,6 +310,14 @@ def edit_product(product_id):
         if 'tags' in data:
             tag_ids = data['tags'] or []
             set_product_tags(db, product_id, [int(t) for t in tag_ids])
+        # Broadcast update if availability changed
+        if 'is_active' in data or 'is_archived' in data:
+            broadcast('product_update', {
+                'product_id': product_id,
+                'db': db,
+                'is_active': data.get('is_active'),
+                'is_archived': data.get('is_archived')
+            })
         return jsonify({'message': 'Product updated'})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -303,8 +331,19 @@ def remove_product(product_id):
     if deleted is None:
         return jsonify({'error': 'Product not found'}), 404
     elif deleted:
+        broadcast('product_update', {
+            'product_id': product_id,
+            'db': db,
+            'deleted': True
+        })
         return jsonify({'message': 'Product deleted'})
     else:
+        broadcast('product_update', {
+            'product_id': product_id,
+            'db': db,
+            'is_active': 0,
+            'is_archived': 1
+        })
         return jsonify({'message': 'Product archived (has sales history)'})
 
 

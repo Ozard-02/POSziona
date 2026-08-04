@@ -1001,10 +1001,72 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // --- Live availability updates via SSE ---
+    function connectSSEEvents() {
+        const evtSource = new EventSource(`${API_BASE}/events`);
+
+        evtSource.addEventListener('error', function() {
+            // Connection error — will auto-reconnect via EventSource
+            console.warn('SSE connection error, will retry...');
+        });
+
+        // Single product update (toggled active/archived/deleted)
+        evtSource.addEventListener('product_update', function(event) {
+            const payload = JSON.parse(event.data);
+            handleProductUpdate(payload);
+        });
+
+        // Bulk product update
+        evtSource.addEventListener('bulk_product_update', function(event) {
+            const payload = JSON.parse(event.data);
+            // For bulk updates, just reload the current subsection
+            const activeSub = document.querySelector('.subsection.active');
+            if (activeSub) {
+                loadProducts(activeSub.dataset.subsectionId);
+            }
+        });
+    }
+
+    function handleProductUpdate(payload) {
+        const productBtn = productsGrid.querySelector(`[data-product-id="${payload.product_id}"]`);
+        if (!productBtn) return;  // Product not on current screen
+
+        // Deleted product — remove from grid
+        if (payload.deleted) {
+            productBtn.remove();
+            return;
+        }
+
+        // Update availability classes
+        if (payload.is_active !== undefined || payload.is_archived !== undefined) {
+            if (payload.is_active === 0 || payload.is_archived === 1) {
+                productBtn.classList.add('out-of-stock');
+                productBtn.onclick = function(e) { e.preventDefault(); };
+            } else {
+                productBtn.classList.remove('out-of-stock');
+                // Re-attach click handler for addToCart — re-fetch product
+                const productId = payload.product_id;
+                productBtn.onclick = function() {
+                    // Re-fetch the product to get fresh data
+                    fetchJSON(`${API_BASE}/products/products/${productId}?db=${db}`)
+                        .then(function(p) { addToCart(p); })
+                        .catch(function(e) { showError(e); });
+                };
+            }
+        }
+    }
+
     // --- Init ---
     loadSettings();
     loadSections();
-    
+
+    // --- Live availability updates via SSE ---
+    // Connect to the server-sent events stream so that when an admin
+    // toggles product availability (active/archived) on another client or
+    // the web admin panel, the change is reflected live on the POS screen
+    // without requiring a page reload.
+    connectSSEEvents();
+
     // Hide admin button if user is not admin
     fetchJSON(`${API_BASE}/auth/status`)
         .then(function(data) {
