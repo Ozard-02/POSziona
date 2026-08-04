@@ -257,7 +257,7 @@ body {
     border-color: #dee2e6;
 }
 
-/* Availability toggle mode — products grid gets a pulsing highlight */
+/* Stock edit mode (Shift+L) — products grid gets a pulsing highlight */
 .products-grid.availability-toggle-mode {
     outline: 3px dashed #e74c3c;
     outline-offset: -3px;

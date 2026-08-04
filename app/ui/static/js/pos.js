@@ -216,15 +216,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 showPosContextMenu(e.pageX, e.pageY, product, btn);
             });
 
-            // Click handler: shift+click or toggle-mode click toggles
-            // availability; regular click adds to cart (if active & in stock)
+            // Click handler:
+            //   Shift+Click opens the stock count editor
+            //   Shift+L toggle mode + Click toggles availability
+            //   Regular click adds to cart (if active & in stock)
             btn.addEventListener('click', async (e) => {
-                if (e.shiftKey || availabilityToggleMode) {
+                if (e.shiftKey && !availabilityToggleMode) {
+                    // Shift+Click: edit stock count
                     e.preventDefault();
-                    if (availabilityToggleMode) {
-                        availabilityToggleMode = false;
-                        productsGrid.classList.remove('availability-toggle-mode');
-                    }
+                    await editProductStock(product);
+                } else if (availabilityToggleMode) {
+                    // Shift+L toggle mode: toggle availability
+                    e.preventDefault();
+                    availabilityToggleMode = false;
+                    productsGrid.classList.remove('availability-toggle-mode');
                     await toggleProductAvailability(product);
                 } else if (!(isOutOfStock || isInactive)) {
                     e.preventDefault();
@@ -1053,9 +1058,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // --- Live availability updates via SSE ---
-    // Availability toggle mode: press Shift+L to enter "toggle mode",
-    // then click any product to toggle its availability.
-    // This avoids relying on right-click which may not work in all environments.
+    // Availability toggle mode: press Shift+L to enter "availability toggle mode",
+    // then click any product to toggle its availability (is_active).
+    // Shift+Click directly opens the stock count editor.
     let availabilityToggleMode = false;
 
     // --- Add keyboard shortcut before connectSSEEvents ---
