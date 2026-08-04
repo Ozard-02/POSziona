@@ -4,7 +4,7 @@
 
 Party POS is a **desktop Point of Sale (POS) application** built with Python (Flask backend) and pywebview (native desktop shell). It's designed for parties, events, and pop-up venues to manage product catalogs, operator authentication, cart-based ordering, and checkout with tax/discount support.
 
-The app runs as a **hybrid desktop app**: a Flask server runs in a background thread, and a pywebview window loads the web UI as a native desktop window. This gives the simplicity of a web frontend with the packaging benefits of a desktop application (including an AppImage build for Linux).
+The app runs as a **hybrid desktop app**: a Flask server runs in a background thread, and a pywebview window loads the web UI as a native desktop window. This gives the simplicity of a web frontend with the packaging benefits of a desktop application (including a standalone Linux binary built with PyInstaller).
 
 ---
 
@@ -101,8 +101,10 @@ party-pos/
 ├── requirements-dev.txt         # Development dependencies
 ├── pyproject.toml               # Project metadata & tooling config
 ├── pytest.ini                   # Pytest configuration
-├── build_appimage.sh            # Linux AppImage build script
-├── build_exe.spec               # PyInstaller spec
+├── build_linux.sh               # Linux onefile binary build script
+├── build_exe.bat                # Windows EXE build script
+├── build_onefile.spec           # PyInstaller onefile spec (Linux)
+├── build_exe.spec               # PyInstaller spec (Windows EXE)
 ├── README.md
 └── STRUCTURE.md (or CODEBASE_EXPLANATION.md — this file)
 ```
@@ -322,10 +324,12 @@ Flask parties.py:create_party()
 
 ## Build & Distribution
 
-- **`build_appimage.sh`**: Builds a portable Linux AppImage using PyInstaller + appimage-builder
+- **`build_linux.sh`**: Builds a portable Linux standalone binary using PyInstaller onefile mode
+- **`build_exe.bat`**: Builds a Windows .exe using PyInstaller onefile + windowed mode
+- **`build_onefile.spec`**: PyInstaller spec for Linux onefile builds (stripped, UPX)
 - **`build_exe.spec`**: PyInstaller spec for Windows EXE packaging
 - **`scripts/run_pos.py`**: Alternative launcher with command-line argument support
-- **`scripts/entry_point.py`**: PyInstaller entry point (imports `app.main`)
+- **`scripts/entry_point.py`**: PyInstaller entry point (imports `app.main`), handles frozen mode path resolution
 - The app bundles Flask, pywebview, PyInstaller, and all dependencies into a single executable
 
 ---

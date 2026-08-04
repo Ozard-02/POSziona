@@ -1,0 +1,84 @@
+version: 1
+
+# ─────────────────────────────────────────────────────────────────
+# AppImageBuilder recipe for Party POS
+#
+# Solves the libfuse.so.2 problem: appimage-builder bundles
+# libfuse2 (and other GTK/Python runtime libs) directly into the
+# AppImage via apt.include, so the end user does NOT need to
+# install libfuse2 or have FUSE mounted.
+#
+# Build locally (requires appimage-builder + apt):
+#   venv/bin/appimage-builder -c AppImageBuilder.yml
+#
+# Build in CI (GitHub Actions):
+#   Run on ubuntu-latest which has apt available.
+# ─────────────────────────────────────────────────────────────────
+
+script:
+  # Clean any previous AppDir
+  - rm -rf AppDir || true
+  # Create the AppDir structure
+  - mkdir -p AppDir/usr/bin
+  - mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+  # Copy the pre-built PyInstaller onefile binary
+  # (build it first with: bash build_linux.sh)
+  - |
+    if [ ! -f dist/party-pos ]; then
+      echo "Building PyInstaller onefile binary first..."
+      venv/bin/pyinstaller build_onefile.spec --noconfirm --onefile --distpath dist
+    fi
+  - chmod +x dist/party-pos
+  - cp dist/party-pos AppDir/usr/bin/party-pos
+  # Copy icon (create a placeholder if it doesn't exist)
+  - |
+    if [ -f app/ui/static/img/icon.png ]; then
+      cp app/ui/static/img/icon.png AppDir/usr/share/icons/hicolor/256x256/apps/party-pos.png
+    else
+      # Generate a simple SVG icon if no logo exists
+      echo '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#2c3e50"/><text x="128" y="140" font-family="sans-serif" font-size="60" fill="white" text-anchor="middle">POS</text></svg>' > AppDir/usr/share/icons/hicolor/256x256/apps/party-pos.svg
+    fi
+
+AppDir:
+  path: ./AppDir
+
+  app_info:
+    id: io.party-pos.App
+    name: Party POS
+    icon: usr/share/icons/hicolor/256x256/apps/party-pos
+    version: 0.1.0
+    exec: usr/bin/party-pos
+
+  apt:
+    arch: amd64
+    sources:
+      # Ubuntu Noble (24.04) — the same base as ubuntu-latest runners
+      - sourceline: 'deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ noble main restricted universe multiverse'
+        key_url: 'http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x3B4FE6ACC0B21F32'
+    include:
+      # libfuse2 is the critical dependency that was missing and causing
+      # AppImage to fail on systems that only have libfuse3 (e.g. Ubuntu 24.04+)
+      - libfuse2
+      # pywebview GTK backend needs these libs
+      - libgtk-3-0
+      - libnotify4
+      - libnss3
+      - libxss1
+      - libxtst6
+      - xdg-utils
+      - libatspi2.0-0
+      - libdrm2
+      - libgbm1
+      - libxcb-dri3-0
+      - libdbus-1-3
+    exclude: []
+
+  runtime:
+    env:
+      # Ensure the bundled libs are found
+      APPDIR_LIBRARY_PATH: $APPDIR/usr/lib:$APPDIR/usr/lib/x86_64-linux-gnu
+
+AppImage:
+  arch: x86_64
+  # No signing key — sign-key: None means unsigned
+  sign-key: None

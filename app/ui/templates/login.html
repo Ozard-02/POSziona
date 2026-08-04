@@ -27,7 +27,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function attemptLogin(isAdmin) {
         const pin = pinInput.value.trim();
-        if (!pin || pin.length < 4) return;
+        if (!pin || pin.length < 4) {
+            alert('Please enter a 4-digit PIN');
+            pinInput.focus();
+            return;
+        }
 
         fetch(`/api/auth/login${isAdmin ? '/admin' : ''}?db=default`, {
             method: 'POST',

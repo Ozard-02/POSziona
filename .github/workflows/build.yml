@@ -1,0 +1,147 @@
+name: Build Distributables
+
+on:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  # ── Run tests first ──────────────────────────────────────────────
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Create venv & install deps
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-timeout
+      - name: Run tests
+        run: venv/bin/python -m pytest tests/ -x -q --timeout=30
+
+  # ── Linux AppImage (bundles libfuse2, no FUSE required on host) ──
+  build-appimage:
+    name: Linux AppImage
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Create venv & install deps
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller appimage-builder
+      - name: Build PyInstaller binary
+        run: venv/bin/pyinstaller build_onefile.spec --noconfirm --onefile --distpath dist
+      - name: Build AppImage
+        run: |
+          source venv/bin/activate
+          appimage-builder --recipe AppImageBuilder.yml --skip-tests
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: party-pos-appimage
+          path: out/*.AppImage
+          if-no-files-found: error
+
+  # ── Linux single-file binary (fallback, no FUSE needed) ─────────
+  build-linux:
+    name: Linux Binary
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Create venv & install deps
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+      - name: Build binary
+        run: venv/bin/pyinstaller build_onefile.spec --noconfirm --onefile --distpath dist
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: party-pos-linux
+          path: dist/party-pos
+          if-no-files-found: error
+
+  # ── Windows .exe ────────────────────────────────────────────────
+  build-windows:
+    name: Windows EXE
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Create venv & install deps
+        run: |
+          python -m venv venv
+          venv\Scripts\activate
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+          pip install pywebview[win64]  # native backend for Windows
+      - name: Build EXE (one-file, windowed)
+        run: venv\Scripts\pyinstaller build_exe.spec --noconfirm --onefile --windowed --distpath dist
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: party-pos-windows
+          path: dist/party-pos.exe
+          if-no-files-found: error
+
+  # ── Release assets (only on tag push) ───────────────────────────
+  release:
+    name: Create Release
+    needs: [build-appimage, build-linux, build-windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download AppImage
+        uses: actions/download-artifact@v4
+        with:
+          name: party-pos-appimage
+          path: dist/
+      - name: Download Linux binary
+        uses: actions/download-artifact@v4
+        with:
+          name: party-pos-linux
+          path: dist/
+      - name: Download Windows EXE
+        uses: actions/download-artifact@v4
+        with:
+          name: party-pos-windows
+          path: dist/
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.AppImage
+            dist/party-pos
+            dist/party-pos.exe
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}

@@ -473,6 +473,13 @@ body {
     font-size: 14px;
 }
 
+/* Enlarged logout button for better visibility */
+#logout-btn {
+    padding: 8px 14px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
 /* Small buttons override base button sizing */
 .btn-sm {
     padding: 5px 10px;
