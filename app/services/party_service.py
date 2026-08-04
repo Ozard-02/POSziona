@@ -252,21 +252,23 @@ def create_empty_party(party_name, start_date=None, end_date=None):
 
 def duplicate_party(original_name, new_name, start_date=None, end_date=None):
     """
-    Duplicate an existing party by copying its database file.
-    (Note: templates are preferred for new parties, but this is useful
-    for copying a party that has already accumulated some data.)
+    Duplicate an existing party by copying only the catalog/item data
+    (sections, subsections, products, tags, product_tags, operators, settings)
+    — NOT the sales history (orders, order_items, payments, audit_log).
 
     Optionally sets start_date / end_date on the duplicated party's
     settings table (overriding the original's dates).
     """
-    # Sanitize new_name to match _get_party_db_path behavior
-    safe_name = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_'))
-    src_path = os.path.join(PARTY_DB_DIR, f"{safe_name}.db" if original_name.endswith('.db')
-                            else f"{original_name}.db")
-    dst_path = os.path.join(PARTY_DB_DIR, f"{safe_name}.db")
+    # Determine source path
+    src_db_name = original_name.replace('.db', '') if original_name.endswith('.db') else original_name
+    src_path = os.path.join(PARTY_DB_DIR, f"{src_db_name}.db")
 
     if not os.path.exists(src_path):
         raise FileNotFoundError(f"Party '{original_name}' not found")
+
+    # Sanitize new_name to determine the destination DB name
+    safe_name = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_'))
+    dst_path = os.path.join(PARTY_DB_DIR, f"{safe_name}.db")
 
     # Remove destination if it already exists (fresh copy)
     if os.path.exists(dst_path):
@@ -275,17 +277,39 @@ def duplicate_party(original_name, new_name, start_date=None, end_date=None):
             if os.path.exists(p):
                 os.remove(p)
 
-    shutil.copy2(src_path, dst_path)
+    # Tables to copy (catalog/items only — no sales history)
+    catalog_tables = [
+        'sections', 'subsections', 'products',
+        'tags', 'product_tags',
+        'operators',
+        'settings',
+    ]
 
-    # Copy WAL/SHM files if they exist
-    for ext in ['-wal', '-shm']:
-        src = src_path + ext
-        dst = dst_path + ext
-        if os.path.exists(src):
-            shutil.copy2(src, dst)
+    # Create new DB with schema, then copy catalog data from source
+    with sqlite3.connect(dst_path) as dst_conn:
+        dst_conn.executescript(get_party_schema())
+        dst_conn.execute('PRAGMA journal_mode=WAL')
 
-    # Update party name and optionally dates in settings
-    db_name_for_path = safe_name.replace('.db', '') if safe_name.endswith('.db') else safe_name
+        src_conn = sqlite3.connect(f"file:{src_path}?mode=ro", uri=True)
+        try:
+            for table in catalog_tables:
+                rows = src_conn.execute(f"SELECT * FROM {table}").fetchall()
+                if not rows:
+                    continue
+                # Get column count to build placeholders
+                col_count = len(rows[0])
+                placeholders = ', '.join(['?'] * col_count)
+                dst_conn.executemany(
+                    f"INSERT INTO {table} VALUES ({placeholders})",
+                    rows
+                )
+        finally:
+            src_conn.close()
+
+        dst_conn.commit()
+
+    # Override party name and optionally dates in settings
+    db_name_for_path = safe_name
     with PartyDatabase(db_name_for_path) as conn:
         conn.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
@@ -303,5 +327,5 @@ def duplicate_party(original_name, new_name, start_date=None, end_date=None):
             )
         conn.commit()
 
-    logger.info(f"Duplicated party '{original_name}' to '{safe_name}'")
+    logger.info(f"Duplicated party '{original_name}' to '{safe_name}' (catalog only, no sales history)")
     return safe_name

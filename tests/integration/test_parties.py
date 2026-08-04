@@ -84,3 +84,47 @@ def test_duplicate_party(clean_db, client):
     sections = resp.get_json()
     assert len(sections) == 1
     assert sections[0]['name'] == 'Drinks'
+
+
+def test_duplicate_party_excludes_sales_history(clean_db, client):
+    """Test that duplicating a party copies catalog data but NOT sales history."""
+    db_name = clean_db
+
+    # Login as admin
+    client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
+
+    # Create a section, subsection, and product
+    client.post(f'/api/products/sections?db={db_name}', json={'name': 'Drinks'})
+    client.post(f'/api/products/subsections?db={db_name}', json={'section_id': 1, 'name': 'Coffee'})
+    client.post(f'/api/products/products?db={db_name}', json={
+        'name': 'Small Coffee', 'price': 2.50, 'section_id': 1, 'subsection_id': 1
+    })
+
+    # Create an order directly via the service layer (sales history)
+    from app.services.order_service import create_order
+    order_id = create_order(
+        db_name,
+        [{'product_id': 1, 'quantity': 2, 'unit_price': 2.50}],
+        'cash', 1, 0.0, None
+    )
+    assert order_id is not None
+
+    # Verify the original party has 1 order
+    from app.services.order_service import get_recent_orders
+    original_orders = get_recent_orders(db_name, 50)
+    assert len(original_orders) >= 1
+
+    # Duplicate the party
+    resp = client.post(f'/api/parties/{db_name}/duplicate', json={'name': 'Copy'})
+    assert resp.status_code == 200
+    new_db = resp.get_json().get('new_name', 'Copy')
+
+    # Verify the duplicated party has the same products
+    resp = client.get(f'/api/products/?db={new_db}')
+    sections = resp.get_json()
+    assert len(sections) == 1
+    assert sections[0]['name'] == 'Drinks'
+
+    # Verify NO orders were copied (sales history excluded)
+    duplicate_orders = get_recent_orders(new_db, 50)
+    assert len(duplicate_orders) == 0, "Sales history should NOT be copied during duplication"
