@@ -1103,10 +1103,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // Bulk product update
         evtSource.addEventListener('bulk_product_update', function(event) {
             const payload = JSON.parse(event.data);
-            // For bulk updates, just reload the current subsection
+            // For bulk updates, reload the current subsection to pick up changes
             const activeSub = document.querySelector('.subsection.active');
             if (activeSub) {
                 loadProducts(activeSub.dataset.subsectionId);
+            }
+            // Check if any cart items need trimming due to stock changes
+            if (payload.stock_count !== undefined && payload.stock_count !== null) {
+                _trimCartForStock(payload.product_ids, payload.stock_count);
             }
         });
 
@@ -1169,20 +1173,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             // If this product is in the cart and stock is now insufficient,
-            // trim the cart quantity to the new available stock
-            const cartItem = cart.find(i => i.product_id === payload.product_id);
-            if (cartItem && payload.stock_count !== null && payload.stock_count < cartItem.quantity) {
-                const newQty = payload.stock_count;
-                fetchJSON(`${API_BASE}/cart/update?db=${db}`, {
-                    method: 'POST',
-                    body: JSON.stringify({ product_id: payload.product_id, quantity: newQty })
-                }).then(function(data) {
-                    cart = data.cart;
-                    updateCartDisplay();
-                }).catch(function(e) {
-                    console.error('Failed to update cart after stock change:', e);
-                });
-            }
+            // trim the cart quantity to the new available stock (silent)
+            _trimCartForStock([payload.product_id], payload.stock_count);
         }
     }
 
@@ -1195,6 +1187,34 @@ document.addEventListener('DOMContentLoaded', function() {
     // toggles product availability (active/archived) on the web admin
     // panel, the change is reflected instantly on the POS screen
     // without requiring a page reload or cart reset.
+
+    /**
+     * Check if any cart items exceed the new stock count and trim them.
+     * product_ids: array of product IDs (or null for all)
+     * newStock: the new stock count (applies to all listed products)
+     */
+    function _trimCartForStock(product_ids, newStock) {
+        if (newStock === null || newStock === undefined) return;
+        const ids = product_ids ? product_ids : cart.map(i => i.product_id);
+        for (const pid of ids) {
+            const cartItem = cart.find(i => i.product_id === pid);
+            if (cartItem && newStock < cartItem.quantity) {
+                fetchJSON(`${API_BASE}/cart/update?db=${db}`, {
+                    method: 'POST',
+                    body: JSON.stringify({ product_id: pid, quantity: newStock })
+                }).then(function(data) {
+                    cart = data.cart;
+                    updateCartDisplay();
+                }).catch(function(e) {
+                    console.error('Failed to trim cart after stock change:', e);
+                });
+            }
+        }
+    }
+
+    // --- Init ---
+    loadSettings();
+    loadSections();
     connectSSEEvents();
 
     // Hide admin button if user is not admin

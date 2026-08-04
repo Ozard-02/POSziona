@@ -8,6 +8,10 @@ from app.utils.logger import get_logger
 
 logger = get_logger('services.products')
 
+# Sentinel for distinguishing "argument not provided" from "argument is None".
+# Used so that stock=None (unlimited) can be explicitly set on products.
+_UNSET = object()
+
 
 # ============================================================
 # SECTION OPERATIONS
@@ -414,8 +418,13 @@ def create_product(db_name, name, price, section_id, subsection_id, sku=None, st
 
 
 def update_product(db_name, product_id, name=None, price=None, sku=None,
-                   section_id=None, subsection_id=None, stock=None, is_active=None):
-    """Update product fields. Only price and stock can change during active party."""
+                   section_id=None, subsection_id=None, stock=_UNSET,
+                   is_active=None):
+    """Update product fields.
+    
+    Uses _UNSET sentinel for stock so that stock=None (unlimited) can be
+    explicitly set. Other fields use None as 'not provided'.
+    """
     with PartyDatabase(db_name) as conn:
         updates = []
         params = []
@@ -435,7 +444,7 @@ def update_product(db_name, product_id, name=None, price=None, sku=None,
         if subsection_id is not None:
             updates.append("subsection_id = ?")
             params.append(subsection_id)
-        if stock is not None:
+        if stock is not _UNSET:
             updates.append("stock_count = ?")
             params.append(stock)
         if is_active is not None:

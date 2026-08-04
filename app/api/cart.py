@@ -51,8 +51,7 @@ def add_to_cart():
         return jsonify({'error': 'Product out of stock'}), 400
 
     cart = session.get('cart', [])
-
-    # Check if product already in cart
+    # Check if product already in cart — if so, validate combined quantity against stock
     existing = None
     for item in cart:
         if item['product_id'] == product_id:
@@ -94,6 +93,7 @@ def remove_from_cart():
 @cart_bp.route('/update', methods=['POST'])
 def update_quantity():
     """Update quantity of an item in the cart."""
+    db = request.args.get('db', 'default')
     data = request.get_json()
     if data is None:
         return jsonify({'error': 'Request body is required'}), 400
