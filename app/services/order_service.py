@@ -37,7 +37,7 @@ def create_order(db_name, cart_items, payment_method, operator_id,
         )
         order_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
-        # Create order items
+        # Create order items and decrement stock
         for item in cart_items:
             conn.execute(
                 """INSERT INTO order_items (order_id, product_id, quantity, unit_price)
@@ -59,9 +59,18 @@ def create_order(db_name, cart_items, payment_method, operator_id,
                 (item['quantity'], item['product_id'])
             )
 
+        # Fetch updated stock counts for broadcast
+        updated_stocks = {}
+        for item in cart_items:
+            row = conn.execute(
+                "SELECT stock_count FROM products WHERE id = ?", (item['product_id'],)
+            ).fetchone()
+            if row:
+                updated_stocks[item['product_id']] = row['stock_count']
+
         conn.commit()
         logger.info(f"Order created: id={order_id}, total={total}, items={len(cart_items)}")
-        return order_id
+        return order_id, updated_stocks
 
 
 def record_payment(db_name, order_id, method, amount, tendered=None):

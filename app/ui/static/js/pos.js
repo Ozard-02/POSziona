@@ -1120,7 +1120,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function handleProductUpdate(payload) {
         const productBtn = productsGrid.querySelector(`[data-product-id="${payload.product_id}"]`);
-        if (!productBtn) return;  // Product not on current screen
+        if (!productBtn) {
+            // Product not on current screen — silently refresh the current
+            // subsection's products so updated stock/availability is reflected
+            // when the user navigates to that section. No user notification.
+            const activeSub = document.querySelector('.subsection.active');
+            if (activeSub) {
+                loadProducts(activeSub.dataset.subsectionId);
+            }
+            return;
+        }
 
         // Deleted product — remove from grid
         if (payload.deleted) {
@@ -1148,14 +1157,31 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Update stock count display if provided
         if (payload.stock_count !== undefined && payload.stock_count !== null) {
-            const stockEl = productBtn.querySelector('.product-stock');
-            if (stockEl) {
-                stockEl.textContent = `${t('stock')}: ${payload.stock_count}`;
+            if (productBtn) {
+                const stockEl = productBtn.querySelector('.product-stock');
+                if (stockEl) {
+                    stockEl.textContent = `${t('stock')}: ${payload.stock_count}`;
+                }
+                // Update out-of-stock class based on new stock count
+                if (payload.stock_count <= 0) {
+                    productBtn.classList.add('out-of-stock');
+                    productBtn.onclick = function(e) { e.preventDefault(); };
+                }
             }
-            // Update out-of-stock class based on new stock count
-            if (payload.stock_count <= 0) {
-                productBtn.classList.add('out-of-stock');
-                productBtn.onclick = function(e) { e.preventDefault(); };
+            // If this product is in the cart and stock is now insufficient,
+            // trim the cart quantity to the new available stock
+            const cartItem = cart.find(i => i.product_id === payload.product_id);
+            if (cartItem && payload.stock_count !== null && payload.stock_count < cartItem.quantity) {
+                const newQty = payload.stock_count;
+                fetchJSON(`${API_BASE}/cart/update?db=${db}`, {
+                    method: 'POST',
+                    body: JSON.stringify({ product_id: payload.product_id, quantity: newQty })
+                }).then(function(data) {
+                    cart = data.cart;
+                    updateCartDisplay();
+                }).catch(function(e) {
+                    console.error('Failed to update cart after stock change:', e);
+                });
             }
         }
     }

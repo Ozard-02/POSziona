@@ -15,7 +15,9 @@ from app.services.order_service import (
     get_items_sold_summary,
     delete_order_by_id,
 )
+from app.services.product_service import get_product_by_id
 from app.services.settings_service import get_default_payment_method
+from app.utils.events import broadcast
 from app.utils.logger import get_logger
 
 logger = get_logger('api.orders')
@@ -75,10 +77,21 @@ def checkout():
 
     try:
         # Create the order
-        order_id = create_order(
+        order_id, updated_stocks = create_order(
             db, cart_items, payment_method, operator_id,
             discount_amount, discount_type
         )
+
+        # Broadcast stock updates to all connected POS clients via SSE
+        for product_id, stock_count in updated_stocks.items():
+            product = get_product_by_id(db, product_id)
+            broadcast('product_update', {
+                'product_id': product_id,
+                'db': db,
+                'stock_count': stock_count,
+                'is_active': 1 if (product and product.get('is_active')) else 0,
+                'is_archived': 1 if (product and product.get('is_archived')) else 0
+            })
 
         # Record payment if provided
         total = sum(item['line_total'] for item in cart) - discount_amount
