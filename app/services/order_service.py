@@ -45,10 +45,11 @@ def create_order(db_name, cart_items, payment_method, operator_id,
                 (order_id, item['product_id'], item['quantity'], item['unit_price'])
             )
 
-            # Decrement stock if product has a stock count.
-            # Guard against negative stock (defensive — add_to_cart checks, but
-            # the cart is session-based and could be stale if stock was edited
-            # between adding to cart and checkout).
+            # Atomically decrement stock. Uses MAX(0, ...) to clamp at 0
+            # rather than going negative. The WHERE clause ensures this is
+            # atomic — concurrent checkouts for the same product will each
+            # update the row sequentially (SQLite serializes via WAL + busy_timeout),
+            # so stock_count - quantity is always computed against the latest value.
             conn.execute(
                 """UPDATE products
                    SET stock_count = CASE

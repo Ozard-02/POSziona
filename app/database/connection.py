@@ -217,8 +217,9 @@ class PartyDatabase:
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute('PRAGMA foreign_keys = ON')
-        self.conn.execute('PRAGMA busy_timeout = 5000')
+        self.conn.execute('PRAGMA busy_timeout = 10000')  # Wait up to 10s for locks
         self.conn.execute('PRAGMA journal_mode = WAL')
+        self.conn.execute('PRAGMA synchronous = NORMAL')  # Faster WAL writes
         return self.conn
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -250,8 +251,9 @@ class TemplatesDatabase:
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute('PRAGMA foreign_keys = ON')
-        self.conn.execute('PRAGMA busy_timeout = 5000')
+        self.conn.execute('PRAGMA busy_timeout = 10000')
         self.conn.execute('PRAGMA journal_mode = WAL')
+        self.conn.execute('PRAGMA synchronous = NORMAL')
         return self.conn
 
     def __exit__(self, exc_type, exc_val, exc_tb):
