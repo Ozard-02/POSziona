@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
-name = "party-pos"
+name = "posziona"
 version = "0.1.0"
 description = "Lightweight POS for parties/events"
 readme = "README.md"

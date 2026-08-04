@@ -1,5 +1,5 @@
 """
-Resilience tests for Party POS.
+Resilience tests for Posziona.
 
 Covers input validation and financial-integrity edge cases:
 1. Negative totals from excessive discounts (backend clamping)

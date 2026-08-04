@@ -1,5 +1,5 @@
 """
-Operator model for Party POS.
+Operator model for Posziona.
 """
 
 from app.models import BaseModel

@@ -1,5 +1,5 @@
 """
-Cart model for Party POS.
+Cart model for Posziona.
 """
 
 from app.models import BaseModel

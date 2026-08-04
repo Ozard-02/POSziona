@@ -1,7 +1,7 @@
 version: 1
 
 # ─────────────────────────────────────────────────────────────────
-# AppImageBuilder recipe for Party POS
+# AppImageBuilder recipe for Posziona
 #
 # Solves the libfuse.so.2 problem: appimage-builder bundles
 # libfuse2 (and other GTK/Python runtime libs) directly into the
@@ -24,30 +24,30 @@ script:
   # Copy the pre-built PyInstaller onefile binary
   # (build it first with: bash build_linux.sh)
   - |
-    if [ ! -f dist/party-pos ]; then
+    if [ ! -f dist/posziona ]; then
       echo "Building PyInstaller onefile binary first..."
       venv/bin/pyinstaller build_onefile.spec --noconfirm --onefile --distpath dist
     fi
-  - chmod +x dist/party-pos
-  - cp dist/party-pos AppDir/usr/bin/party-pos
+  - chmod +x dist/posziona
+  - cp dist/posziona AppDir/usr/bin/posziona
   # Copy icon (create a placeholder if it doesn't exist)
   - |
     if [ -f app/ui/static/img/icon.png ]; then
-      cp app/ui/static/img/icon.png AppDir/usr/share/icons/hicolor/256x256/apps/party-pos.png
+      cp app/ui/static/img/icon.png AppDir/usr/share/icons/hicolor/256x256/apps/posziona.png
     else
       # Generate a simple SVG icon if no logo exists
-      echo '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#2c3e50"/><text x="128" y="140" font-family="sans-serif" font-size="60" fill="white" text-anchor="middle">POS</text></svg>' > AppDir/usr/share/icons/hicolor/256x256/apps/party-pos.svg
+      echo '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#2c3e50"/><text x="128" y="140" font-family="sans-serif" font-size="60" fill="white" text-anchor="middle">POS</text></svg>' > AppDir/usr/share/icons/hicolor/256x256/apps/posziona.svg
     fi
 
 AppDir:
   path: ./AppDir
 
   app_info:
-    id: io.party-pos.App
-    name: Party POS
-    icon: usr/share/icons/hicolor/256x256/apps/party-pos
+    id: io.posziona.App
+    name: Posziona
+    icon: usr/share/icons/hicolor/256x256/apps/posziona
     version: 0.1.0
-    exec: usr/bin/party-pos
+    exec: usr/bin/posziona
 
   apt:
     arch: amd64

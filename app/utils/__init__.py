@@ -1,3 +1,3 @@
 """
-Utility functions package for Party POS.
+Utility functions package for Posziona.
 """

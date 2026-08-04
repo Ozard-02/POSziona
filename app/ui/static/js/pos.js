@@ -729,7 +729,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         var subtotal = receiptItems.reduce((sum, item) => sum + item.line_total, 0);
         lines.push(separator);
-        lines.push('           PARTY POS RECEIPT        ');
+        lines.push('           POSZIONA RECEIPT        ');
         lines.push(separator);
         lines.push(t('items'));
         receiptItems.forEach(item => {
@@ -861,7 +861,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (receiptContent) {
                 const printWindow = window.open('', '_blank');
                 printWindow.document.write(`<pre>${receiptContent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`);
-                printWindow.document.title = 'Party POS Receipt';
+                printWindow.document.title = 'Posziona Receipt';
                 printWindow.focus();
                 printWindow.print();
                 printWindow.close();

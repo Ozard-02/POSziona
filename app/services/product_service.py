@@ -1,5 +1,5 @@
 """
-Product service for Party POS.
+Product service for Posziona.
 Handles product catalog, sections, subsections, and stock management.
 """
 

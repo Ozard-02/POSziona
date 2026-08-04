@@ -1,5 +1,5 @@
 """
-Entry point for Party POS application with pywebview.
+Entry point for Posziona application with pywebview.
 Launches the Flask server in a background thread and wraps it
 in a native pywebview desktop window.
 
@@ -53,7 +53,7 @@ def check_server_ready(host, port, timeout=5):
 def select_mode():
     """Prompt the user to choose a startup mode interactively."""
     print("\n" + "=" * 40)
-    print("  Party POS — Startup Mode")
+    print("  Posziona — Startup Mode")
     print("=" * 40)
     print()
     print("  1. Server + Client  (Flask + pywebview window)")
@@ -131,7 +131,7 @@ def run_client_only(server_url=None):
     print(f"  Connecting to: {server_url}")
 
     window = webview.create_window(
-        title='Party POS',
+        title='Posziona',
         url=server_url,
         width=1200,
         height=800,
@@ -160,7 +160,7 @@ def run_server_and_client():
     # cookies set inside the iframe may not persist in pywebview contexts.
     # Direct URL loading ensures cookies work correctly.
     window = webview.create_window(
-        title='Party POS',
+        title='Posziona',
         url=f'http://{HOST}:{PORT}/',
         width=1200,
         height=800,

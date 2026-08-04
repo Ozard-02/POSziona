@@ -1,5 +1,5 @@
 """
-Configuration for Party POS.
+Configuration for Posziona.
 """
 import os
 

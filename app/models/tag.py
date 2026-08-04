@@ -1,5 +1,5 @@
 """
-Tag model for Party POS.
+Tag model for Posziona.
 Tags are assigned to products and carry styling rules (bg color, text color).
 """
 

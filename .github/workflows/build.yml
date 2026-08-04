@@ -54,7 +54,7 @@ jobs:
       - name: Upload AppImage artifact
         uses: actions/upload-artifact@v4
         with:
-          name: party-pos-appimage
+          name: posziona-appimage
           path: out/*.AppImage
           if-no-files-found: error
 
@@ -80,8 +80,8 @@ jobs:
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: party-pos-linux
-          path: dist/party-pos
+          name: posziona-linux
+          path: dist/posziona
           if-no-files-found: error
 
   # ── Windows .exe ────────────────────────────────────────────────
@@ -107,8 +107,8 @@ jobs:
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
         with:
-          name: party-pos-windows
-          path: dist/party-pos.exe
+          name: posziona-windows
+          path: dist/posziona.exe
           if-no-files-found: error
 
   # ── Release assets (only on tag push) ───────────────────────────
@@ -124,24 +124,24 @@ jobs:
       - name: Download AppImage
         uses: actions/download-artifact@v4
         with:
-          name: party-pos-appimage
+          name: posziona-appimage
           path: dist/
       - name: Download Linux binary
         uses: actions/download-artifact@v4
         with:
-          name: party-pos-linux
+          name: posziona-linux
           path: dist/
       - name: Download Windows EXE
         uses: actions/download-artifact@v4
         with:
-          name: party-pos-windows
+          name: posziona-windows
           path: dist/
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/*.AppImage
-            dist/party-pos
-            dist/party-pos.exe
+            dist/posziona
+            dist/posziona.exe
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}

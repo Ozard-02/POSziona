@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', function() {
             printWindow.document.write(
                 '<pre>' + content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>'
             );
-            printWindow.document.title = 'Party POS - Summary Report';
+            printWindow.document.title = 'Posziona - Summary Report';
             printWindow.focus();
             printWindow.print();
             printWindow.close();
@@ -151,7 +151,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var lines = [];
         var separator = '=================================';
         lines.push(separator);
-        lines.push('        PARTY POS - SUMMARY REPORT    ');
+        lines.push('        POSZIONA - SUMMARY REPORT    ');
         lines.push(separator);
 
         var period = data.type === 'day' ? t('report_date_label') + ': ' + data.date : t('period_label') + ': ' + t('whole_party');

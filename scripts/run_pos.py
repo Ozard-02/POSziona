@@ -1,5 +1,5 @@
 """
-Run script for Party POS application.
+Run script for Posziona application.
 
 Startup mode can be selected interactively or via CLI flags:
     python scripts/run_pos.py              # Interactive prompt
@@ -19,7 +19,7 @@ from app.main import main
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='Run Party POS in one of three modes:',
+        description='Run Posziona in one of three modes:',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
   all       Start Flask server + open pywebview window (default)

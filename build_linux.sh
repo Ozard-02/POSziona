@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build Party POS for Linux.
+# Build Posziona for Linux.
 #
 # Two output formats are supported:
 #   1. Standalone onefile binary  (default) — no FUSE needed, runs anywhere
@@ -15,7 +15,7 @@
 #   bash build_linux.sh --appimage   # Build AppImage (bundles libfuse2)
 #
 # Output:
-#   dist/party-pos                — standalone binary (~110MB)
+#   dist/posziona                — standalone binary (~110MB)
 #   out/Party.POS-x86_64.AppImage  — AppImage (when --appimage is used)
 #
 # Note: The previous AppImage approach required FUSE (libfuse.so.2) which
@@ -25,7 +25,7 @@
 
 set -e
 
-APP_NAME="Party POS"
+APP_NAME="Posziona"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APPIMAGE_MODE=false
 
@@ -56,7 +56,7 @@ pip install pyinstaller
 echo "=== Building binary ==="
 pyinstaller build_onefile.spec --noconfirm
 
-BINARY_PATH="dist/party-pos"
+BINARY_PATH="dist/posziona"
 if [ -f "$BINARY_PATH" ]; then
   chmod +x "$BINARY_PATH"
   echo ""
@@ -65,8 +65,8 @@ if [ -f "$BINARY_PATH" ]; then
   echo "Size: $(du -h $BINARY_PATH | cut -f1)"
   echo ""
   echo "Test it with:"
-  echo "  ./dist/party-pos --mode server"
-  echo "  ./dist/party-pos --mode client --server-url http://127.0.0.1:5000/"
+  echo "  ./dist/posziona --mode server"
+  echo "  ./dist/posziona --mode client --server-url http://127.0.0.1:5000/"
 else
   echo "ERROR: Binary not found at expected location!"
   exit 1

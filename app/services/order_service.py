@@ -1,5 +1,5 @@
 """
-Order service for Party POS.
+Order service for Posziona.
 Handles cart management, checkout, orders, and payments.
 """
 

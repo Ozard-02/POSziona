@@ -1,8 +1,8 @@
-# Party POS — Codebase Structure & Logic
+# Posziona — Codebase Structure & Logic
 
 ## Overview
 
-Party POS is a **desktop Point of Sale (POS) application** built with Python (Flask backend) and pywebview (native desktop shell). It's designed for parties, events, and pop-up venues to manage product catalogs, operator authentication, cart-based ordering, and checkout with tax/discount support.
+Posziona is a **desktop Point of Sale (POS) application** built with Python (Flask backend) and pywebview (native desktop shell). It's designed for parties, events, and pop-up venues to manage product catalogs, operator authentication, cart-based ordering, and checkout with tax/discount support.
 
 The app runs as a **hybrid desktop app**: a Flask server runs in a background thread, and a pywebview window loads the web UI as a native desktop window. This gives the simplicity of a web frontend with the packaging benefits of a desktop application (including a standalone Linux binary built with PyInstaller).
 
@@ -11,7 +11,7 @@ The app runs as a **hybrid desktop app**: a Flask server runs in a background th
 ## Directory Layout
 
 ```
-party-pos/
+posziona/
 │
 ├── app/                          # Main application package
 │   ├── __init__.py              # Flask app factory — create_app()
@@ -208,7 +208,7 @@ app = create_app()
 server_thread = Thread(target=app.run, daemon=True)
 server_thread.start()
 # Wait for server to be ready (socket connect check)
-webview.create_window(title="Party POS", url="http://127.0.0.1:5000/")
+webview.create_window(title="Posziona", url="http://127.0.0.1:5000/")
 webview.start()  # Blocks — runs the pywebview event loop
 ```
 

@@ -1,5 +1,5 @@
 """
-Flask application factory for Party POS.
+Flask application factory for Posziona.
 """
 import os
 

@@ -1,5 +1,5 @@
 """
-API blueprint for Party POS.
+API blueprint for Posziona.
 Registers all sub-blueprints and health check.
 """
 

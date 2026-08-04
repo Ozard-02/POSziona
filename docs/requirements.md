@@ -1,4 +1,4 @@
-# Party POS System - Requirements
+# Posziona System - Requirements
 
 ## Overview
 A lightweight, PC-based Point of Sale application for parties/events. Runs as a web app on localhost across 2+ laptops, each with an independent local SQLite database. Designed to be simple, fast, and plug-and-play — no complex setup, no Java runtime, no MySQL server.

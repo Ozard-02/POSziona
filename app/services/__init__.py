@@ -1,3 +1,3 @@
 """
-Services package for Party POS.
+Services package for Posziona.
 """

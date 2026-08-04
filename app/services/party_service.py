@@ -1,5 +1,5 @@
 """
-Party service for Party POS.
+Party service for Posziona.
 Handles party creation from templates, settings, and party lifecycle.
 """
 

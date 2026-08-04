@@ -1,5 +1,5 @@
 """
-Database connection management for Party POS.
+Database connection management for Posziona.
 """
 
 import sqlite3

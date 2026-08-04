@@ -1,5 +1,5 @@
 """
-Product model for Party POS.
+Product model for Posziona.
 """
 
 from app.models import BaseModel

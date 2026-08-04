@@ -1,5 +1,5 @@
 """
-Logging configuration for Party POS.
+Logging configuration for Posziona.
 """
 import logging
 import os

@@ -1,5 +1,5 @@
 """
-Authentication service for Party POS.
+Authentication service for Posziona.
 Handles PIN-based login for operators and admin access.
 """
 

@@ -1,4 +1,4 @@
-/* Party POS translations */
+/* Posziona translations */
 const translations = {
     en: {
         // POS Header
@@ -290,7 +290,7 @@ function t(key) {
 // Translate login page elements
 function translateLoginPage() {
     var h1 = document.querySelector('.login-screen h1');
-    if (h1) h1.textContent = 'Party POS';
+    if (h1) h1.textContent = 'Posziona';
 
     var loginBtn = document.getElementById('login-btn');
     if (loginBtn) loginBtn.textContent = t('login');

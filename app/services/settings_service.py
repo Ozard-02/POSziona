@@ -1,5 +1,5 @@
 """
-Settings service for Party POS.
+Settings service for Posziona.
 Handles application and party-level settings.
 """
 

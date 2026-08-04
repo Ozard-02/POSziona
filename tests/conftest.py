@@ -1,5 +1,5 @@
 """
-Pytest configuration and fixtures for Party POS tests.
+Pytest configuration and fixtures for Posziona tests.
 """
 import os
 import sys

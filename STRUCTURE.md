@@ -1,7 +1,7 @@
 # Project Structure
 
 ```
-party-pos/
+posziona/
 ├── app/                    # Main application package
 │   ├── __init__.py         # Flask app factory, route definitions
 │   ├── main.py             # Entry point with pywebview launcher

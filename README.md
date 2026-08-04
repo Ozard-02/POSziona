@@ -1,4 +1,4 @@
-# Party POS System
+# Posziona System
 
 A lightweight, offline Point of Sale application for parties/events.
 
@@ -6,7 +6,7 @@ A lightweight, offline Point of Sale application for parties/events.
 
 ```bash
 # Setup (one-time)
-cd party-pos
+cd posziona
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
 # or venv\Scripts\activate  # Windows

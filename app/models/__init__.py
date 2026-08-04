@@ -1,5 +1,5 @@
 """
-Data models for Party POS.
+Data models for Posziona.
 """
 
 class BaseModel:

@@ -1,5 +1,5 @@
 """
-Database schema definitions for Party POS.
+Database schema definitions for Posziona.
 """
 
 # ============================================================

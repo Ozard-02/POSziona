@@ -1,5 +1,5 @@
 @echo off
-REM Build Party POS as a Windows .exe using PyInstaller.
+REM Build Posziona as a Windows .exe using PyInstaller.
 REM
 REM Prerequisites:
 REM   - Python 3 with venv (Python 3.8+)
@@ -11,7 +11,7 @@ REM
 REM Usage:
 REM   build_exe.bat
 REM
-REM Output: dist\party-pos.exe
+REM Output: dist\posziona.exe
 REM
 REM To build with GUI mode (no console window), use:
 REM   pyinstaller build_exe.spec --windowed
@@ -20,10 +20,10 @@ REM To build as a single file, use:
 REM   pyinstaller build_exe.spec --onefile
 
 setlocal
-set APP_NAME=party-pos
+set APP_NAME=posziona
 set VERSION=0.1.0
 
-echo === Building Party POS .exe ===
+echo === Building Posziona .exe ===
 
 REM Clean previous build
 if exist build rmdir /s /q build

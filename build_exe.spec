@@ -1,5 +1,5 @@
 """
-PyInstaller spec for Party POS — standalone executable build.
+PyInstaller spec for Posziona — standalone executable build.
 
 Build on Linux:
     pyinstaller build_exe.spec
@@ -59,7 +59,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='party-pos',
+    name='posziona',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

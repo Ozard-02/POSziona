@@ -1,5 +1,5 @@
 """
-Standalone entry point for PyInstaller builds of Party POS.
+Standalone entry point for PyInstaller builds of Posziona.
 
 This script handles both development mode (running from source)
 and frozen mode (running as a PyInstaller bundle / AppImage / .exe).
@@ -30,7 +30,7 @@ from app.main import main
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='Run Party POS in one of three modes:',
+        description='Run Posziona in one of three modes:',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
   all       Start Flask server + open pywebview window (default)

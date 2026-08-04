@@ -39,7 +39,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='party-pos',
+    name='posziona',
     debug=False,
     bootloader_ignore_signals=False,
     strip=True,

@@ -1,3 +1,3 @@
 """
-Database package for Party POS.
+Database package for Posziona.
 """
