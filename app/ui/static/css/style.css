@@ -257,6 +257,24 @@ body {
     border-color: #dee2e6;
 }
 
+/* Availability toggle mode — products grid gets a pulsing highlight */
+.products-grid.availability-toggle-mode {
+    outline: 3px dashed #e74c3c;
+    outline-offset: -3px;
+    animation: pulse-outline 1s infinite;
+}
+
+@keyframes pulse-outline {
+    0% { outline-color: #e74c3c; }
+    50% { outline-color: #ff6b6b; }
+    100% { outline-color: #e74c3c; }
+}
+
+.products-grid.availability-toggle-mode .product-btn {
+    cursor: crosshair;
+    box-shadow: 0 0 8px rgba(231, 76, 60, 0.4);
+}
+
 .product-btn.out-of-stock .product-name {
     text-decoration: line-through;
     color: #999;

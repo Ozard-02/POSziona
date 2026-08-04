@@ -99,6 +99,7 @@ const translations = {
         invalid_price: 'Invalid price value',
         price_update_failed: 'Failed to update price',
         availability_update_failed: 'Failed to update availability',
+        availability_toggle_mode: 'Availability toggle mode: click a product to toggle',
 
         // Auth
         login: 'Login',
@@ -230,6 +231,7 @@ const translations = {
         invalid_price: 'Valore prezzo non valido',
         price_update_failed: 'Aggiornamento prezzo fallito',
         availability_update_failed: 'Aggiornamento disponibilità fallito',
+        availability_toggle_mode: 'Modalità attiva/disattiva: clicca su un prodotto per toggle',
 
         // Auth
         login: 'Accedi',

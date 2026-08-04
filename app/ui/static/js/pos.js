@@ -215,15 +215,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.preventDefault();
                 showPosContextMenu(e.pageX, e.pageY, product, btn);
             });
-            
-            // Only allow clicking to add if in stock and active
-            if (isOutOfStock || isInactive) {
-                btn.addEventListener('click', (e) => {
+
+            // Click handler: shift+click or toggle-mode click toggles
+            // availability; regular click adds to cart (if active & in stock)
+            btn.addEventListener('click', async (e) => {
+                if (e.shiftKey || availabilityToggleMode) {
                     e.preventDefault();
-                });
-            } else {
-                btn.addEventListener('click', () => addToCart(product));
-            }
+                    if (availabilityToggleMode) {
+                        availabilityToggleMode = false;
+                        productsGrid.classList.remove('availability-toggle-mode');
+                    }
+                    await toggleProductAvailability(product);
+                } else if (!(isOutOfStock || isInactive)) {
+                    e.preventDefault();
+                    addToCart(product);
+                }
+            });
             
             productsGrid.appendChild(btn);
         });
@@ -1002,6 +1009,34 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // --- Live availability updates via SSE ---
+    // Availability toggle mode: press Shift+L to enter "toggle mode",
+    // then click any product to toggle its availability.
+    // This avoids relying on right-click which may not work in all environments.
+    let availabilityToggleMode = false;
+
+    // --- Add keyboard shortcut before connectSSEEvents ---
+    document.addEventListener('keydown', function(e) {
+        // Shift+L: enter availability toggle mode
+        if (e.shiftKey && (e.key === 'l' || e.key === 'L')) {
+            e.preventDefault();
+            availabilityToggleMode = true;
+            productsGrid.classList.add('availability-toggle-mode');
+            showError(t('availability_toggle_mode'));
+            // Exit toggle mode after 5 seconds of inactivity
+            setTimeout(function() {
+                if (availabilityToggleMode) {
+                    availabilityToggleMode = false;
+                    productsGrid.classList.remove('availability-toggle-mode');
+                }
+            }, 5000);
+        }
+        // Escape: exit toggle mode
+        if (e.key === 'Escape') {
+            availabilityToggleMode = false;
+            productsGrid.classList.remove('availability-toggle-mode');
+        }
+    });
+
     function connectSSEEvents() {
         const evtSource = new EventSource(`${API_BASE}/events`);
 
