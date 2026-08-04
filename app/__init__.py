@@ -38,7 +38,7 @@ def create_app(config_class=None):
 
     @app.route('/pos')
     def pos():
-        return render_template('pos.html', party_name='Party')
+        return render_template('pos.html', party_name='Posziona')
 
     @app.route('/admin')
     def admin():

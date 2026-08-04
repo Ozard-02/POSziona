@@ -16,7 +16,6 @@ from app.services.product_service import (
     create_section,
     create_subsection,
     get_sections,
-    get_subsections,
     get_all_products,
     get_all_tags,
     get_tag_by_id,

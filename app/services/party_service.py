@@ -5,7 +5,6 @@ Handles party creation from templates, settings, and party lifecycle.
 
 import os
 import sqlite3
-import shutil
 from datetime import datetime
 
 from app.database.connection import PartyDatabase, _init_default_operators, _init_default_products
