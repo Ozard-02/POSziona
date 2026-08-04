@@ -183,7 +183,10 @@ def duplicate(db_name):
         return jsonify({'error': 'New party name is required'}), 400
 
     try:
-        actual_db_name = duplicate_party(db_name, new_name)
+        actual_db_name = duplicate_party(
+            db_name, new_name,
+            data.get('start_date'), data.get('end_date')
+        )
         return jsonify({'message': 'Party duplicated', 'new_name': actual_db_name})
     except Exception as e:
         return jsonify({'error': str(e)}), 400

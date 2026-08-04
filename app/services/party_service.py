@@ -250,15 +250,18 @@ def create_empty_party(party_name, start_date=None, end_date=None):
     return db_name
 
 
-def duplicate_party(original_name, new_name):
+def duplicate_party(original_name, new_name, start_date=None, end_date=None):
     """
     Duplicate an existing party by copying its database file.
     (Note: templates are preferred for new parties, but this is useful
     for copying a party that has already accumulated some data.)
+
+    Optionally sets start_date / end_date on the duplicated party's
+    settings table (overriding the original's dates).
     """
     # Sanitize new_name to match _get_party_db_path behavior
     safe_name = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_'))
-    src_path = os.path.join(PARTY_DB_DIR, f"{safe_name}.db" if original_name.endswith('.db') 
+    src_path = os.path.join(PARTY_DB_DIR, f"{safe_name}.db" if original_name.endswith('.db')
                             else f"{original_name}.db")
     dst_path = os.path.join(PARTY_DB_DIR, f"{safe_name}.db")
 
@@ -281,13 +284,23 @@ def duplicate_party(original_name, new_name):
         if os.path.exists(src):
             shutil.copy2(src, dst)
 
-    # Update party name in settings using the correct DB name
+    # Update party name and optionally dates in settings
     db_name_for_path = safe_name.replace('.db', '') if safe_name.endswith('.db') else safe_name
     with PartyDatabase(db_name_for_path) as conn:
         conn.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
             ('party_name', new_name)
         )
+        if start_date:
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                ('start_date', start_date)
+            )
+        if end_date:
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                ('end_date', end_date)
+            )
         conn.commit()
 
     logger.info(f"Duplicated party '{original_name}' to '{safe_name}'")

@@ -695,13 +695,65 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function duplicateParty(partyName) {
-        const newName = prompt('Enter new party name:', partyName + ' (copy)');
-        if (!newName || !newName.trim()) return;
+        // Fetch the original party's settings to pre-fill dates
+        let origStartDate = '';
+        let origEndDate = '';
+        try {
+            const settings = await fetchJSON(`${API_BASE}/parties/${encodeURIComponent(partyName)}/settings?db=${db}`);
+            origStartDate = settings.start_date || '';
+            origEndDate = settings.end_date || '';
+        } catch(e) {
+            // If we can't fetch settings, just use empty dates
+            console.warn('Could not fetch party settings for dates:', e);
+        }
+
+        // Guess a default new name: append " (copy)" if not already a copy
+        let defaultName = partyName;
+        if (!defaultName.match(/\(copy\)/i)) {
+            defaultName = partyName + ' (copy)';
+        }
+
+        const html = `
+            <div class="form-group">
+                <label>New Party Name:</label>
+                <input type="text" id="dup-party-name" class="form-control" value="${defaultName}">
+            </div>
+            <div class="form-group">
+                <label>Start Date:</label>
+                <input type="date" id="dup-party-start-date" class="form-control" value="${origStartDate}">
+            </div>
+            <div class="form-group">
+                <label>End Date (optional):</label>
+                <input type="date" id="dup-party-end-date" class="form-control" value="${origEndDate}">
+            </div>
+        `;
+
+        // Read form values in onConfirm callback (runs before overlay is removed)
+        let formData = null;
+
+        const onConfirm = function() {
+            formData = {
+                name: document.getElementById('dup-party-name').value.trim(),
+                startDate: document.getElementById('dup-party-start-date').value,
+                endDate: document.getElementById('dup-party-end-date').value
+            };
+            if (!formData.name) {
+                alert('Party name is required');
+                return false;
+            }
+        };
+
+        const confirmed = await showDialog('Duplicate Party', html, 'Duplicate', onConfirm);
+        if (!confirmed || !formData) return;
 
         try {
             await fetchJSON(`${API_BASE}/parties/${encodeURIComponent(partyName)}/duplicate?db=${db}`, {
                 method: 'POST',
-                body: JSON.stringify({ name: newName.trim() })
+                body: JSON.stringify({
+                    name: formData.name,
+                    start_date: formData.startDate || null,
+                    end_date: formData.endDate || null
+                })
             });
             loadParties();
         } catch (e) {
