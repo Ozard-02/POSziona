@@ -5,6 +5,7 @@ Handles party-level settings like default payment method, currency, tax rate, et
 
 from flask import Blueprint, request, jsonify
 from app.services.settings_service import get_effective_settings, get_setting, update_setting
+from app.utils.events import broadcast
 from app.utils.logger import get_logger
 
 logger = get_logger('api.settings')
@@ -32,6 +33,11 @@ def set_default_payment():
     else:
         update_setting(db, 'default_payment_method', '')
 
+    broadcast('settings_update', {
+        'db': db,
+        'key': 'default_payment_method',
+        'value': method or None
+    })
     return jsonify({'message': 'Default payment method updated', 'method': method or None})
 
 
@@ -58,5 +64,10 @@ def update_settings():
             'split_receipts', 'print_recovery_receipt',
         ]:
             update_setting(db, key, str(value))
+            broadcast('settings_update', {
+                'db': db,
+                'key': key,
+                'value': str(value)
+            })
 
     return jsonify({'message': 'Settings updated'})

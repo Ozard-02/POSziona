@@ -1025,6 +1025,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 loadProducts(activeSub.dataset.subsectionId);
             }
         });
+
+        // Settings update (e.g. default_payment_method, auto_checkout, etc.)
+        evtSource.addEventListener('settings_update', function(event) {
+            const payload = JSON.parse(event.data);
+            // Re-fetch settings so checkout logic picks up the new values
+            loadSettings();
+        });
     }
 
     function handleProductUpdate(payload) {
