@@ -932,17 +932,24 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Edit Price
         menu.appendChild(makeItem(
-            'Edit Price',
+            t('edit_price'),
             () => editProductPrice(product),
             '💰'
         ));
         
         // Toggle Availability
-        const availLabel = product.is_active ? 'Set Unavailable' : 'Set Available';
+        const availLabel = product.is_active ? t('set_unavailable') : t('set_available');
         menu.appendChild(makeItem(
             availLabel,
             () => toggleProductAvailability(product),
             '👁️'
+        ));
+        
+        // Set Stock Count
+        menu.appendChild(makeItem(
+            t('set_stock'),
+            () => editProductStock(product),
+            '📦'
         ));
         
         // Close menu on outside click
@@ -958,16 +965,16 @@ document.addEventListener('DOMContentLoaded', function() {
             showError(t('admin_access_required'));
             return;
         }
-        
-        const newPriceStr = prompt('Enter new price:', String(product.price));
+
+        const newPriceStr = prompt(t('enter_new_price'), String(product.price));
         if (!newPriceStr) return;
-        
+
         const newPrice = parseFloat(newPriceStr);
         if (isNaN(newPrice) || newPrice < 0) {
             showError(t('invalid_price'));
             return;
         }
-        
+
         try {
             await fetchJSON(`${API_BASE}/products/products/${product.id}?db=${db}`, {
                 method: 'PUT',
@@ -1005,6 +1012,43 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (e) {
             showError(e.message || t('availability_update_failed'));
+        }
+    }
+
+    async function editProductStock(product) {
+        const admin = await checkAdmin();
+        if (!admin) {
+            showError(t('admin_access_required'));
+            return;
+        }
+
+        const currentStock = product.stock_count === null ? '' : String(product.stock_count);
+        const newStockStr = prompt(t('enter_new_stock'), currentStock);
+        if (newStockStr === null) return; // User cancelled
+
+        const trimmed = newStockStr.trim();
+        let newStock = null;
+        if (trimmed !== '') {
+            newStock = parseInt(trimmed, 10);
+            if (isNaN(newStock) || newStock < 0) {
+                showError(t('invalid_stock'));
+                return;
+            }
+        }
+
+        try {
+            await fetchJSON(`${API_BASE}/products/products/${product.id}?db=${db}`, {
+                method: 'PUT',
+                body: JSON.stringify({ stock: newStock })
+            });
+            product.stock_count = newStock;
+            // Re-render to update displayed stock
+            const activeSub = document.querySelector('.subsection.active');
+            if (activeSub) {
+                loadProducts(activeSub.dataset.subsectionId);
+            }
+        } catch (e) {
+            showError(e.message || t('stock_update_failed'));
         }
     }
     
@@ -1094,6 +1138,19 @@ document.addEventListener('DOMContentLoaded', function() {
                         .then(function(p) { addToCart(p); })
                         .catch(function(e) { showError(e); });
                 };
+            }
+        }
+
+        // Update stock count display if provided
+        if (payload.stock_count !== undefined && payload.stock_count !== null) {
+            const stockEl = productBtn.querySelector('.product-stock');
+            if (stockEl) {
+                stockEl.textContent = `${t('stock')}: ${payload.stock_count}`;
+            }
+            // Update out-of-stock class based on new stock count
+            if (payload.stock_count <= 0) {
+                productBtn.classList.add('out-of-stock');
+                productBtn.onclick = function(e) { e.preventDefault(); };
             }
         }
     }

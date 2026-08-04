@@ -310,13 +310,14 @@ def edit_product(product_id):
         if 'tags' in data:
             tag_ids = data['tags'] or []
             set_product_tags(db, product_id, [int(t) for t in tag_ids])
-        # Broadcast update if availability changed
-        if 'is_active' in data or 'is_archived' in data:
+        # Broadcast update if availability or stock changed
+        if 'is_active' in data or 'is_archived' in data or 'stock' in data:
             broadcast('product_update', {
                 'product_id': product_id,
                 'db': db,
                 'is_active': data.get('is_active'),
-                'is_archived': data.get('is_archived')
+                'is_archived': data.get('is_archived'),
+                'stock_count': data.get('stock')
             })
         return jsonify({'message': 'Product updated'})
     except Exception as e:

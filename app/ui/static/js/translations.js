@@ -100,6 +100,14 @@ const translations = {
         price_update_failed: 'Failed to update price',
         availability_update_failed: 'Failed to update availability',
         availability_toggle_mode: 'Availability toggle mode: click a product to toggle',
+        set_stock: 'Set Stock',
+        invalid_stock: 'Invalid stock value',
+        stock_update_failed: 'Failed to update stock',
+        edit_price: 'Edit Price',
+        set_available: 'Set Available',
+        set_unavailable: 'Set Unavailable',
+        enter_new_price: 'Enter new price:',
+        enter_new_stock: 'Enter new stock count (leave blank for unlimited):',
 
         // Auth
         login: 'Login',
@@ -232,6 +240,14 @@ const translations = {
         price_update_failed: 'Aggiornamento prezzo fallito',
         availability_update_failed: 'Aggiornamento disponibilità fallito',
         availability_toggle_mode: 'Modalità attiva/disattiva: clicca su un prodotto per toggle',
+        set_stock: 'Imposta Scorta',
+        invalid_stock: 'Valore scorta non valido',
+        stock_update_failed: 'Aggiornamento scorta fallito',
+        edit_price: 'Modifica Prezzo',
+        set_available: 'Imposta Disponibile',
+        set_unavailable: 'Imposta Non Disponibile',
+        enter_new_price: 'Inserisci nuovo prezzo:',
+        enter_new_stock: 'Inserisci nuova scorta (lascia vuoto per illimitato):',
 
         // Auth
         login: 'Accedi',
