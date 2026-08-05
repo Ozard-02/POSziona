@@ -179,12 +179,12 @@ def main(mode=None, server_url=None):
 
     Args:
         mode: 'all' (server+client, default), 'server', or 'client'.
-               If None, prompts interactively (unless --mode flag was passed).
+               If None, defaults to 'all' (server + client).
         server_url: For 'client' mode only, the URL of the POS server.
                      If None, checks localhost; if not found, prompts for IP.
     """
     if mode is None:
-        mode = select_mode()
+        mode = 'all'
 
     print(f"Mode: {mode}")
     if mode == 'server':
