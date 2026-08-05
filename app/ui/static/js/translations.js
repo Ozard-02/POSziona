@@ -109,6 +109,17 @@ const translations = {
         enter_new_price: 'Enter new price:',
         enter_new_stock: 'Enter new stock count (leave blank for unlimited):',
 
+        // Startup screen
+        startup_title: 'Posziona',
+        startup_subtitle: 'Select startup mode',
+        mode_local: 'Local Server',
+        mode_local_desc: 'Use server on this machine',
+        mode_remote: 'Connect to Remote',
+        mode_remote_desc: 'Enter a server IP address',
+        server_ip_placeholder: '192.168.1.10:5000',
+        connect: 'Connect',
+        back: 'Back',
+
         // Auth
         login: 'Login',
         admin_login: 'Admin Login',
@@ -249,6 +260,17 @@ const translations = {
         enter_new_price: 'Inserisci nuovo prezzo:',
         enter_new_stock: 'Inserisci nuova scorta (lascia vuoto per illimitato):',
 
+        // Startup screen
+        startup_title: 'Posziona',
+        startup_subtitle: 'Seleziona modalità di avvio',
+        mode_local: 'Server Locale',
+        mode_local_desc: 'Usa il server su questa macchina',
+        mode_remote: 'Connetti a Remoto',
+        mode_remote_desc: 'Inserisci un indirizzo IP del server',
+        server_ip_placeholder: '192.168.1.10:5000',
+        connect: 'Connetti',
+        back: 'Indietro',
+
         // Auth
         login: 'Accedi',
         admin_login: 'Accesso Admin',
@@ -309,6 +331,32 @@ function t(key) {
 function translateLoginPage() {
     var h1 = document.querySelector('.login-screen h1');
     if (h1) h1.textContent = 'Posziona';
+
+    // Startup screen
+    var startupTitle = document.getElementById('startup-title');
+    if (startupTitle) startupTitle.textContent = t('startup_title');
+
+    var startupSubtitle = document.getElementById('startup-subtitle');
+    if (startupSubtitle) startupSubtitle.textContent = t('startup_subtitle');
+
+    var modeLocalLabel = document.querySelector('#mode-local .mode-label');
+    if (modeLocalLabel) modeLocalLabel.textContent = t('mode_local');
+    var modeLocalDesc = document.querySelector('#mode-local .mode-desc');
+    if (modeLocalDesc) modeLocalDesc.textContent = t('mode_local_desc');
+
+    var modeRemoteLabel = document.querySelector('#mode-remote .mode-label');
+    if (modeRemoteLabel) modeRemoteLabel.textContent = t('mode_remote');
+    var modeRemoteDesc = document.querySelector('#mode-remote .mode-desc');
+    if (modeRemoteDesc) modeRemoteDesc.textContent = t('mode_remote_desc');
+
+    var serverInput = document.getElementById('server-input');
+    if (serverInput) serverInput.placeholder = t('server_ip_placeholder');
+
+    var connectBtn = document.getElementById('connect-btn');
+    if (connectBtn) connectBtn.textContent = t('connect');
+
+    var backBtn = document.getElementById('back-to-modes');
+    if (backBtn) backBtn.textContent = t('back');
 
     var loginBtn = document.getElementById('login-btn');
     if (loginBtn) loginBtn.textContent = t('login');

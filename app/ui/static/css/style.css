@@ -594,13 +594,16 @@ body {
     justify-content: flex-end;
 }
 
+/* ===== Hidden utility ===== */
+.hidden { display: none !important; }
+
 /* ===== Login Screen ===== */
 .login-screen {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 100vh;
+    min-height: 100vh;
     background: #2c3e50;
     color: white;
 }
@@ -630,6 +633,87 @@ body {
     padding: 10px 15px;
     font-size: 16px;
     flex: 1;
+}
+
+/* ===== Startup Screen ===== */
+.startup-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: #2c3e50;
+    color: white;
+}
+
+.startup-card {
+    background: #34495e;
+    border-radius: 10px;
+    padding: 30px;
+    text-align: center;
+    min-width: 320px;
+}
+
+.startup-card h2 {
+    font-size: 28px;
+    margin-bottom: 5px;
+}
+
+.startup-card p {
+    font-size: 14px;
+    color: #bdc3c7;
+    margin-bottom: 25px;
+}
+
+.mode-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.mode-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 12px 15px;
+    font-size: 16px;
+    text-align: left;
+    border-radius: 5px;
+}
+
+.mode-btn .mode-label {
+    font-weight: bold;
+    font-size: 16px;
+}
+
+.mode-btn .mode-desc {
+    font-size: 13px;
+    color: #bdc3c7;
+    margin-top: 2px;
+}
+
+.login-form-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+.remote-connect {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 300px;
+    margin-top: 10px;
+}
+
+.remote-connect input {
+    padding: 10px;
+    font-size: 16px;
+    border: none;
+    border-radius: 5px;
+    text-align: center;
 }
 
 /* ===== Admin Panel ===== */

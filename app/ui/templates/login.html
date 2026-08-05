@@ -5,11 +5,40 @@
 {% block content %}
 <div class="login-screen">
     <h1>Posziona</h1>
-    <div class="login-form">
-        <input type="text" id="operator-name" placeholder="Operator Name" autocomplete="off">
-        <input type="password" id="pin-input" placeholder="PIN" maxlength="4" autocomplete="off">
-        <button id="login-btn" class="btn-primary">Login</button>
-        <button id="admin-login-btn" class="btn-secondary">Admin Login</button>
+
+    <!-- Startup screen: mode + server selection -->
+    <div id="startup-screen" class="startup-screen">
+        <div class="startup-card">
+            <h2 id="startup-title">Posziona</h2>
+            <p id="startup-subtitle">Select startup mode</p>
+
+            <div class="mode-options">
+                <button id="mode-local" class="btn-primary mode-btn">
+                    <span class="mode-label">Local Server</span>
+                    <span class="mode-desc">Use server on this machine</span>
+                </button>
+                <button id="mode-remote" class="btn-secondary mode-btn">
+                    <span class="mode-label">Connect to Remote</span>
+                    <span class="mode-desc">Enter a server IP address</span>
+                </button>
+            </div>
+
+            <div id="remote-connect" class="remote-connect hidden">
+                <input type="text" id="server-input" placeholder="192.168.1.10:5000" autocomplete="off">
+                <button id="connect-btn" class="btn-primary">Connect</button>
+                <button id="back-to-modes" class="btn-secondary">Back</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login form (hidden until mode is chosen) -->
+    <div id="login-form-container" class="login-form-container hidden">
+        <div class="login-form">
+            <input type="text" id="operator-name" placeholder="Operator Name" autocomplete="off">
+            <input type="password" id="pin-input" placeholder="PIN" maxlength="4" autocomplete="off">
+            <button id="login-btn" class="btn-primary">Login</button>
+            <button id="admin-login-btn" class="btn-secondary">Admin Login</button>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -18,22 +47,71 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     translateLoginPage();
-    const pinInput = document.getElementById('pin-input');
-    const loginBtn = document.getElementById('login-btn');
-    const adminBtn = document.getElementById('admin-login-btn');
 
-    // Auto-focus PIN input
-    pinInput.focus();
+    var startupScreen = document.getElementById('startup-screen');
+    var loginFormContainer = document.getElementById('login-form-container');
+    var remoteConnect = document.getElementById('remote-connect');
+    var modeLocalBtn = document.getElementById('mode-local');
+    var modeRemoteBtn = document.getElementById('mode-remote');
+    var serverInput = document.getElementById('server-input');
+    var connectBtn = document.getElementById('connect-btn');
+    var backToModesBtn = document.getElementById('back-to-modes');
+
+    var pinInput = document.getElementById('pin-input');
+    var loginBtn = document.getElementById('login-btn');
+    var adminBtn = document.getElementById('admin-login-btn');
+
+    // Mode: Local Server — just show the login form
+    modeLocalBtn.addEventListener('click', function() {
+        startupScreen.classList.add('hidden');
+        loginFormContainer.classList.remove('hidden');
+        pinInput.focus();
+    });
+
+    // Mode: Remote — show the server IP input
+    modeRemoteBtn.addEventListener('click', function() {
+        startupScreen.classList.add('hidden');
+        remoteConnect.classList.remove('hidden');
+        serverInput.focus();
+    });
+
+    // Back from remote screen to mode selection
+    backToModesBtn.addEventListener('click', function() {
+        remoteConnect.classList.add('hidden');
+        startupScreen.classList.remove('hidden');
+    });
+
+    // Connect to remote server
+    connectBtn.addEventListener('click', function() {
+        var input = serverInput.value.trim();
+        if (!input) {
+            alert('Please enter a server IP address');
+            serverInput.focus();
+            return;
+        }
+        // Normalize: prepend http:// if missing
+        if (!input.startsWith('http://') && !input.startsWith('https://')) {
+            input = 'http://' + input;
+        }
+        input = input.replace(/\/+$/, '') + '/';
+        // Navigate to the remote server
+        window.location.href = input;
+    });
+
+    // Allow Enter key on server input
+    serverInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') connectBtn.click();
+    });
 
     function attemptLogin(isAdmin) {
-        const pin = pinInput.value.trim();
+        var pin = pinInput.value.trim();
         if (!pin || pin.length < 4) {
             alert('Please enter a 4-digit PIN');
             pinInput.focus();
             return;
         }
 
-        fetch(`/api/auth/login${isAdmin ? '/admin' : ''}?db=default`, {
+        fetch('/api/auth/login' + (isAdmin ? '/admin' : '') + '?db=default', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({pin: pin})
