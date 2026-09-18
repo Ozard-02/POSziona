@@ -120,31 +120,65 @@ def _verify_integrity_once(db_path):
     _ensure_party_db_exists(os.path.basename(db_path).rsplit('.db', 1)[0])
 
 
+def _ensure_schema_columns(conn):
+    """Add columns present in PARTY_SCHEMA but missing from this DB.
+
+    Compares the live database against a fresh in-memory one built from
+    the schema, so new columns never need hand-written migrations.
+    Failures are logged, never fatal (a kiosk must stay up).
+    Returns the list of (table, column) pairs that were added.
+    """
+    added = []
+    ref = sqlite3.connect(':memory:')
+    try:
+        ref.executescript(get_party_schema())
+        tables = [r[0] for r in ref.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
+        for table in tables:
+            ref_cols = {r[1]: r for r in ref.execute(f'PRAGMA table_info("{table}")')}
+            try:
+                live_cols = {r[1] for r in conn.execute(f'PRAGMA table_info("{table}")')}
+            except sqlite3.Error:
+                continue
+            for name, col in ref_cols.items():
+                if name in live_cols:
+                    continue
+                coldef = f'"{name}" {col[2]}'
+                if col[4] is not None:
+                    coldef += f' DEFAULT {col[4]}'
+                try:
+                    conn.execute(f'ALTER TABLE "{table}" ADD COLUMN {coldef}')
+                    logger.info(f"Schema drift fix: added column {table}.{name}")
+                    added.append((table, name))
+                except sqlite3.Error as e:
+                    logger.warning(f"Could not add column {table}.{name}: {e}")
+        conn.commit()
+    finally:
+        ref.close()
+    return added
+
+
 def _run_migrations(db_path):
-    """Run lightweight migrations on existing party databases."""
+    """Bring existing party databases up to the current schema.
+
+    - Re-applies PARTY_SCHEMA (all statements are IF NOT EXISTS, so new
+      tables/indexes appear automatically).
+    - Adds missing columns via _ensure_schema_columns.
+    - Backfills sections.sort_order the one time it is introduced.
+    """
     conn = sqlite3.connect(db_path)
     try:
-        # Add sort_order column to sections if it doesn't exist
-        columns = [row[1] for row in conn.execute("PRAGMA table_info(sections)").fetchall()]
-        if 'sort_order' not in columns:
-            conn.execute("ALTER TABLE sections ADD COLUMN sort_order INTEGER DEFAULT 0")
-            # Set initial sort_order based on existing row order
+        conn.executescript(get_party_schema())
+        conn.commit()
+        added = _ensure_schema_columns(conn)
+
+        if ('sections', 'sort_order') in added:
+            # Freshly added columns default to 0 — set initial order by id
             rows = conn.execute("SELECT id FROM sections ORDER BY id").fetchall()
             for idx, (sid,) in enumerate(rows):
                 conn.execute("UPDATE sections SET sort_order = ? WHERE id = ?", (idx, sid))
             conn.commit()
-            logger.info(f"Migration: added sort_order to sections in {db_path}")
-        # Idempotency keys table for retry-safe checkout (new DBs get it
-        # via PARTY_SCHEMA; existing DBs need it created here)
-        conn.execute(
-            """CREATE TABLE IF NOT EXISTS idempotency_keys (
-                key TEXT PRIMARY KEY,
-                order_id INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
-            )"""
-        )
-        conn.commit()
+            logger.info(f"Migration: backfilled sort_order in {db_path}")
     finally:
         conn.close()
 
