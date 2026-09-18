@@ -1,85 +1,89 @@
 # Project Structure
 
+Verified against the real tree on 2026-09-18.
+
 ```
 posziona/
-├── app/                    # Main application package
-│   ├── __init__.py         # Flask app factory, route definitions
-│   ├── main.py             # Entry point with pywebview launcher
-│   ├── api/                # REST API endpoints (Flask blueprints)
-│   │   ├── __init__.py     # Registers all sub-blueprints + health status
-│   │   ├── products.py     # Products, sections, subsections, tags CRUD
-│   │   ├── cart.py         # Session-based cart: add/remove/update/discount
-│   │   ├── orders.py       # Checkout, order history, sales reports
-│   │   ├── parties.py      # Party CRUD, template management, party settings
-│   │   ├── auth.py         # Operator/PIN login, admin access, operator mgmt
-│   │   └── settings.py     # Party settings: currency, payment, snapshots
-│   ├── database/           # Database layer
-│   │   ├── __init__.py     # Package init
-│   │   ├── connection.py   # PartyDatabase + TemplatesDatabase context managers
-│   │   ├── schema.py       # SQL schema for party + templates DBs
-│   │   └── templates_db.py # Template CRUD operations (sections, products, tags)
-│   ├── models/             # Data models (dataclass-style, base on Row)
-│   │   ├── __init__.py     # BaseModel base class
-│   │   ├── product.py      # Product model with stock/availability helpers
-│   │   ├── cart.py         # Cart + CartItem with discount logic
-│   │   ├── order.py        # Order, OrderItem, Payment models
-│   │   ├── party.py        # Party model
-│   │   ├── operator.py     # Operator model (admin/operator roles)
-│   ├── services/           # Business logic
-│   │   ├── __init__.py     # Package init
-│   │   ├── product_service.py  # Product catalog, sections, tags, CSV import
-│   │   ├── order_service.py    # Order creation, payments, sales reports
-│   │   ├── party_service.py    # Party CRUD, templates→parties, settings
-│   │   ├── settings_service.py # Default settings, setting get/set
-│   │   └── auth_service.py    # PIN hashing, operator auth, audit logging
-│   ├── ui/                 # Web UI (HTML/CSS/JS templates)
-│   │   ├── templates/      # Jinja2 HTML templates
-│   │   │   ├── base.html   # Base template (layout, scripts, styles)
-│   │   │   ├── login.html  # Operator login screen (embedded inline JS)
-│   │   │   ├── pos.html    # POS screen: sections sidebar, products grid, cart
-│   │   │   ├── dashboard.html # Sales dashboard with report filters
-│   │   │   └── admin.html  # Admin panel: products, parties, operators, tags
-│   │   └── static/         # Static assets
-│   │       ├── css/
-│   │       │   └── style.css  # All CSS (no inline styles in templates)
+├── app/                          # Main application package
+│   ├── __init__.py               # Flask app factory create_app()
+│   ├── main.py                   # Entry point: server+client / server / client modes + pywebview
+│   ├── api/                      # REST API (Flask blueprints, thin)
+│   │   ├── __init__.py           # Registers sub-blueprints + GET /api/events (SSE) + /api/status
+│   │   ├── auth.py               # PIN login/logout, operator mgmt
+│   │   ├── products.py           # Products, sections, subsections, tags, CSV import/export
+│   │   ├── cart.py               # Session-based cart: add/remove/update/discount
+│   │   ├── orders.py             # Checkout, order history, reports, delete (restores stock)
+│   │   ├── parties.py            # Party CRUD, duplicate (catalog only), date edit
+│   │   └── settings.py           # Party settings get/set
+│   ├── database/
+│   │   ├── __init__.py
+│   │   ├── connection.py         # PartyDatabase + TemplatesDatabase ctx managers, seeds operators
+│   │   ├── schema.py             # PARTY_SCHEMA + TEMPLATES_SCHEMA (WAL, FK, indexes)
+│   │   └── templates_db.py       # Template CRUD (sections, products, tags, settings)
+│   ├── models/                   # Dataclass-style helpers (services return plain dicts)
+│   │   ├── __init__.py           # BaseModel (from_row/to_dict)
+│   │   ├── product.py            # Product + stock/availability helpers
+│   │   ├── cart.py               # Cart + CartItem (in-memory, discount logic)
+│   │   ├── operator.py           # Operator (admin/operator roles)
+│   │   └── tag.py                # Tag + styling rules
+│   ├── services/                 # Business logic + SQL
+│   │   ├── __init__.py
+│   │   ├── product_service.py    # Catalog, sections, tags, CSV, search (ALL-tags filter)
+│   │   ├── order_service.py      # create_order, record_payment, sales summaries, delete+restore
+│   │   ├── party_service.py      # Party create from template/empty, duplicate, delete
+│   │   ├── settings_service.py   # DEFAULT_SETTINGS + get_effective_settings()
+│   │   └── auth_service.py       # PIN hashing (SHA-256), verification, audit log
+│   ├── ui/
+│   │   ├── templates/            # Jinja2 pages
+│   │   │   ├── base.html
+│   │   │   ├── login.html        # PIN entry (root route /)
+│   │   │   ├── pos.html          # Sections sidebar + product grid + cart + bottom bar
+│   │   │   ├── admin.html        # Products, parties, operators, tags, settings
+│   │   │   └── dashboard.html    # Reports + print
+│   │   └── static/
+│   │       ├── css/style.css
 │   │       └── js/
-│   │           ├── app.js      # Shared utilities (formatCurrency, fetchJSON, auth check)
-│   │           ├── pos.js      # POS screen: sections, products, cart, checkout
-│   │           ├── admin.js    # Admin panel: dashboard, products, tags, parties
-│   │           └── dashboard.js # Report generation, printing
-│   └── utils/              # Utilities
-│       ├── __init__.py     # Package init
-│       ├── config.py       # Configuration (paths, secrets, defaults)
-│       ├── logger.py       # Logging setup
-│       └── helpers.py      # General helpers (party paths, currency, PIN validation)
-├── data/                   # Runtime data (gitignored)
-│   ├── parties/            # Individual party SQLite databases
-│   ├── templates.db        # Shared templates database
-│   └── backups/            # Periodic snapshots
-├── tests/                  # Test suite
-│   ├── __init__.py
-│   ├── conftest.py         # Pytest fixtures
-│   ├── unit/               # Unit tests (models, schema validation)
-│   ├── integration/        # Integration tests (full workflow, auth, CRUD)
-│   └── fixtures/           # Test data
-├── docs/                   # Documentation
-│   └── requirements.md     # Feature requirements
-├── scripts/                # Utility scripts
-│   └── run_pos.py          # Launch script (starts Flask + pywebview)
-├── .gitignore
-├── requirements.txt        # Python dependencies (Flask, pywebview, etc.)
-├── requirements-dev.txt    # Development dependencies (pytest, etc.)
-├── pyproject.toml          # Project metadata
-├── pytest.ini              # Pytest configuration
-└── README.md               # Project README with setup & usage
+│   │           ├── app.js            # fetchJSON, formatCurrency, auth check
+│   │           ├── pos.js            # Sections/products/cart/checkout, SSE sync, Shift+L / Shift+Click
+│   │           ├── admin.js          # Dashboard, products, tags, parties (data-i18n)
+│   │           ├── dashboard.js      # Report generation, printing
+│   │           └── translations.js   # i18n (en/it)
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   ├── config.py             # HOST, PORT, DATA_DIR, PARTY_DB_DIR, DEFAULT_CURRENCY
+│   │   ├── events.py             # SSE broadcaster: broadcast(), sse_response(), prune/heartbeat
+│   │   └── logger.py             # Logging → app/logs/pos.log
+│   ├── logs/                     # Runtime logs (pos.log; .gitkeep tracked)
+│   └── data/                     # Runtime data (gitignored): parties/*.db, templates.db, backups/
+├── scripts/
+│   ├── run_pos.py                # Launcher (--mode all|server|client, --server-url)
+│   └── entry_point.py            # PyInstaller entry point (frozen path handling)
+├── tests/
+│   ├── conftest.py               # app/client/clean_db fixtures (fresh test_party.db, wipe templates)
+│   ├── unit/test_models.py
+│   └── integration/              # test_api, test_parties, test_products_search_bulk, test_csv_import,
+│                                 # test_stock_and_availability, test_tags, test_orders,
+│                                 # test_default_tags_and_zero_total, test_manual_party_and_products,
+│                                 # test_resilience
+├── docs/
+│   └── requirements.md           # Feature requirements + MVP scope + unicenta lessons
+├── .github/                      # CI builds
+├── AppImageBuilder.yml
+├── build_linux.sh / build_onefile.spec    # Linux onefile binary
+├── build_exe.bat / build_exe.spec / build_onefile.spec  # Windows EXE
+├── pyproject.toml                # name posziona 0.1.0, Flask + pywebview + flask-cors
+├── pytest.ini                    # testpaths=tests, python_files=test_*.py
+├── requirements.txt / requirements-dev.txt
+├── README.md                     # Quick start
+├── PLAN.md                       # Phases + status
+├── ARCHITECTURE.md               # Layers, DB strategy, SSE, flows
+└── CODEBASE_EXPLANATION.md       # Long-form walkthrough (partly stale, see Notes)
 ```
 
 ### Notes
-- **data/** directory and its contents are gitignored (contains runtime databases and backups)
-- **templates.db** is the shared app-level store for party templates
-- Each party gets its own SQLite file in **data/parties/** created from a template
-- **index.html** was removed — the root route renders **login.html** directly
-- Static assets use CSS classes instead of inline styles for maintainability
-- The `db` parameter is passed as a query string `?db=<name>` to all API endpoints (currently hardcoded to 'default' in the frontend)
-- Models exist as dataclass-style classes but services return plain dicts from SQLite rows
-- `payment_service.py` and `report_service.py` are in the old STRUCTURE.md but don't exist — payment logic lives in `order_service.py`'s `record_payment()`, and reports live in `order_service.py`'s `get_sales_summary()` etc.
+- `data/` is gitignored (runtime DBs + backups).
+- There is **no** `app/models/order.py` or `app/models/party.py` — order/party logic lives in `order_service.py` / `party_service.py` returning dicts. (Older docs mention them; they don't exist.)
+- There is **no** `payment_service.py` / `report_service.py` — payments = `order_service.record_payment()`, reports = `order_service.get_sales_summary()` etc.
+- There is **no** `app/utils/helpers.py` — helpers live in services + `config.py`.
+- `db` scoping is `?db=<name>` query param, frontend currently hardcodes `default`.
+- `index.html` was removed — `/` renders `login.html` directly.

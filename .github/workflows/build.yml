@@ -2,10 +2,11 @@ name: Build Distributables
 
 on:
   push:
+    branches: [main]
     tags:
       - 'v*'
   pull_request:
-    branches: [master]
+    branches: [main]
   workflow_dispatch:
 
 jobs:

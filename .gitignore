@@ -1,4 +1,5 @@
 .venv/
+venv/
 __pycache__/
 *.pyc
 *.pyo
@@ -25,3 +26,8 @@ app/logs/*.log
 
 # Database runtime data
 *.db
+
+# Local summary / session notes (keep untracked)
+PLAN.md
+ARCHITECTURE.md
+session.log
