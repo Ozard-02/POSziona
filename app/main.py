@@ -30,6 +30,13 @@ app = create_app()
 def start_server():
     """Start Flask server in a background thread."""
     from app.services.backup_service import start_backup_scheduler
+    from app.utils.instance_lock import acquire, owner_pid
+    if not acquire():
+        print(f"ERROR: Another POSziona server is already running "
+              f"(lock held, owner PID {owner_pid()}).")
+        print("Stop it first — two servers on the same data directory "
+              "would silently diverge the database.")
+        sys.exit(1)
     start_backup_scheduler()
     print(f"Starting Flask server on {HOST}:{PORT}...")
     app.run(host=HOST, port=PORT, threaded=True, use_reloader=False)
