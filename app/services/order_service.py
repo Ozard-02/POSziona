@@ -3,6 +3,8 @@ Order service for Posziona.
 Handles cart management, checkout, orders, and payments.
 """
 
+import sqlite3
+
 from app.database.connection import PartyDatabase
 from app.utils.logger import get_logger
 
@@ -112,12 +114,27 @@ def checkout_order(db_name, cart_items, payment_method, operator_id,
                 (order_id, payment_method, total, tendered, change_due)
             )
 
-        # Remember the idempotency key only after everything succeeded
+        # Remember the idempotency key only after everything succeeded.
+        # A concurrent retry may have committed the same key first —
+        # treat the duplicate-key error as a replay, not a failure.
         if idempotency_key:
-            conn.execute(
-                "INSERT INTO idempotency_keys (key, order_id) VALUES (?, ?)",
-                (idempotency_key, order_id)
-            )
+            try:
+                conn.execute(
+                    "INSERT INTO idempotency_keys (key, order_id) VALUES (?, ?)",
+                    (idempotency_key, order_id)
+                )
+            except sqlite3.IntegrityError:
+                conn.rollback()
+                row = conn.execute(
+                    """SELECT o.id, o.total FROM idempotency_keys k
+                       JOIN orders o ON o.id = k.order_id
+                       WHERE k.key = ?""",
+                    (idempotency_key,)
+                ).fetchone()
+                if row:
+                    logger.info(f"Checkout raced, replaying: key={idempotency_key}")
+                    return row['id'], row['total'], {}, True
+                raise
 
         # Fetch updated stock counts for broadcast
         updated_stocks = {}

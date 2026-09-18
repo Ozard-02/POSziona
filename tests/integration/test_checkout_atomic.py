@@ -7,6 +7,7 @@ Retry-safe atomic checkout tests.
 - SSE broadcast failures never fail the sale.
 """
 import pytest
+import pytest
 
 
 def _setup_product(client, db_name, stock=10):
@@ -130,3 +131,86 @@ def test_broadcast_failure_does_not_fail_sale(clean_db, client, monkeypatch):
                     json={'payment_method': 'card', 'idempotency_key': 'test-key-sse'})
     assert r.status_code == 201
     assert _summary(client, db_name)['total_orders'] == 1
+
+
+def test_mid_transaction_crash_rolls_back_everything(clean_db, client):
+    """A failure halfway through checkout (bad product FK) leaves zero trace."""
+    from app.services.order_service import checkout_order
+
+    db_name = clean_db
+    _setup_product(client, db_name, stock=10)
+
+    with pytest.raises(Exception):
+        checkout_order(
+            db_name,
+            [{'product_id': 99999, 'quantity': 1, 'unit_price': 1.0}],
+            'cash', 1, idempotency_key='test-key-crash')
+
+    assert _summary(client, db_name)['total_orders'] == 0
+    # ...including no orphaned idempotency key (retry starts clean)
+    from app.services.order_service import checkout_order as co2
+    _fill_cart(client, db_name, 1, qty=1)
+    order_id, total, _, replayed = co2(
+        db_name, [{'product_id': 1, 'quantity': 1, 'unit_price': 2.50}],
+        'cash', 1, idempotency_key='test-key-crash')
+    assert replayed is False
+    assert _summary(client, db_name)['total_orders'] == 1
+
+
+def test_concurrent_same_key_single_order(clean_db, client):
+    """10 threads retrying the same sale at once → exactly 1 order."""
+    import threading
+    from app.services.order_service import checkout_order, get_sales_summary
+
+    db_name = clean_db
+    _setup_product(client, db_name, stock=100)
+
+    results, errors = [], []
+
+    def attempt():
+        try:
+            results.append(checkout_order(
+                db_name, [{'product_id': 1, 'quantity': 1, 'unit_price': 2.50}],
+                'cash', 1, idempotency_key='test-key-race'))
+        except Exception as e:  # noqa: BLE001
+            errors.append(e)
+
+    threads = [threading.Thread(target=attempt) for _ in range(10)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors
+    assert len(results) == 10
+    assert {r[0] for r in results} == {results[0][0]}  # all got the same order
+    assert get_sales_summary(db_name)['total_orders'] == 1
+
+
+def test_concurrent_checkouts_never_negative_stock(clean_db, client):
+    """10 threads × qty 2 against stock 5 → stock clamps at exactly 0."""
+    import threading
+    from app.services.order_service import checkout_order
+    from app.services.product_service import get_product_by_id
+
+    db_name = clean_db
+    _setup_product(client, db_name, stock=5)
+
+    errors = []
+
+    def attempt(i):
+        try:
+            checkout_order(
+                db_name, [{'product_id': 1, 'quantity': 2, 'unit_price': 2.50}],
+                'cash', 1, idempotency_key=f'test-key-load-{i}')
+        except Exception as e:  # noqa: BLE001
+            errors.append(e)
+
+    threads = [threading.Thread(target=attempt, args=(i,)) for i in range(10)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors
+    assert get_product_by_id(db_name, 1)['stock_count'] == 0
