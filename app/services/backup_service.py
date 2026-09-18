@@ -101,6 +101,34 @@ def prune_snapshots(keep=DEFAULT_KEEP_COUNT):
         logger.info(f"Pruned old snapshot: {stale}")
 
 
+def _prune_idempotency_keys():
+    """Drop idempotency keys older than 7 days across all party DBs."""
+    if not os.path.isdir(PARTY_DB_DIR):
+        return
+    for filename in os.listdir(PARTY_DB_DIR):
+        if not filename.endswith('.db'):
+            continue
+        path = os.path.join(PARTY_DB_DIR, filename)
+        if not os.path.isfile(path):
+            continue
+        try:
+            conn = sqlite3.connect(path, timeout=10)
+            try:
+                conn.execute(
+                    "DELETE FROM idempotency_keys "
+                    "WHERE created_at < datetime('now', '-7 days')"
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        except sqlite3.OperationalError as e:
+            # Pre-upgrade DBs without the table heal on next open; stay quiet
+            if 'no such table' not in str(e):
+                logger.warning(f"Key prune failed for {filename}: {e}")
+        except Exception as e:
+            logger.warning(f"Key prune failed for {filename}: {e}")
+
+
 def list_snapshots():
     """List snapshots newest-first with file counts and sizes."""
     if not os.path.isdir(BACKUP_DIR):
@@ -195,12 +223,20 @@ def _keep_count():
 
 
 def scheduler_tick(now=None):
-    """One scheduler pass: snapshot every party DB whose interval elapsed.
+    """One scheduler pass: prune old snapshots/keys, snapshot due party DBs.
 
     Always includes templates.db when anything is due. Called every minute
     by the background thread; also directly callable in tests.
     """
     now = now if now is not None else time.time()
+    # Prune here (not in the checkout hot path): keeps latency variance
+    # out of sales and the tables tiny on low-end machines.
+    try:
+        prune_snapshots(_keep_count())
+        _prune_idempotency_keys()
+    except Exception as e:
+        logger.warning(f"Scheduler prune failed: {e}")
+
     if not os.path.isdir(PARTY_DB_DIR):
         return None
 

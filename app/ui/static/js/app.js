@@ -46,6 +46,27 @@ function showError(message) {
     }, 5000);
 }
 
+function showBanner(message) {
+    // Persistent, unmissable banner for critical events (e.g. database
+    // corruption). Stays until explicitly dismissed — unlike toasts.
+    let banner = document.getElementById('alert-banner');
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'alert-banner';
+        const close = document.createElement('button');
+        close.id = 'alert-banner-close';
+        close.textContent = '✕';
+        close.setAttribute('aria-label', 'Dismiss');
+        close.addEventListener('click', () => banner.remove());
+        const text = document.createElement('span');
+        text.id = 'alert-banner-text';
+        banner.appendChild(text);
+        banner.appendChild(close);
+        document.body.prepend(banner);
+    }
+    document.getElementById('alert-banner-text').textContent = message;
+}
+
 function fetchJSON(url, options = {}) {
     const defaultHeaders = {
         'Content-Type': 'application/json',

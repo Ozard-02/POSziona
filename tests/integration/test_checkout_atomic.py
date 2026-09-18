@@ -214,3 +214,49 @@ def test_concurrent_checkouts_never_negative_stock(clean_db, client):
 
     assert not errors
     assert get_product_by_id(db_name, 1)['stock_count'] == 0
+
+
+def test_loser_reread_sees_winner_commit(clean_db, client):
+    """The idempotency race fallback relies on rollback giving a fresh read.
+
+    Simulates the exact interleaving: loser SELECTs (miss — winner hasn't
+    committed), winner commits, loser INSERTs the key (IntegrityError),
+    loser rolls back and re-reads → must see the winner's order.
+    """
+    import sqlite3
+    from app.database.connection import _get_party_db_path
+
+    db_name = clean_db
+    _setup_product(client, db_name, stock=10)
+    path = _get_party_db_path(db_name)
+
+    loser = sqlite3.connect(path)
+    try:
+        miss = loser.execute(
+            "SELECT order_id FROM idempotency_keys WHERE key = 'test-key-fresh'"
+        ).fetchone()
+        assert miss is None
+
+        # Winner commits through the public path while loser holds its snapshot
+        _fill_cart(client, db_name, 1, qty=1)
+        r = client.post(f'/api/orders/checkout?db={db_name}',
+                        json={'payment_method': 'cash',
+                              'idempotency_key': 'test-key-fresh'})
+        assert r.status_code == 201
+        winner_id = r.get_json()['order_id']
+
+        # Loser now hits the duplicate key...
+        with pytest.raises(sqlite3.IntegrityError):
+            loser.execute(
+                "INSERT INTO idempotency_keys (key, order_id) VALUES (?, ?)",
+                ('test-key-fresh', 999999))
+        loser.rollback()
+
+        # ...and its re-read must observe the winner (fresh snapshot)
+        row = loser.execute(
+            "SELECT order_id FROM idempotency_keys WHERE key = 'test-key-fresh'"
+        ).fetchone()
+        assert row is not None
+        assert row[0] == winner_id
+    finally:
+        loser.close()

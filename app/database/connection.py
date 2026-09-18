@@ -97,8 +97,10 @@ def _verify_integrity_once(db_path):
 
     On corruption the file is quarantined aside (.corrupt-<timestamp>)
     for forensics/restore, and a FRESH database is created so the party
-    can keep selling. The data itself is recovered via the snapshot
-    restore API. A corrupt DB fails every query anyway — refusing to
+    can keep selling. Before wiping, the handler looks for a usable
+    snapshot and attempts an emergency salvage copy; afterwards it
+    broadcasts a database_corruption event so kiosk screens show an
+    unmissable banner. A corrupt DB fails every query anyway — refusing to
     start would halt all sales with no benefit.
     """
     with _checked_paths_lock:
@@ -119,6 +121,46 @@ def _verify_integrity_once(db_path):
         detail = f'{type(e).__name__}: {e}'
 
     logger.critical(f"Database corruption detected in {db_path}: {detail}")
+
+    # Before wiping anything: is there a snapshot to restore from?
+    # A corruption before the first snapshot is otherwise total loss.
+    db_filename = os.path.basename(db_path)
+    latest_snapshot = None
+    try:
+        from app.services.backup_service import list_snapshots
+        for snap in list_snapshots():
+            if db_filename in snap.get('files', []):
+                latest_snapshot = snap['name']
+                break
+    except Exception as e:
+        logger.warning(f"Could not list snapshots during corruption handling: {e}")
+
+    # Best-effort salvage of the corrupt file via the online backup API
+    # (copies what it can; may fail on severe corruption — never fatal).
+    salvage_path = f"{db_path}.salvage-{time.strftime('%Y%m%d-%H%M%S')}"
+    salvaged = False
+    try:
+        src = sqlite3.connect(db_path)
+        try:
+            dst = sqlite3.connect(salvage_path)
+            try:
+                src.backup(dst)
+                salvaged = True
+            finally:
+                dst.close()
+        finally:
+            src.close()
+        if salvaged:
+            logger.critical(f"Salvaged what could be read to {salvage_path}")
+    except Exception as e:
+        logger.warning(f"Emergency salvage failed for {db_path}: {e}")
+        try:
+            if os.path.exists(salvage_path):
+                os.remove(salvage_path)
+        except OSError:
+            pass
+        salvaged = False
+
     quarantine = f"{db_path}.corrupt-{time.strftime('%Y%m%d-%H%M%S')}"
     try:
         os.rename(db_path, quarantine)
@@ -135,6 +177,19 @@ def _verify_integrity_once(db_path):
         _checked_paths.discard(db_path)
     # Recreate from scratch via the normal creation path
     _ensure_party_db_exists(os.path.basename(db_path).rsplit('.db', 1)[0])
+
+    # Unmissable operator signal: a CRITICAL log line is invisible on a
+    # kiosk. Broadcast to all connected clients (persistent banner UI).
+    try:
+        from app.utils.events import broadcast
+        broadcast('database_corruption', {
+            'db': db_filename[:-3] if db_filename.endswith('.db') else db_filename,
+            'quarantine': os.path.basename(quarantine),
+            'salvage': os.path.basename(salvage_path) if salvaged else None,
+            'snapshot': latest_snapshot,
+        })
+    except Exception as e:
+        logger.warning(f"Could not broadcast corruption alert: {e}")
 
 
 def _ensure_schema_columns(conn):

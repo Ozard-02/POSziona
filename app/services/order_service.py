@@ -38,12 +38,6 @@ def checkout_order(db_name, cart_items, payment_method, operator_id,
         raise ValueError('Cart is empty')
 
     with PartyDatabase(db_name) as conn:
-        # Opportunistic prune of old idempotency keys (older than 7 days)
-        # so the table stays tiny on low-end machines.
-        conn.execute(
-            "DELETE FROM idempotency_keys WHERE created_at < datetime('now', '-7 days')"
-        )
-
         if idempotency_key:
             row = conn.execute(
                 """SELECT o.id, o.total FROM idempotency_keys k

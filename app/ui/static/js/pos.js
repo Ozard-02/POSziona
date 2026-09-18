@@ -1142,6 +1142,24 @@ document.addEventListener('DOMContentLoaded', function() {
             // Re-fetch settings so checkout logic picks up the new values
             loadSettings();
         });
+
+        // Database corruption — persistent banner, must not be missed.
+        // The server already quarantined the file and recreated a fresh
+        // DB; sales can continue, data comes back via snapshot restore.
+        evtSource.addEventListener('database_corruption', function(event) {
+            const payload = JSON.parse(event.data);
+            let msg = `DATABASE PROBLEM on "${payload.db}": sales continue on a fresh database.`;
+            if (payload.snapshot) {
+                msg += ` A snapshot (${payload.snapshot}) is available to restore from.`;
+            } else {
+                msg += ' NO snapshot exists yet — data may be lost.';
+            }
+            if (payload.salvage) {
+                msg += ` A salvage copy was kept (${payload.salvage}).`;
+            }
+            msg += ' Tell the admin immediately.';
+            showBanner(msg);
+        });
     }
 
     function handleProductUpdate(payload) {
