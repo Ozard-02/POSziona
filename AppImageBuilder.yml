@@ -26,7 +26,7 @@ script:
   - |
     if [ ! -f dist/posziona ]; then
       echo "Building PyInstaller onefile binary first..."
-      venv/bin/pyinstaller build_onefile.spec --noconfirm --onefile --distpath dist
+      venv/bin/pyinstaller build_onefile.spec --noconfirm --distpath dist
     fi
   - chmod +x dist/posziona
   - cp dist/posziona AppDir/usr/bin/posziona

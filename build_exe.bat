@@ -13,11 +13,10 @@ REM   build_exe.bat
 REM
 REM Output: dist\posziona.exe
 REM
-REM To build with GUI mode (no console window), use:
-REM   pyinstaller build_exe.spec --windowed
-REM
-REM To build as a single file, use:
-REM   pyinstaller build_exe.spec --onefile
+REM To build with GUI mode (no console window), set console=False
+REM in build_exe.spec (CLI flags like --windowed cannot be combined
+REM with a .spec file). To build as a single file, the spec already
+REM defines a one-file EXE, so just run pyinstaller with the spec.
 
 setlocal
 set APP_NAME=posziona

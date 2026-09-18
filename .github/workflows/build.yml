@@ -15,8 +15,8 @@ jobs:
     name: Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: Create venv & install deps
@@ -35,8 +35,8 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: Create venv & install deps
@@ -47,7 +47,7 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller appimage-builder
       - name: Build PyInstaller binary
-        run: venv/bin/pyinstaller build_onefile.spec --noconfirm --onefile --distpath dist
+        run: venv/bin/pyinstaller build_onefile.spec --noconfirm --distpath dist
       - name: Build AppImage
         run: |
           source venv/bin/activate
@@ -65,8 +65,8 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: Create venv & install deps
@@ -77,7 +77,7 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
       - name: Build binary
-        run: venv/bin/pyinstaller build_onefile.spec --noconfirm --onefile --distpath dist
+        run: venv/bin/pyinstaller build_onefile.spec --noconfirm --distpath dist
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
@@ -91,8 +91,8 @@ jobs:
     needs: test
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: Create venv & install deps
@@ -104,7 +104,7 @@ jobs:
           pip install pyinstaller
           pip install pywebview[win64]  # native backend for Windows
       - name: Build EXE (one-file, windowed)
-        run: venv\Scripts\pyinstaller build_exe.spec --noconfirm --onefile --windowed --distpath dist
+        run: venv\Scripts\pyinstaller build_exe.spec --noconfirm --distpath dist
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
         with:
@@ -121,7 +121,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Download AppImage
         uses: actions/download-artifact@v4
         with:

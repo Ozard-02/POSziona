@@ -5,10 +5,12 @@ Build on Linux:
     pyinstaller build_exe.spec
 
 Build on Windows:
-    pyinstaller build_exe.spec --windowed  (or --onefile)
+    pyinstaller build_exe.spec
 
-For one-file builds, add --onefile to the command line.
-For GUI-only (no console), add --windowed to the command line.
+The spec already defines a one-file build (see EXE below) and the
+console/windowed setting (console=False means GUI-only, no console).
+Makespec flags like --onefile/--windowed are NOT valid together with
+a .spec file — edit this spec instead of passing them on the CLI.
 
 Notes:
   - Hidden imports include pywebview/webview submodules and the app package
@@ -66,7 +68,7 @@ exe = EXE(
     upx=True,
     upx_dir=None,
     runtime_tmpdir=None,
-    console=True,      # Console for debugging; override with --windowed on CLI
+    console=False,     # Windowed (no console); spec already defines one-file above
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
