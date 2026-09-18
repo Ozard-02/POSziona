@@ -287,6 +287,13 @@ def restore_party(db_name):
         return jsonify({'error': 'snapshot is required'}), 400
     try:
         restore_party_db(db_name, snapshot)
+        try:
+            from app.services.auth_service import log_audit_event
+            log_audit_event(
+                db_name, 'party_restored',
+                f'Party restored from snapshot {snapshot}', session.get('operator_id'))
+        except Exception:
+            pass  # audit must never break disaster recovery
         return jsonify({'message': f'Party "{db_name}" restored from {snapshot}'})
     except FileNotFoundError as e:
         return jsonify({'error': str(e)}), 404

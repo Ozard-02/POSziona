@@ -23,7 +23,27 @@ function formatCurrency(amount) {
 }
 
 function showError(message) {
-    alert(message);
+    // Non-blocking toast: alert() froze the whole kiosk UI until clicked,
+    // hiding the sale behind a modal during busy service. Toasts stack
+    // (max 5), auto-dismiss after 5s, and click-to-dismiss.
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-error';
+    toast.textContent = message;
+    toast.addEventListener('click', () => toast.remove());
+    container.appendChild(toast);
+    while (container.children.length > 5) {
+        container.firstChild.remove();
+    }
+    setTimeout(() => {
+        toast.classList.add('toast-hide');
+        setTimeout(() => toast.remove(), 300);
+    }, 5000);
 }
 
 function fetchJSON(url, options = {}) {

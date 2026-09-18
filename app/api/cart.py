@@ -154,6 +154,17 @@ def apply_discount():
         'value': discount_value
     }
 
+    from app.services.auth_service import log_audit_event
+    try:
+        log_audit_event(
+            request.args.get('db', 'default'),
+            'discount_applied',
+            f'{discount_type} discount value={discount_value} amount={discount_amount:.2f}',
+            session.get('operator_id'))
+    except Exception:
+        # Audit must never break discounting
+        pass
+
     total = subtotal - discount_amount
     return jsonify({
         'subtotal': subtotal,

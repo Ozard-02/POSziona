@@ -137,19 +137,21 @@ def restore_party_db(db_name, snapshot):
 
     dst = _get_party_db_path(db_name)
 
-    # Checkpoint the live DB so no committed data lingers only in the WAL
-    if os.path.exists(dst):
-        conn = sqlite3.connect(dst)
-        try:
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        finally:
-            conn.close()
+    from app.database.connection import _lifecycle_lock
+    with _lifecycle_lock:
+        # Checkpoint the live DB so no committed data lingers only in the WAL
+        if os.path.exists(dst):
+            conn = sqlite3.connect(dst)
+            try:
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            finally:
+                conn.close()
 
-    shutil.copyfile(src, dst)
-    for ext in ['-wal', '-shm', '-journal']:
-        p = dst + ext
-        if os.path.exists(p):
-            os.remove(p)
+        shutil.copyfile(src, dst)
+        for ext in ['-wal', '-shm', '-journal']:
+            p = dst + ext
+            if os.path.exists(p):
+                os.remove(p)
 
     # Force a fresh integrity verification on next open
     from app.database import connection as _conn_mod

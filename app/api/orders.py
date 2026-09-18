@@ -16,6 +16,7 @@ from app.services.order_service import (
 )
 from app.services.product_service import get_product_by_id
 from app.services.settings_service import get_default_payment_method
+from app.services.auth_service import log_audit_event
 from app.utils.events import broadcast
 from app.utils.logger import get_logger
 
@@ -171,6 +172,9 @@ def delete_order(order_id):
     try:
         result = delete_order_by_id(db, order_id)
         if result:
+            log_audit_event(
+                db, 'order_voided',
+                f'Order {order_id} revoked by admin', session.get('operator_id'))
             return jsonify({'message': f'Order {order_id} revoked'})
         else:
             return jsonify({'error': 'Order not found'}), 404

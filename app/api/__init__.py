@@ -38,5 +38,31 @@ def sse_events():
 
 @api_bp.route('/status')
 def status():
-    """Health check endpoint."""
-    return jsonify({'status': 'ok', 'version': '0.1.0'})
+    """Health check endpoint (kiosk monitoring).
+
+    Reports db_writable=False / status=degraded instead of failing when
+    the data directory is not writable — SQLite can't save sales then,
+    and the operator must know before taking orders.
+    """
+    import os
+    import shutil
+    from app.utils.config import DATA_DIR, PARTY_DB_DIR
+
+    try:
+        os.makedirs(PARTY_DB_DIR, exist_ok=True)
+        db_writable = os.access(PARTY_DB_DIR, os.W_OK)
+    except OSError:
+        db_writable = False
+
+    try:
+        disk_free_mb = shutil.disk_usage(DATA_DIR).free // (1024 * 1024)
+    except OSError:
+        disk_free_mb = -1
+
+    degraded = not db_writable
+    return jsonify({
+        'status': 'degraded' if degraded else 'ok',
+        'version': '0.1.0',
+        'db_writable': db_writable,
+        'disk_free_mb': disk_free_mb,
+    })

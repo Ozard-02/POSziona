@@ -18,6 +18,23 @@ logger = get_logger('database')
 _checked_paths = set()
 _checked_paths_lock = threading.Lock()
 
+# Best-effort count of currently open connections per party DB path.
+# delete_party() refuses to remove a DB with live connections instead of
+# pulling the file out from under running requests mid-party.
+_open_counts = {}
+_open_counts_lock = threading.Lock()
+
+# Serializes party lifecycle file operations (create/duplicate/delete/
+# restore) against each other so two admins can't interleave file
+# copies/removals of the same database.
+_lifecycle_lock = threading.RLock()
+
+
+def open_count(db_path):
+    """Number of currently open connections to a party DB file."""
+    with _open_counts_lock:
+        return _open_counts.get(db_path, 0)
+
 
 def validate_db_name(db_name):
     """Reject database names that could escape the party directory.
@@ -337,6 +354,8 @@ class PartyDatabase:
         self.conn.execute('PRAGMA busy_timeout = 10000')  # Wait up to 10s for locks
         self.conn.execute('PRAGMA journal_mode = WAL')
         self.conn.execute('PRAGMA synchronous = NORMAL')  # Faster WAL writes
+        with _open_counts_lock:
+            _open_counts[self.db_path] = _open_counts.get(self.db_path, 0) + 1
         return self.conn
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -350,6 +369,9 @@ class PartyDatabase:
                     self.conn.rollback()
             finally:
                 self.conn.close()
+                with _open_counts_lock:
+                    _open_counts[self.db_path] = max(
+                        0, _open_counts.get(self.db_path, 1) - 1)
 
 
 class TemplatesDatabase:
