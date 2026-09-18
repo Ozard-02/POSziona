@@ -1,6 +1,15 @@
 /* Admin panel JavaScript */
 document.addEventListener('DOMContentLoaded', function() {
     const db = 'default';
+
+    // Factory-PIN enforcement: logins with 0000/1234 land here with a flag
+    // that raises a persistent banner pointing at the Operators section.
+    try {
+        if (sessionStorage.getItem('mustChangePin') === '1') {
+            sessionStorage.removeItem('mustChangePin');
+            showBanner(t('change_factory_pin'));
+        }
+    } catch (e) {}
     
     // DOM elements
     const sections = document.querySelectorAll('.admin-section');

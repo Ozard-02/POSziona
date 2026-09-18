@@ -122,6 +122,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert(data.error);
                 pinInput.value = '';
                 pinInput.focus();
+            } else if (data.must_change_pin) {
+                // Factory PIN: send straight to the admin panel (where PINs
+                // are changed) with a flag that raises an unmissable banner.
+                try { sessionStorage.setItem('mustChangePin', '1'); } catch (e) {}
+                window.location.href = '/admin';
             } else {
                 window.location.href = '/pos';
             }

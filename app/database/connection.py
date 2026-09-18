@@ -24,6 +24,12 @@ _checked_paths_lock = threading.Lock()
 _open_counts = {}
 _open_counts_lock = threading.Lock()
 
+# DB paths currently being deleted. PartyDatabase refuses to open these,
+# closing the check-then-unlink race for this process. Cross-process races
+# are impossible: the instance lock guarantees a single server.
+_deleting = set()
+_deleting_lock = threading.Lock()
+
 # Serializes party lifecycle file operations (create/duplicate/delete/
 # restore) against each other so two admins can't interleave file
 # copies/removals of the same database.
@@ -34,6 +40,21 @@ def open_count(db_path):
     """Number of currently open connections to a party DB file."""
     with _open_counts_lock:
         return _open_counts.get(db_path, 0)
+
+
+def mark_deleting(db_path, active=True):
+    """Flag/unflag a DB path as being deleted (see _deleting)."""
+    with _deleting_lock:
+        if active:
+            _deleting.add(db_path)
+        else:
+            _deleting.discard(db_path)
+
+
+def is_deleting(db_path):
+    """True when a delete is in progress for this DB file."""
+    with _deleting_lock:
+        return db_path in _deleting
 
 
 def validate_db_name(db_name):
@@ -403,6 +424,9 @@ class PartyDatabase:
 
     def __enter__(self):
         self.db_path = _ensure_party_db_exists(self.db_name)
+        if is_deleting(self.db_path):
+            raise RuntimeError(
+                f'Party database is being deleted: {self.db_name}')
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute('PRAGMA foreign_keys = ON')

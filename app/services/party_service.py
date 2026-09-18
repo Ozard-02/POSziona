@@ -201,7 +201,7 @@ def delete_party(db_name):
     Refuses (with a clear error) when the DB has live connections —
     deleting the file mid-party would break running checkouts.
     """
-    from app.database.connection import _get_party_db_path, open_count
+    from app.database.connection import _get_party_db_path, open_count, mark_deleting
     validate_db_name(db_name)
     with _lifecycle_lock:
         db_path = _get_party_db_path(db_name)
@@ -210,14 +210,18 @@ def delete_party(db_name):
             raise RuntimeError(
                 f'Party "{db_name}" is in use (' + str(live) + ' open connections) — '
                 'close POS clients using it, then retry')
-        if os.path.exists(db_path):
-            os.remove(db_path)
-            # Remove WAL and SHM files if they exist
-            for ext in ['-wal', '-shm']:
-                path = db_path + ext
-                if os.path.exists(path):
-                    os.remove(path)
-            logger.info(f"Deleted party '{db_name}'")
+        mark_deleting(db_path, True)
+        try:
+            if os.path.exists(db_path):
+                os.remove(db_path)
+                # Remove WAL and SHM files if they exist
+                for ext in ['-wal', '-shm']:
+                    path = db_path + ext
+                    if os.path.exists(path):
+                        os.remove(path)
+                logger.info(f"Deleted party '{db_name}'")
+        finally:
+            mark_deleting(db_path, False)
 
 
 def create_empty_party(party_name, start_date=None, end_date=None):
