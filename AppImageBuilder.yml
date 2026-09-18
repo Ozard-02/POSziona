@@ -46,7 +46,7 @@ AppDir:
     id: io.posziona.App
     name: Posziona
     icon: usr/share/icons/hicolor/256x256/apps/posziona
-    version: 0.1.0
+    version: 0.1.1
     exec: usr/bin/posziona
 
   apt:

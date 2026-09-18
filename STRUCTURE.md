@@ -76,7 +76,7 @@ posziona/
 ├── AppImageBuilder.yml
 ├── build_linux.sh / build_onefile.spec    # Linux onefile binary
 ├── build_exe.bat / build_exe.spec / build_onefile.spec  # Windows EXE
-├── pyproject.toml                # name posziona 0.1.0, Flask + pywebview + flask-cors
+├── pyproject.toml                # name posziona 0.1.1, Flask + pywebview + flask-cors
 ├── pytest.ini                    # testpaths=tests, python_files=test_*.py
 ├── requirements.txt / requirements-dev.txt
 ├── README.md                     # Quick start

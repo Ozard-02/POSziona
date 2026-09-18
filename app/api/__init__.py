@@ -62,7 +62,7 @@ def status():
     degraded = not db_writable
     return jsonify({
         'status': 'degraded' if degraded else 'ok',
-        'version': '0.1.0',
+        'version': '0.1.1',
         'db_writable': db_writable,
         'disk_free_mb': disk_free_mb,
     })

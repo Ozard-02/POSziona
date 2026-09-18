@@ -11,7 +11,7 @@ def test_status_endpoint(client):
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['status'] == 'ok'
-    assert data['version'] == '0.1.0'
+    assert data['version'] == '0.1.1'
 
 
 def test_login_page(client):
