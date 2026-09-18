@@ -61,6 +61,7 @@ def update_settings():
             'default_operator_id', 'printer_model',
             'receipt_header', 'receipt_footer',
             'auto_logout_minutes', 'snapshot_interval_minutes',
+            'snapshot_keep_count',
             'split_receipts', 'print_recovery_receipt',
         ]:
             update_setting(db, key, str(value))

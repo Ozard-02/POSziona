@@ -2,7 +2,7 @@
 Party management API endpoints.
 """
 
-from flask import Blueprint, request, jsonify, Response
+from flask import Blueprint, request, jsonify, Response, session
 import csv
 import io
 from app.services.party_service import (
@@ -15,6 +15,7 @@ from app.services.party_service import (
     update_party_setting,
 )
 from app.services.order_service import get_sales_summary, get_items_sold_summary, get_recent_orders
+from app.services.backup_service import list_snapshots, restore_party_db, run_snapshots
 from app.database import templates_db
 from app.utils.logger import get_logger
 
@@ -243,6 +244,57 @@ def assign_template_product_tag(template_id, product_id):
         return jsonify({'error': 'tag_name is required'}), 400
     templates_db.set_template_product_tags(template_id, product_id, [tag_name])
     return jsonify({'message': 'Tag assigned to template product'})
+
+
+# ============================================================
+# SNAPSHOT BACKUPS (disaster recovery)
+# ============================================================
+
+@parties_bp.route('/backups', methods=['GET'])
+def get_backups():
+    """List snapshot backups, newest first."""
+    return jsonify(list_snapshots())
+
+
+@parties_bp.route('/backups', methods=['POST'])
+def take_backup():
+    """Trigger a snapshot backup right now (admin only)."""
+    if session.get('operator_role') != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
+    try:
+        name = run_snapshots()
+        return jsonify({'message': 'Snapshot created', 'snapshot': name}), 201
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        logger.error(f"Snapshot failed: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@parties_bp.route('/<db_name>/restore', methods=['POST'])
+def restore_party(db_name):
+    """Restore a party database from a snapshot (admin only).
+
+    Body: {"snapshot": "<timestamp>"}. Replaces the live DB file, so
+    sales recorded after the snapshot are lost — this is the escape
+    hatch for corruption/disaster, not routine use.
+    """
+    if session.get('operator_role') != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
+    data = request.get_json() or {}
+    snapshot = data.get('snapshot', '').strip()
+    if not snapshot:
+        return jsonify({'error': 'snapshot is required'}), 400
+    try:
+        restore_party_db(db_name, snapshot)
+        return jsonify({'message': f'Party "{db_name}" restored from {snapshot}'})
+    except FileNotFoundError as e:
+        return jsonify({'error': str(e)}), 404
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        logger.error(f"Restore failed: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 # ============================================================

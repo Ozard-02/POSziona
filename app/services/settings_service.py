@@ -26,6 +26,7 @@ DEFAULT_SETTINGS = {
     'receipt_footer': 'Thank you for your purchase!',
     'auto_logout_minutes': 0,  # 0 = no auto-logout
     'snapshot_interval_minutes': 5,
+    'snapshot_keep_count': 12,  # how many snapshots to retain
     'split_receipts': '0',  # 1 = print one receipt per section
     'print_recovery_receipt': '0',  # 1 = print/display the recovery receipt
 }

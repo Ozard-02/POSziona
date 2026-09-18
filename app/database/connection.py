@@ -4,6 +4,8 @@ Database connection management for Posziona.
 
 import sqlite3
 import os
+import threading
+import time
 
 from app.utils.config import PARTY_DB_DIR, TEMPLATES_DB
 from app.utils.logger import get_logger
@@ -11,9 +13,32 @@ from app.database.schema import get_party_schema, get_templates_schema
 
 logger = get_logger('database')
 
+# Tracks party DB paths already integrity-checked in this process, so the
+# (expensive) check runs once per DB per process lifetime, not per request.
+_checked_paths = set()
+_checked_paths_lock = threading.Lock()
+
+
+def validate_db_name(db_name):
+    """Reject database names that could escape the party directory.
+
+    Raises ValueError on absolute paths, parent-directory references,
+    path separators, null bytes, or empty/overlong names. All ?db=
+    values and party file operations funnel through here.
+    """
+    if not isinstance(db_name, str) or not db_name.strip():
+        raise ValueError('Invalid database name')
+    name = db_name.strip()
+    if len(name) > 100:
+        raise ValueError('Database name too long')
+    if os.path.isabs(name) or '..' in name or '/' in name or '\\' in name or '\x00' in name:
+        raise ValueError(f'Invalid database name: {db_name!r}')
+    return name
+
 
 def _get_party_db_path(db_name):
     """Get the full path for a party database file."""
+    db_name = validate_db_name(db_name)
     if not db_name.endswith('.db'):
         db_name = f"{db_name}.db"
     return os.path.join(PARTY_DB_DIR, db_name)
@@ -42,10 +67,57 @@ def _ensure_party_db_exists(db_name):
         conn.commit()
         conn.close()
     else:
+        # Existing DB: verify integrity once per process, run migrations
+        _verify_integrity_once(db_path)
         # Run migrations on existing databases
         _run_migrations(db_path)
 
     return db_path
+
+
+def _verify_integrity_once(db_path):
+    """Run PRAGMA integrity_check once per process for a party DB.
+
+    On corruption the file is quarantined aside (.corrupt-<timestamp>)
+    for forensics/restore, and a FRESH database is created so the party
+    can keep selling. The data itself is recovered via the snapshot
+    restore API. A corrupt DB fails every query anyway — refusing to
+    start would halt all sales with no benefit.
+    """
+    with _checked_paths_lock:
+        if db_path in _checked_paths:
+            return
+        _checked_paths.add(db_path)
+
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            row = conn.execute("PRAGMA integrity_check").fetchone()
+            if row and row[0] == 'ok':
+                return
+            detail = row[0] if row else 'unknown'
+        finally:
+            conn.close()
+    except Exception as e:
+        detail = f'{type(e).__name__}: {e}'
+
+    logger.critical(f"Database corruption detected in {db_path}: {detail}")
+    quarantine = f"{db_path}.corrupt-{time.strftime('%Y%m%d-%H%M%S')}"
+    try:
+        os.rename(db_path, quarantine)
+        for ext in ['-wal', '-shm', '-journal']:
+            p = db_path + ext
+            if os.path.exists(p):
+                os.rename(p, quarantine + ext)
+    except OSError as e:
+        logger.critical(f"Could not quarantine corrupt DB {db_path}: {e}")
+        raise RuntimeError(f'Database file is corrupt and cannot be opened: {db_path}')
+
+    logger.critical(f"Quarantined corrupt DB to {quarantine}; recreating fresh database")
+    with _checked_paths_lock:
+        _checked_paths.discard(db_path)
+    # Recreate from scratch via the normal creation path
+    _ensure_party_db_exists(os.path.basename(db_path).rsplit('.db', 1)[0])
 
 
 def _run_migrations(db_path):

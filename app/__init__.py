@@ -3,7 +3,7 @@ Flask application factory for Posziona.
 """
 import os
 
-from flask import Flask, render_template
+from flask import Flask, jsonify, render_template
 from flask_cors import CORS
 
 
@@ -26,6 +26,16 @@ def create_app(config_class=None):
     app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 hours
 
     CORS(app)
+
+    # Validation errors (bad ?db= names, bad input) are client errors —
+    # always JSON, never an HTML stack page the kiosk UI can't parse.
+    @app.errorhandler(ValueError)
+    def handle_value_error(e):
+        return jsonify({'error': str(e)}), 400
+
+    @app.errorhandler(404)
+    def handle_not_found(e):
+        return jsonify({'error': 'Not found'}), 404
 
     # Register blueprints
     from app.api import api_bp

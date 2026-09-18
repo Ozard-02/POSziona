@@ -29,6 +29,8 @@ app = create_app()
 
 def start_server():
     """Start Flask server in a background thread."""
+    from app.services.backup_service import start_backup_scheduler
+    start_backup_scheduler()
     print(f"Starting Flask server on {HOST}:{PORT}...")
     app.run(host=HOST, port=PORT, threaded=True, use_reloader=False)
 

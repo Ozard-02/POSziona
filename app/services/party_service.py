@@ -7,7 +7,7 @@ import os
 import sqlite3
 from datetime import datetime
 
-from app.database.connection import PartyDatabase, _init_default_operators, _init_default_products
+from app.database.connection import PartyDatabase, _init_default_operators, _init_default_products, validate_db_name
 from app.database import templates_db
 from app.database.schema import get_party_schema
 from app.utils.config import PARTY_DB_DIR
@@ -189,6 +189,7 @@ def list_parties():
 
 def delete_party(db_name):
     """Delete a party database and its associated files."""
+    validate_db_name(db_name)
     db_path = os.path.join(PARTY_DB_DIR, f"{db_name}.db")
 
     if os.path.exists(db_path):
@@ -260,6 +261,7 @@ def duplicate_party(original_name, new_name, start_date=None, end_date=None):
     """
     # Determine source path
     src_db_name = original_name.replace('.db', '') if original_name.endswith('.db') else original_name
+    validate_db_name(src_db_name)
     src_path = os.path.join(PARTY_DB_DIR, f"{src_db_name}.db")
 
     if not os.path.exists(src_path):
@@ -267,6 +269,7 @@ def duplicate_party(original_name, new_name, start_date=None, end_date=None):
 
     # Sanitize new_name to determine the destination DB name
     safe_name = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_'))
+    validate_db_name(safe_name)
     dst_path = os.path.join(PARTY_DB_DIR, f"{safe_name}.db")
 
     # Remove destination if it already exists (fresh copy)
