@@ -7,16 +7,40 @@ from flask import Blueprint, request, jsonify, session
 from app.services.auth_service import (
     authenticate_operator,
     authenticate_admin,
+    is_factory_pin,
     log_audit_event,
     get_all_operators,
     create_operator as _create_operator,
     update_operator_pin as _update_operator_pin,
 )
+from app.utils.rate_limit import check as _rate_check
 from app.utils.logger import get_logger
 
 logger = get_logger('api.auth')
 
 auth_bp = Blueprint('auth', __name__)
+
+# 4-digit PINs fall fast to unlimited guessing: throttle FAILED logins per
+# IP. Only failures consume budget (a success resets it), so legitimate
+# operators who mistype occasionally are never locked out, while sustained
+# guessing hits the wall.
+_LOGIN_LIMIT = 10
+_LOGIN_WINDOW_SECONDS = 60
+
+
+def _login_failed():
+    """Record a failed login; returns a 429 response when throttled, else None."""
+    key = f"login:{request.remote_addr}"
+    if not _rate_check(key, _LOGIN_LIMIT, _LOGIN_WINDOW_SECONDS):
+        logger.warning(f"Login rate limit exceeded for {request.remote_addr}")
+        return jsonify({'error': 'Too many login attempts, try again in a minute'}), 429
+    return None
+
+
+def _login_succeeded():
+    """Forgive past failures for this IP after a successful login."""
+    from app.utils.rate_limit import reset as _rate_reset
+    _rate_reset(f"login:{request.remote_addr}")
 
 
 # ============================================================
@@ -30,7 +54,7 @@ def login():
     Returns the operator info if successful.
     """
     db = request.args.get('db', 'default')
-    data = request.get_json()
+    data = request.get_json() or {}
     pin = data.get('pin', '').strip()
 
     if not pin:
@@ -38,7 +62,12 @@ def login():
 
     operator = authenticate_operator(db, pin)
     if not operator:
+        throttled = _login_failed()
+        if throttled:
+            return throttled
         return jsonify({'error': 'Invalid PIN'}), 403
+
+    _login_succeeded()
 
     # Store operator info in session
     session['operator_id'] = operator['id']
@@ -49,6 +78,7 @@ def login():
 
     return jsonify({
         'message': 'Login successful',
+        'must_change_pin': is_factory_pin(pin),
         'operator': {
             'id': operator['id'],
             'name': operator['name'],
@@ -64,7 +94,7 @@ def login_admin():
     Returns the operator info if successful admin.
     """
     db = request.args.get('db', 'default')
-    data = request.get_json()
+    data = request.get_json() or {}
     pin = data.get('pin', '').strip()
 
     if not pin:
@@ -72,7 +102,12 @@ def login_admin():
 
     operator = authenticate_admin(db, pin)
     if not operator:
+        throttled = _login_failed()
+        if throttled:
+            return throttled
         return jsonify({'error': 'Invalid admin PIN'}), 403
+
+    _login_succeeded()
 
     session['operator_id'] = operator['id']
     session['operator_name'] = operator['name']
@@ -82,6 +117,7 @@ def login_admin():
 
     return jsonify({
         'message': 'Admin login successful',
+        'must_change_pin': is_factory_pin(pin),
         'operator': {
             'id': operator['id'],
             'name': operator['name'],

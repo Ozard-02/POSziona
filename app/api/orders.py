@@ -24,6 +24,17 @@ logger = get_logger('api.orders')
 orders_bp = Blueprint('orders', __name__)
 
 
+def _parse_limit(raw, default=50, maximum=500):
+    """Parse a ?limit= value defensively (garbage → ValueError → 400)."""
+    try:
+        limit = int(raw if raw is not None else default)
+    except (TypeError, ValueError):
+        raise ValueError(f'Invalid limit: {raw!r}')
+    if limit < 1 or limit > maximum:
+        raise ValueError(f'Limit must be between 1 and {maximum}')
+    return limit
+
+
 # ============================================================
 # CHECKOUT
 # ============================================================
@@ -132,7 +143,7 @@ def checkout():
 def recent_orders():
     """Get recent orders (admin only)."""
     db = request.args.get('db', 'default')
-    limit = int(request.args.get('limit', 50))
+    limit = _parse_limit(request.args.get('limit'))
     return jsonify(get_recent_orders(db, limit))
 
 
@@ -188,7 +199,7 @@ def recent_orders_report():
     """Get recent orders for the report view. Optional ?date=YYYY-MM-DD."""
     db = request.args.get('db', 'default')
     date_filter = request.args.get('date')
-    limit = int(request.args.get('limit', 50))
+    limit = _parse_limit(request.args.get('limit'))
     return jsonify(get_recent_orders(db, limit, date_filter))
 
 
