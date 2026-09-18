@@ -46,7 +46,7 @@ posziona/
 │   │   └── static/
 │   │       ├── css/style.css
 │   │       └── js/
-│   │           ├── app.js            # fetchJSON, formatCurrency, auth check, toast errors
+│   │           ├── app.js            # fetchJSON, formatCurrency, auth check, toasts, banner
 │   │           ├── pos.js            # Sections/products/cart/checkout (idempotency key), SSE sync, Shift+L / Shift+Click
 │   │           ├── admin.js          # Dashboard, products, tags, parties (data-i18n)
 │   │           ├── dashboard.js      # Report generation, printing
@@ -56,6 +56,7 @@ posziona/
 │   │   ├── config.py             # HOST, PORT, DATA_DIR, PARTY_DB_DIR, per-install SECRET_KEY
 │   │   ├── events.py             # SSE broadcaster: broadcast(), sse_response(), prune/heartbeat
 │   │   ├── rate_limit.py         # In-memory fixed-window throttle (login endpoints)
+│   │   ├── instance_lock.py      # Single-server OS lock (split-brain guard)
 │   │   └── logger.py             # Rotating logs → app/logs/pos.log (5MB × 4)
 │   ├── logs/                     # Runtime logs (pos.log; .gitkeep tracked)
 │   └── data/                     # Runtime data (gitignored): parties/*.db, templates.db, backups/
@@ -69,7 +70,8 @@ posziona/
 │                                 # test_stock_and_availability, test_tags,
 │                                 # test_default_tags_and_zero_total, test_manual_party_and_products,
 │                                 # test_resilience, test_checkout_atomic, test_backups,
-│                                 # test_auth_hardening, test_schema_drift, test_ops_safety
+│                                 # test_auth_hardening, test_schema_drift, test_ops_safety,
+│                                 # test_instance_lock, test_crash_kill9
 ├── docs/
 │   └── requirements.md           # Feature requirements + MVP scope + unicenta lessons
 ├── .github/                      # CI builds
