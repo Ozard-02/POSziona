@@ -29,37 +29,7 @@ jobs:
       - name: Run tests
         run: venv/bin/python -m pytest tests/ -x -q --timeout=30
 
-  # ── Linux AppImage (bundles libfuse2, no FUSE required on host) ──
-  build-appimage:
-    name: Linux AppImage
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-      - name: Create venv & install deps
-        run: |
-          python -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller appimage-builder
-      - name: Build PyInstaller binary
-        run: venv/bin/pyinstaller build_onefile.spec --noconfirm --distpath dist
-      - name: Build AppImage
-        run: |
-          source venv/bin/activate
-          appimage-builder --recipe AppImageBuilder.yml --skip-tests
-      - name: Upload AppImage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: posziona-appimage
-          path: out/*.AppImage
-          if-no-files-found: error
-
-  # ── Linux single-file binary (fallback, no FUSE needed) ─────────
+  # ── Linux single-file binary (no FUSE needed) ────────────────────
   build-linux:
     name: Linux Binary
     needs: test
@@ -115,18 +85,13 @@ jobs:
   # ── Release assets (only on tag push) ───────────────────────────
   release:
     name: Create Release
-    needs: [build-appimage, build-linux, build-windows]
+    needs: [build-linux, build-windows]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v5
-      - name: Download AppImage
-        uses: actions/download-artifact@v4
-        with:
-          name: posziona-appimage
-          path: dist/
       - name: Download Linux binary
         uses: actions/download-artifact@v4
         with:
@@ -141,7 +106,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/*.AppImage
             dist/posziona
             dist/posziona.exe
           tag_name: ${{ github.ref_name }}
