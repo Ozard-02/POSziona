@@ -13,20 +13,63 @@ logger = get_logger('services.orders')
 # ORDER CREATION & CHECKOUT
 # ============================================================
 
-def create_order(db_name, cart_items, payment_method, operator_id,
-                 discount_amount=0.0, discount_type=None):
+def checkout_order(db_name, cart_items, payment_method, operator_id,
+                   discount_amount=0.0, discount_type=None,
+                   tendered=None, idempotency_key=None):
     """
-    Finalize a cart into a completed order.
-    cart_items: list of dicts with product_id, quantity, unit_price
-    Returns the order_id.
+    Atomic, retry-safe checkout.
+
+    Order + order_items + stock decrement + payment are written in a
+    SINGLE transaction: either the whole sale lands or nothing does.
+    A mid-checkout crash or error can therefore never leave a partial
+    order behind, and a client retry can never duplicate the sale.
+
+    Retry safety comes from `idempotency_key` (one UUID per sale,
+    generated client-side): if the key was already used, the original
+    order is returned unchanged (replayed=True) instead of creating
+    a second order.
+
+    Returns (order_id, total, updated_stocks, replayed).
+    Raises ValueError for client errors (empty cart, bad tendered).
     """
+    if not cart_items:
+        raise ValueError('Cart is empty')
+
     with PartyDatabase(db_name) as conn:
-        # Calculate totals
+        # Opportunistic prune of old idempotency keys (older than 7 days)
+        # so the table stays tiny on low-end machines.
+        conn.execute(
+            "DELETE FROM idempotency_keys WHERE created_at < datetime('now', '-7 days')"
+        )
+
+        if idempotency_key:
+            row = conn.execute(
+                """SELECT o.id, o.total FROM idempotency_keys k
+                   JOIN orders o ON o.id = k.order_id
+                   WHERE k.key = ?""",
+                (idempotency_key,)
+            ).fetchone()
+            if row:
+                logger.info(f"Checkout replayed: key={idempotency_key}, order={row['id']}")
+                return row['id'], row['total'], {}, True
+
+        # Calculate totals server-side (single source of truth — the
+        # payment record must match the order, never the session cart)
         subtotal = sum(item['quantity'] * item['unit_price'] for item in cart_items)
         # Clamp discount to subtotal to prevent negative totals from
         # direct API calls that bypass the frontend's Math.min guard
         discount_amount = min(discount_amount, subtotal)
         total = subtotal - discount_amount
+
+        # Validate tendered before writing anything
+        change_due = None
+        if tendered is not None:
+            if tendered < 0:
+                raise ValueError('Tendered amount must be non-negative')
+            if payment_method == 'cash' and tendered < total:
+                raise ValueError('Tendered amount must be at least the total due')
+            if payment_method == 'cash':
+                change_due = tendered - total
 
         # Create order
         conn.execute(
@@ -60,6 +103,22 @@ def create_order(db_name, cart_items, payment_method, operator_id,
                 (item['quantity'], item['product_id'])
             )
 
+        # Record payment in the SAME transaction (an order must never
+        # exist without its payment, or vice versa)
+        if tendered is not None:
+            conn.execute(
+                """INSERT INTO payments (order_id, method, amount, tendered, change_due)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (order_id, payment_method, total, tendered, change_due)
+            )
+
+        # Remember the idempotency key only after everything succeeded
+        if idempotency_key:
+            conn.execute(
+                "INSERT INTO idempotency_keys (key, order_id) VALUES (?, ?)",
+                (idempotency_key, order_id)
+            )
+
         # Fetch updated stock counts for broadcast
         updated_stocks = {}
         for item in cart_items:
@@ -71,7 +130,21 @@ def create_order(db_name, cart_items, payment_method, operator_id,
 
         conn.commit()
         logger.info(f"Order created: id={order_id}, total={total}, items={len(cart_items)}")
-        return order_id, updated_stocks
+        return order_id, total, updated_stocks, False
+
+
+def create_order(db_name, cart_items, payment_method, operator_id,
+                 discount_amount=0.0, discount_type=None):
+    """
+    Finalize a cart into a completed order (no payment recorded).
+    Kept for backwards compatibility — new code should use checkout_order().
+    Returns (order_id, updated_stocks).
+    """
+    order_id, _total, updated_stocks, _replayed = checkout_order(
+        db_name, cart_items, payment_method, operator_id,
+        discount_amount, discount_type
+    )
+    return order_id, updated_stocks
 
 
 def record_payment(db_name, order_id, method, amount, tendered=None):

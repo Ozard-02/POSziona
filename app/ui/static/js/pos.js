@@ -25,6 +25,22 @@ document.addEventListener('DOMContentLoaded', function() {
     let discount = null;
     let sections = [];
 
+    // Idempotency key for the current sale — one UUID per sale, sent with
+    // every checkout request. If a request fails (network/server) and the
+    // operator retries, the server returns the original order instead of
+    // creating a duplicate. Rotated after each successful sale.
+    let saleKey = newSaleKey();
+    function newSaleKey() {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            return crypto.randomUUID();
+        }
+        // Fallback for older webviews without crypto.randomUUID
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+        });
+    }
+
     // --- Load settings ---
     async function loadSettings() {
         try {
@@ -436,6 +452,9 @@ document.addEventListener('DOMContentLoaded', function() {
             showError('Add items to cart first');
             return;
         }
+        // Fresh sale, fresh key — retries of THIS sale reuse it, so a
+        // failed request can never turn into a duplicate order.
+        saleKey = newSaleKey();
         const subtotal = cart.reduce((sum, item) => sum + item.line_total, 0);
         const discountAmount = discount ? (
             discount.type === 'percentage'
@@ -457,7 +476,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         method: 'POST',
                         body: JSON.stringify({
                             payment_method: 'cash',
-                            tendered: total
+                            tendered: total,
+                            idempotency_key: saleKey
                         })
                     });
                     data.change_due = 0;
@@ -668,7 +688,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const data = await fetchJSON(`${API_BASE}/orders/checkout?db=${db}`, {
                 method: 'POST',
-                body: JSON.stringify({ payment_method: paymentMethod })
+                body: JSON.stringify({ payment_method: paymentMethod, idempotency_key: saleKey })
             });
 
             showReceipt(data);
@@ -702,7 +722,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 method: 'POST',
                 body: JSON.stringify({
                     payment_method: 'cash',
-                    tendered: tendered
+                    tendered: tendered,
+                    idempotency_key: saleKey
                 })
             });
 
@@ -836,6 +857,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear cart and reset state after showing receipt
         cart = [];
         discount = null;
+        saleKey = newSaleKey(); // next sale gets a fresh idempotency key
         fetchJSON(`${API_BASE}/cart/clear?db=${db}`, { method: 'POST' });
         fetchJSON(`${API_BASE}/cart/remove-discount?db=${db}`, { method: 'POST' });
         updateCartDisplay();

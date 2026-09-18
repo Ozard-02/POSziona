@@ -135,6 +135,20 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 
 -- ----------------------------------------------------------
+-- Idempotency keys (retry-safe checkout)
+-- One row per checkout attempt key; lets clients safely retry
+-- a sale after a network/server failure without duplicating
+-- the order. Pruned opportunistically (keys older than 7 days).
+-- ----------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+    key TEXT PRIMARY KEY,
+    order_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+);
+
+-- ----------------------------------------------------------
 -- Indexes
 -- ----------------------------------------------------------
 

@@ -62,6 +62,17 @@ def _run_migrations(db_path):
                 conn.execute("UPDATE sections SET sort_order = ? WHERE id = ?", (idx, sid))
             conn.commit()
             logger.info(f"Migration: added sort_order to sections in {db_path}")
+        # Idempotency keys table for retry-safe checkout (new DBs get it
+        # via PARTY_SCHEMA; existing DBs need it created here)
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS idempotency_keys (
+                key TEXT PRIMARY KEY,
+                order_id INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+            )"""
+        )
+        conn.commit()
     finally:
         conn.close()
 
@@ -224,7 +235,15 @@ class PartyDatabase:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.conn:
-            self.conn.close()
+            try:
+                if exc_type is not None:
+                    # An exception is propagating — roll back the pending
+                    # transaction explicitly so a failed unit of work never
+                    # leaves partial writes behind. Do not mask the original
+                    # exception.
+                    self.conn.rollback()
+            finally:
+                self.conn.close()
 
 
 class TemplatesDatabase:
@@ -258,4 +277,12 @@ class TemplatesDatabase:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.conn:
-            self.conn.close()
+            try:
+                if exc_type is not None:
+                    # An exception is propagating — roll back the pending
+                    # transaction explicitly so a failed unit of work never
+                    # leaves partial writes behind. Do not mask the original
+                    # exception.
+                    self.conn.rollback()
+            finally:
+                self.conn.close()

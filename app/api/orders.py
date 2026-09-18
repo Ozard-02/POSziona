@@ -7,8 +7,7 @@ import csv
 import io
 from flask import Blueprint, request, jsonify, session, Response
 from app.services.order_service import (
-    create_order,
-    record_payment,
+    checkout_order,
     get_recent_orders,
     get_order_details,
     get_sales_summary,
@@ -75,14 +74,30 @@ def checkout():
             'unit_price': item['unit_price']
         })
 
-    try:
-        # Create the order
-        order_id, updated_stocks = create_order(
-            db, cart_items, payment_method, operator_id,
-            discount_amount, discount_type
-        )
+    # One idempotency key per sale (generated client-side). Retrying the
+    # same sale with the same key returns the original order instead of
+    # creating a duplicate — safe after network/server failures.
+    idempotency_key = request.headers.get('X-Idempotency-Key') or data.get('idempotency_key')
+    tendered = data.get('tendered')
 
-        # Broadcast stock updates to all connected POS clients via SSE
+    try:
+        # Atomic checkout: order + items + stock + payment in ONE commit.
+        # Either the whole sale lands or nothing does.
+        order_id, total, updated_stocks, replayed = checkout_order(
+            db, cart_items, payment_method, operator_id,
+            discount_amount, discount_type,
+            tendered=tendered, idempotency_key=idempotency_key
+        )
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        logger.error(f"Checkout error: {e}")
+        return jsonify({'error': 'Checkout failed, no sale was recorded. It is safe to retry.'}), 500
+
+    # Best-effort live sync: broadcast failures must never fail the sale
+    # (the order is already committed) nor trigger a client retry that
+    # could confuse the operator. Retries are idempotent anyway.
+    try:
         for product_id, stock_count in updated_stocks.items():
             product = get_product_by_id(db, product_id)
             broadcast('product_update', {
@@ -92,34 +107,21 @@ def checkout():
                 'is_active': 1 if (product and product.get('is_active')) else 0,
                 'is_archived': 1 if (product and product.get('is_archived')) else 0
             })
-
-        # Record payment if provided
-        total = sum(item['line_total'] for item in cart) - discount_amount
-        tendered = data.get('tendered')
-
-        if tendered is not None:
-            if tendered < 0:
-                return jsonify({'error': 'Tendered amount must be non-negative'}), 400
-            if payment_method == 'cash' and tendered < total:
-                return jsonify({'error': 'Tendered amount must be at least the total due'}), 400
-
-        if tendered is not None:
-            record_payment(db, order_id, payment_method, total, tendered)
-
-        # Clear cart and discount
-        session['cart'] = []
-        session.pop('cart_discount', None)
-
-        return jsonify({
-            'message': 'Order created',
-            'order_id': order_id,
-            'total': total,
-            'payment_method': payment_method
-        }), 201
-
     except Exception as e:
-        logger.error(f"Checkout error: {e}")
-        return jsonify({'error': str(e)}), 500
+        logger.warning(f"Checkout broadcast failed (sale {order_id} is safe): {e}")
+
+    # Clear cart and discount (also on replay — the retried sale already
+    # owns these items, so keeping them would risk a double sale)
+    session['cart'] = []
+    session.pop('cart_discount', None)
+
+    return jsonify({
+        'message': 'Order created',
+        'order_id': order_id,
+        'total': total,
+        'payment_method': payment_method,
+        'replayed': replayed
+    }), 201
 
 
 # ============================================================
