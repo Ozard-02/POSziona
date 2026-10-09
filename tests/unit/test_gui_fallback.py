@@ -16,6 +16,7 @@ def _no_gui(monkeypatch):
     # Blocking stub: a real server thread stays alive; _wait_for_server
     # treats a dead thread as a startup failure.
     main_mod._server_failed.clear()
+    main_mod._shutdown_requested.clear()
     stop = threading.Event()
     monkeypatch.setattr(main_mod, 'start_server', lambda: stop.wait(30))
     monkeypatch.setattr(main_mod, 'check_server_ready', lambda *a, **k: True)
@@ -31,9 +32,9 @@ def test_all_mode_falls_back_to_server(monkeypatch, capsys):
     """'all' without GUI libs keeps serving instead of tracebacks."""
     _no_gui(monkeypatch)
 
-    def stop_at_once(s):
+    def stop_at_once(timeout=None):
         raise KeyboardInterrupt
-    monkeypatch.setattr(main_mod.time, 'sleep', stop_at_once)
+    monkeypatch.setattr(main_mod._shutdown_requested, 'wait', stop_at_once)
 
     main_mod.run_server_and_client()  # must not raise
 
@@ -94,3 +95,12 @@ def test_dead_server_thread_exits(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert 'died during startup' in out
     assert 'Server ready' not in out
+
+
+def test_shutdown_flag_stops_server_loop(monkeypatch, capsys):
+    """SIGTERM handler path: flag set → _serve_forever exits cleanly."""
+    main_mod._shutdown_requested.clear()
+    main_mod._shutdown_requested.set()
+    main_mod._serve_forever()  # must return immediately, not hang
+    assert 'Shutting down' in capsys.readouterr().out
+    main_mod._shutdown_requested.clear()

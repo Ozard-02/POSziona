@@ -39,6 +39,34 @@ def validate_snapshot_name(name):
     return name
 
 
+def checkpoint_all():
+    """Best-effort WAL checkpoint of every live DB (shutdown path).
+
+    Folds -wal/-shm sidecars back into the main files so a restart (or
+    a file copy) starts from a single self-contained DB. Never raises:
+    the worst case is an un-checkpointed WAL, which SQLite replays
+    on next open anyway.
+    """
+    targets = []
+    if os.path.exists(TEMPLATES_DB):
+        targets.append(TEMPLATES_DB)
+    if os.path.isdir(PARTY_DB_DIR):
+        for filename in sorted(os.listdir(PARTY_DB_DIR)):
+            if filename.endswith('.db'):
+                targets.append(os.path.join(PARTY_DB_DIR, filename))
+    for path in targets:
+        try:
+            conn = sqlite3.connect(path, timeout=5)
+            try:
+                conn.execute('PRAGMA busy_timeout = 5000')
+                conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+            finally:
+                conn.close()
+        except Exception as e:
+            logger.warning(f"Checkpoint failed for {path}: {e}")
+    logger.info(f"Checkpointed {len(targets)} database(s)")
+
+
 def _vacuum_into(src_path, dst_path):
     """Copy a live SQLite DB to dst_path via VACUUM INTO (consistent copy)."""
     os.makedirs(os.path.dirname(dst_path), exist_ok=True)
@@ -63,15 +91,23 @@ def run_snapshots(keep=DEFAULT_KEEP_COUNT):
     """Snapshot all party DBs + templates DB into a timestamped directory.
 
     Returns the snapshot name. Prunes older snapshots beyond `keep`.
+
+    Crash-safe: files land in `<name>.tmp` and the directory is renamed
+    into place only when complete — a kill mid-snapshot never leaves a
+    half-filled snapshot that restore could pick up.
     """
     os.makedirs(PARTY_DB_DIR, exist_ok=True)
     os.makedirs(BACKUP_DIR, exist_ok=True)
     name = _snapshot_name()
     dest_dir = os.path.join(BACKUP_DIR, name)
+    tmp_dir = dest_dir + '.tmp'
+
+    if os.path.isdir(tmp_dir):
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
     copied = []
     if os.path.exists(TEMPLATES_DB):
-        _vacuum_into(TEMPLATES_DB, os.path.join(dest_dir, 'templates.db'))
+        _vacuum_into(TEMPLATES_DB, os.path.join(tmp_dir, 'templates.db'))
         copied.append('templates.db')
 
     for filename in sorted(os.listdir(PARTY_DB_DIR)):
@@ -80,18 +116,29 @@ def run_snapshots(keep=DEFAULT_KEEP_COUNT):
         src = os.path.join(PARTY_DB_DIR, filename)
         if not os.path.isfile(src):
             continue
-        _vacuum_into(src, os.path.join(dest_dir, filename))
+        _vacuum_into(src, os.path.join(tmp_dir, filename))
         copied.append(filename)
+
+    os.rename(tmp_dir, dest_dir)
 
     prune_snapshots(keep)
     logger.info(f"Snapshot {name}: backed up {len(copied)} database(s)")
     return name
 
 
+def _is_tmp_snapshot(name):
+    return name.endswith('.tmp')
+
+
 def prune_snapshots(keep=DEFAULT_KEEP_COUNT):
     """Delete oldest snapshots, keeping the newest `keep`."""
     if not os.path.isdir(BACKUP_DIR):
         return
+    for name in os.listdir(BACKUP_DIR):
+        # Stale debris from a kill mid-snapshot: never a restore candidate.
+        if _is_tmp_snapshot(name):
+            shutil.rmtree(os.path.join(BACKUP_DIR, name), ignore_errors=True)
+            logger.info(f"Removed incomplete snapshot: {name}")
     names = sorted(
         n for n in os.listdir(BACKUP_DIR)
         if os.path.isdir(os.path.join(BACKUP_DIR, n))
@@ -135,6 +182,8 @@ def list_snapshots():
         return []
     result = []
     for name in sorted(os.listdir(BACKUP_DIR), reverse=True):
+        if _is_tmp_snapshot(name):
+            continue  # incomplete (kill mid-snapshot), not restorable
         path = os.path.join(BACKUP_DIR, name)
         if not os.path.isdir(path):
             continue

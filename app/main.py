@@ -100,11 +100,35 @@ def _wait_for_server(server_thread, timeout=10):
 def _serve_forever():
     """Keep the main thread alive while the server runs in a daemon thread."""
     try:
-        # Keep the main thread alive while the server runs in the daemon thread
-        while True:
-            time.sleep(1)
+        while not _shutdown_requested.wait(1):
+            pass
     except KeyboardInterrupt:
-        print("\nShutting down server...")
+        pass
+    print("\nShutting down server...")
+
+
+# Set when SIGTERM asks for shutdown (systemd, docker, kill): the main
+# loop exits cleanly after checkpointing instead of dying mid-request.
+_shutdown_requested = threading.Event()
+
+
+def _install_shutdown_handler():
+    """SIGTERM → checkpoint DBs, then clean exit. Best effort, never fatal."""
+    import signal
+
+    def _on_term(signum, frame):
+        print("\nShutdown requested — checkpointing databases...", flush=True)
+        try:
+            from app.services.backup_service import checkpoint_all
+            checkpoint_all()
+        except Exception as exc:
+            print(f"Checkpoint failed: {exc}", flush=True)
+        _shutdown_requested.set()
+
+    try:
+        signal.signal(signal.SIGTERM, _on_term)
+    except (OSError, ValueError):
+        pass  # not main thread / platform without SIGTERM
 
 
 def _gui_missing_message(exc, server_url):
@@ -146,6 +170,7 @@ def select_mode():
 
 def run_server_only():
     """Mode 2: Start Flask server only, no pywebview window."""
+    _install_shutdown_handler()
     server_thread = threading.Thread(target=start_server, daemon=True)
     server_thread.start()
 
@@ -215,6 +240,7 @@ def run_client_only(server_url=None):
 
 def run_server_and_client():
     """Mode 1 (default): Start Flask server, then open pywebview window."""
+    _install_shutdown_handler()
     server_thread = threading.Thread(target=start_server, daemon=True)
     server_thread.start()
 

@@ -73,6 +73,9 @@ def login():
     session['operator_id'] = operator['id']
     session['operator_name'] = operator['name']
     session['operator_role'] = operator['role']
+    # Persistent cookie (24 h per PERMANENT_SESSION_LIFETIME): closing the
+    # browser/client must not wipe the login — or the unsent cart with it.
+    session.permanent = True
 
     log_audit_event(db, 'operator_login', f"Operator '{operator['name']}' logged in", operator['id'])
 
@@ -112,6 +115,8 @@ def login_admin():
     session['operator_id'] = operator['id']
     session['operator_name'] = operator['name']
     session['operator_role'] = operator['role']
+    # Persistent cookie (see operator login above).
+    session.permanent = True
 
     log_audit_event(db, 'admin_login', f"Admin '{operator['name']}' logged in", operator['id'])
 

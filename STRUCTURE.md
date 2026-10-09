@@ -35,6 +35,7 @@ posziona/
 │   │   ├── party_service.py      # Party create from template/empty, duplicate, delete (locked, guarded)
 │   │   │                         # (template-created parties get default operators: login-ready)
 │   │   ├── backup_service.py     # VACUUM INTO snapshots, prune/restore, background scheduler
+│   │   │                         # (atomic publish via .tmp+rename; checkpoint_all() for shutdown)
 │   │   ├── settings_service.py   # DEFAULT_SETTINGS + get_effective_settings()
 │   │   └── auth_service.py       # PBKDF2 PIN hashing (+legacy upgrade), verification, audit log
 │   ├── ui/
@@ -72,6 +73,7 @@ posziona/
 │   ├── unit/test_frozen_config.py  # frozen DATA_DIR default + POSZIONA_DATA_DIR override
 │   ├── unit/test_gui_fallback.py   # no-GUI: all→server-only, client→exit 1 (no traceback)
 │   ├── integration/test_party_selection.py  # sale+login land in selected party DB only
+│   ├── integration/test_crash_safety.py     # permanent cookie, SIGTERM exit 0, atomic snapshots, WAL checkpoint
 │   └── integration/              # test_api, test_parties, test_products_search_bulk, test_csv_import,
 │                                 # test_stock_and_availability, test_tags,
 │                                 # test_default_tags_and_zero_total, test_manual_party_and_products,
