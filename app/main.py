@@ -31,21 +31,29 @@ def start_server():
     """Start Flask server in a background thread."""
     from app.services.backup_service import start_backup_scheduler
     from app.utils.instance_lock import acquire, owner_pid
-    start_server.failed = False
+    _server_failed.clear()
+    _server_serving.clear()
     if not acquire():
         print(f"ERROR: Another POSziona server is already running "
               f"(lock held, owner PID {owner_pid()}).")
         print("Stop it first — two servers on the same data directory "
               "would silently diverge the database.")
-        start_server.failed = True
+        _server_failed.set()
         return
+    # Lock acquired: this process owns the data dir. Signal it BEFORE
+    # binding the port — the main thread must not mistake another
+    # server's open port for ours (ready/lock race).
+    _server_serving.set()
     start_backup_scheduler()
     print(f"Starting Flask server on {HOST}:{PORT}...")
     app.run(host=HOST, port=PORT, threaded=True, use_reloader=False)
 
 
-# Set at import so readers never hit AttributeError before first start.
-start_server.failed = False
+# Threading events shared between start_server (daemon thread) and the
+# main thread's _wait_for_server(). Module-level (not function attrs)
+# so tests can stub start_server and still drive the handshake.
+_server_failed = threading.Event()   # lock refused by another server
+_server_serving = threading.Event()  # lock acquired, Flask binding next
 
 
 def check_server_ready(host, port, timeout=5):
@@ -68,18 +76,22 @@ def check_server_ready(host, port, timeout=5):
 def _wait_for_server(server_thread, timeout=10):
     """Wait for the daemon server thread to serve, fail, or time out.
 
-    Returns 'ready' (accepting connections), 'failed' (lock held by
-    another server — reason already printed, or thread died), or
-    'timeout'.
+    Returns 'ready' (this process owns the lock AND the port answers),
+    'failed' (lock held by another server — reason already printed — or
+    thread died), or 'timeout'.
+
+    'ready' is gated on the serving event, not just the open port: when
+    a second instance starts, the first server's open port would
+    otherwise win the race against the lock-refusal report.
     """
     deadline = time.time() + timeout
     while time.time() < deadline:
-        if getattr(start_server, 'failed', False):
+        if _server_failed.is_set():
             return 'failed'
         if not server_thread.is_alive():
             print("ERROR: Server thread died during startup")
             return 'failed'
-        if check_server_ready(HOST, PORT, timeout=1):
+        if _server_serving.is_set() and check_server_ready(HOST, PORT, timeout=1):
             return 'ready'
         time.sleep(0.2)
     return 'timeout'
