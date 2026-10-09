@@ -35,9 +35,9 @@ def start_server():
     _server_serving.clear()
     if not acquire():
         print(f"ERROR: Another POSziona server is already running "
-              f"(lock held, owner PID {owner_pid()}).")
+              f"(lock held, owner PID {owner_pid()}).", flush=True)
         print("Stop it first — two servers on the same data directory "
-              "would silently diverge the database.")
+              "would silently diverge the database.", flush=True)
         _server_failed.set()
         return
     # Lock acquired: this process owns the data dir. Signal it BEFORE
@@ -109,10 +109,12 @@ def _serve_forever():
 
 def _gui_missing_message(exc, server_url):
     """Explain why the pywebview window could not open."""
-    print(f"\nWARNING: Desktop window unavailable ({exc}).")
-    print("  pywebview needs GTK+WebKit2GTK (or Qt) system libraries,")
-    print("  which are not installed on this machine.")
-    print(f"  Open {server_url} in a browser instead.")
+    # flush=True: frozen binaries are block-buffered on pipes/files —
+    # failure messages must not die in the buffer on SIGKILL/timeout.
+    print(f"\nWARNING: Desktop window unavailable ({exc}).", flush=True)
+    print("  pywebview needs GTK+WebKit2GTK (or Qt) system libraries,", flush=True)
+    print("  which are not installed on this machine.", flush=True)
+    print(f"  Open {server_url} in a browser instead.", flush=True)
 
 
 def select_mode():
@@ -250,7 +252,7 @@ def run_server_and_client():
         # No usable GUI backend (missing GTK/Qt system libs, no display...).
         # The server is already up, so degrade to server-only mode instead
         # of dying with a traceback.
-        print("  Continuing in server-only mode.")
+        print("  Continuing in server-only mode.", flush=True)
         _gui_missing_message(exc, f'http://{HOST}:{PORT}/')
         print("Press Ctrl+C to stop.")
         _serve_forever()
