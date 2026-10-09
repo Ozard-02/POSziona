@@ -6,7 +6,7 @@ Verified against the real tree on 2026-09-18.
 posziona/
 ├── app/                          # Main application package
 │   ├── __init__.py               # Flask app factory create_app() + JSON error handlers
-│   ├── main.py                   # Entry point: server+client / server / client modes + pywebview
+│   ├── main.py                   # Entry point: server+client / server / client modes + pywebview (no-GUI fallback)
 │   ├── api/                      # REST API (Flask blueprints, thin)
 │   │   ├── __init__.py           # Registers sub-blueprints + GET /api/events (SSE) + /api/status (health)
 │   │   ├── auth.py               # PIN login/logout (rate-limited), operator mgmt
@@ -53,11 +53,11 @@ posziona/
 │   │           └── translations.js   # i18n (en/it)
 │   ├── utils/
 │   │   ├── __init__.py
-│   │   ├── config.py             # HOST, PORT, DATA_DIR, PARTY_DB_DIR, per-install SECRET_KEY
+│   │   ├── config.py             # HOST, PORT, DATA_DIR, PARTY_DB_DIR, per-install SECRET_KEY (frozen builds: DATA_DIR=~/.posziona, POSZIONA_DATA_DIR wins)
 │   │   ├── events.py             # SSE broadcaster: broadcast(), sse_response(), prune/heartbeat
 │   │   ├── rate_limit.py         # In-memory fixed-window throttle (login endpoints)
 │   │   ├── instance_lock.py      # Single-server OS lock (split-brain guard)
-│   │   └── logger.py             # Rotating logs → app/logs/pos.log (5MB × 4)
+│   │   └── logger.py             # Rotating logs → app/logs/pos.log (5MB × 4); frozen → DATA_DIR/logs
 │   ├── logs/                     # Runtime logs (pos.log; .gitkeep tracked)
 │   └── data/                     # Runtime data (gitignored): parties/*.db, templates.db, backups/
 ├── scripts/
@@ -66,6 +66,8 @@ posziona/
 ├── tests/
 │   ├── conftest.py               # app/client/clean_db fixtures (fresh test_party.db, wipe templates)
 │   ├── unit/test_models.py
+│   ├── unit/test_frozen_config.py  # frozen DATA_DIR default + POSZIONA_DATA_DIR override
+│   ├── unit/test_gui_fallback.py   # no-GUI: all→server-only, client→exit 1 (no traceback)
 │   └── integration/              # test_api, test_parties, test_products_search_bulk, test_csv_import,
 │                                 # test_stock_and_availability, test_tags,
 │                                 # test_default_tags_and_zero_total, test_manual_party_and_products,
@@ -88,7 +90,7 @@ posziona/
 ```
 
 ### Notes
-- `data/` is gitignored (runtime DBs + backups + `.secret_key` for session signing).
+- `data/` is gitignored (runtime DBs + backups + `.secret_key` for session signing). This is the *source-mode* location (`app/data/`); **frozen builds** (PyInstaller/AppImage/EXE) use `~/.posziona/` instead, because the bundle's temp dir is wiped on exit — `POSZIONA_DATA_DIR` env var overrides both.
 - `data/backups/` holds timestamped `VACUUM INTO` snapshots (see backup scheduler).
 - There is **no** `app/models/order.py` or `app/models/party.py` — order/party logic lives in `order_service.py` / `party_service.py` returning dicts. (Older docs mention them; they don't exist.)
 - There is **no** `payment_service.py` / `report_service.py` — checkout = `order_service.checkout_order()` (atomic + idempotent), reports = `order_service.get_sales_summary()` etc.

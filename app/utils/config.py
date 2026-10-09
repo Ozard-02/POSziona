@@ -2,10 +2,27 @@
 Configuration for Posziona.
 """
 import os
+import sys
 
 # Base directories
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(BASE_DIR, 'data')
+
+# True when running as a PyInstaller bundle / AppImage / .exe. In that
+# case __file__ points inside a temp extraction dir (sys._MEIPASS) that
+# is wiped on exit — so runtime data must NOT live under BASE_DIR.
+FROZEN = getattr(sys, 'frozen', False)
+
+
+def _default_data_dir(frozen):
+    if frozen:
+        # Persistent, per-user location shared by all frozen builds
+        # (Linux binary, AppImage, Windows .exe).
+        return os.path.join(os.path.expanduser('~'), '.posziona')
+    return os.path.join(BASE_DIR, 'data')
+
+
+# POSZIONA_DATA_DIR env var wins (containers, tests, custom installs).
+DATA_DIR = os.environ.get('POSZIONA_DATA_DIR') or _default_data_dir(FROZEN)
 PARTY_DB_DIR = os.path.join(DATA_DIR, 'parties')
 TEMPLATES_DB = os.path.join(DATA_DIR, 'templates.db')
 

@@ -59,6 +59,24 @@ def check_server_ready(host, port, timeout=5):
     return False
 
 
+def _serve_forever():
+    """Keep the main thread alive while the server runs in a daemon thread."""
+    try:
+        # Keep the main thread alive while the server runs in the daemon thread
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\nShutting down server...")
+
+
+def _gui_missing_message(exc, server_url):
+    """Explain why the pywebview window could not open."""
+    print(f"\nWARNING: Desktop window unavailable ({exc}).")
+    print("  pywebview needs GTK+WebKit2GTK (or Qt) system libraries,")
+    print("  which are not installed on this machine.")
+    print(f"  Open {server_url} in a browser instead.")
+
+
 def select_mode():
     """Prompt the user to choose a startup mode interactively."""
     print("\n" + "=" * 40)
@@ -100,12 +118,7 @@ def run_server_only():
     print(f"or start a separate client with:  python scripts/run_pos.py --mode client")
     print("Press Ctrl+C to stop.")
 
-    try:
-        # Keep the main thread alive while the server runs in the daemon thread
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("\nShutting down server...")
+    _serve_forever()
 
 
 def run_client_only(server_url=None):
@@ -147,7 +160,14 @@ def run_client_only(server_url=None):
         fullscreen=False,
         resizable=True,
     )
-    webview.start(debug=False, private_mode=True)
+    try:
+        webview.start(debug=False, private_mode=True)
+    except Exception as exc:
+        # No usable GUI backend (missing GTK/Qt system libs, no display...).
+        # A client window is the whole point of this mode, so exit with a
+        # clear message instead of a traceback.
+        _gui_missing_message(exc, server_url)
+        sys.exit(1)
 
 
 def run_server_and_client():
@@ -180,7 +200,16 @@ def run_server_and_client():
     # Start the pywebview event loop
     # debug=False: prevents inspector from opening
     # private_mode=True: preserves cookies/sessions
-    webview.start(debug=False, private_mode=True)
+    try:
+        webview.start(debug=False, private_mode=True)
+    except Exception as exc:
+        # No usable GUI backend (missing GTK/Qt system libs, no display...).
+        # The server is already up, so degrade to server-only mode instead
+        # of dying with a traceback.
+        print("  Continuing in server-only mode.")
+        _gui_missing_message(exc, f'http://{HOST}:{PORT}/')
+        print("Press Ctrl+C to stop.")
+        _serve_forever()
 
 
 def main(mode=None, server_url=None):

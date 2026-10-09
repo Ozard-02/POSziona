@@ -4,9 +4,11 @@ Logging configuration for Posziona.
 import logging
 import os
 from logging.handlers import RotatingFileHandler
-from .config import BASE_DIR
+from .config import BASE_DIR, DATA_DIR, FROZEN
 
-LOG_DIR = os.path.join(BASE_DIR, 'logs')
+# In frozen builds BASE_DIR is a temp extraction dir wiped on exit,
+# so logs go next to the other persistent runtime data.
+LOG_DIR = os.path.join(DATA_DIR if FROZEN else BASE_DIR, 'logs')
 os.makedirs(LOG_DIR, exist_ok=True)
 
 LOG_FILE = os.path.join(LOG_DIR, 'pos.log')
