@@ -88,6 +88,8 @@ const translations = {
         add_operator: 'Add Operator',
         assign: 'Assign',
         save_settings: 'Save Settings',
+        active_party: 'Active party:',
+        switch_party_confirm: 'Switch party? The current cart will be cleared.',
         settings_saved: 'Settings saved',
         settings_failed: 'Failed to save settings',
 
@@ -240,6 +242,8 @@ const translations = {
         add_operator: 'Aggiungi Operatore',
         assign: 'Assegna',
         save_settings: 'Salva Impostazioni',
+        active_party: 'Festa attiva:',
+        switch_party_confirm: 'Cambiare festa? Il carrello attuale verrà svuotato.',
         settings_saved: 'Impostazioni salvate',
         settings_failed: 'Salvataggio impostazioni fallito',
 

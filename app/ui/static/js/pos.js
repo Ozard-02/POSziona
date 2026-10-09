@@ -1,6 +1,6 @@
 /* POS screen JavaScript */
 document.addEventListener('DOMContentLoaded', function() {
-    const db = 'default';
+    const db = getActiveDb();
     
     // DOM elements
     const sectionsTree = document.getElementById('sections-tree');
@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const adminBtn = document.getElementById('admin-btn');
     const dashboardBtn = document.getElementById('dashboard-btn');
     const logoutBtn = document.getElementById('logout-btn');
+    const partySwitch = document.getElementById('party-switch');
     const checkoutModal = document.getElementById('checkout-modal');
     const receiptModal = document.getElementById('receipt-modal');
     const cashTenderModal = document.getElementById('cash-tender-modal');
@@ -38,6 +39,22 @@ document.addEventListener('DOMContentLoaded', function() {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
             const r = Math.random() * 16 | 0;
             return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+        });
+    }
+
+    // --- Active party: show it, allow mid-shift switch ---
+    // (settings for the operator live here: the POS has no settings page)
+    var partyHeader = document.querySelector('.party-header h2');
+    if (partyHeader) partyHeader.textContent = db;
+    if (partySwitch) {
+        loadPartyOptions(partySwitch, db).catch(function() {});
+        partySwitch.addEventListener('change', function() {
+            if (!partySwitch.value || partySwitch.value === db) return;
+            if (cart.length > 0 && !confirm(t('switch_party_confirm'))) {
+                partySwitch.value = db;
+                return;
+            }
+            switchActiveParty(partySwitch.value, db);
         });
     }
 

@@ -1,6 +1,6 @@
 /* Admin panel JavaScript */
 document.addEventListener('DOMContentLoaded', function() {
-    const db = 'default';
+    const db = getActiveDb();
 
     // Factory-PIN enforcement: logins with 0000/1234 land here with a flag
     // that raises a persistent banner pointing at the Operators section.
@@ -850,8 +850,23 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // === Settings ===
+    let partySwitchWired = false;
     async function loadSettings() {
         try {
+            // Active party switcher (outside the settings form: it is
+            // client state, not a party setting).
+            const partySelect = document.getElementById('active-party-select');
+            if (partySelect) {
+                await loadPartyOptions(partySelect, db).catch(function() {});
+                if (!partySwitchWired) {
+                    partySwitchWired = true;
+                    partySelect.addEventListener('change', function() {
+                        if (partySelect.value && partySelect.value !== db) {
+                            switchActiveParty(partySelect.value, db);
+                        }
+                    });
+                }
+            }
             const settings = await fetchJSON(`${API_BASE}/settings/?db=${db}`);
             const form = document.getElementById('settings-form');
             // Populate form fields

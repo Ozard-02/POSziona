@@ -33,6 +33,7 @@ posziona/
 │   │   ├── product_service.py    # Catalog, sections, tags, CSV, search (ALL-tags filter)
 │   │   ├── order_service.py      # checkout_order (atomic + idempotent), sales summaries, delete+restore
 │   │   ├── party_service.py      # Party create from template/empty, duplicate, delete (locked, guarded)
+│   │   │                         # (template-created parties get default operators: login-ready)
 │   │   ├── backup_service.py     # VACUUM INTO snapshots, prune/restore, background scheduler
 │   │   ├── settings_service.py   # DEFAULT_SETTINGS + get_effective_settings()
 │   │   └── auth_service.py       # PBKDF2 PIN hashing (+legacy upgrade), verification, audit log
@@ -47,7 +48,9 @@ posziona/
 │   │       ├── css/style.css
 │   │       └── js/
 │   │           ├── app.js            # fetchJSON, formatCurrency, auth check, toasts, banner
+│   │           │                   # + active-party helpers (get/set/switch, cart cleared on switch)
 │   │           ├── pos.js            # Sections/products/cart/checkout (idempotency key), SSE sync, Shift+L / Shift+Click
+│   │           │                   # + party switcher (uses active party, header shows it)
 │   │           ├── admin.js          # Dashboard, products, tags, parties (data-i18n)
 │   │           ├── dashboard.js      # Report generation, printing
 │   │           └── translations.js   # i18n (en/it)
@@ -68,6 +71,7 @@ posziona/
 │   ├── unit/test_models.py
 │   ├── unit/test_frozen_config.py  # frozen DATA_DIR default + POSZIONA_DATA_DIR override
 │   ├── unit/test_gui_fallback.py   # no-GUI: all→server-only, client→exit 1 (no traceback)
+│   ├── integration/test_party_selection.py  # sale+login land in selected party DB only
 │   └── integration/              # test_api, test_parties, test_products_search_bulk, test_csv_import,
 │                                 # test_stock_and_availability, test_tags,
 │                                 # test_default_tags_and_zero_total, test_manual_party_and_products,

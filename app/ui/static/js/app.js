@@ -22,6 +22,61 @@ function formatCurrency(amount) {
     return `${currency}${safeAmount.toFixed(2)}`;
 }
 
+// --- Active party: which party DB the sales go to ---
+// Single source of truth, shared by pos/admin/dashboard/login.
+// Stored per browser tab (sessionStorage): closing the client logs the
+// operator out of that party; the server-side data is untouched.
+var ACTIVE_DB_KEY = 'posDb';
+
+function getActiveDb() {
+    try {
+        var v = sessionStorage.getItem(ACTIVE_DB_KEY);
+        // Mirror of backend validate_db_name: no separators, no traversal.
+        if (typeof v === 'string' && v && v.length <= 100 &&
+            v.indexOf('/') === -1 && v.indexOf('\\') === -1 &&
+            v.indexOf('..') === -1 && v.indexOf('\x00') === -1) {
+            return v;
+        }
+    } catch (e) { /* storage unavailable (private mode) → default */ }
+    return 'default';
+}
+
+function setActiveDb(name) {
+    try { sessionStorage.setItem(ACTIVE_DB_KEY, name); } catch (e) {}
+}
+
+// Fill a <select> with the existing parties (by modification date,
+// newest first). Resolves to the name list; keeps current selection.
+function loadPartyOptions(selectEl, selected) {
+    return fetchJSON(API_BASE + '/parties/').then(function(parties) {
+        selectEl.innerHTML = '';
+        (parties || []).forEach(function(p) {
+            var opt = document.createElement('option');
+            opt.value = p.name;
+            opt.textContent = p.name;
+            selectEl.appendChild(opt);
+        });
+        if (selected) selectEl.value = selected;
+        if (!selectEl.value && selectEl.options.length) selectEl.selectedIndex = 0;
+        return (parties || []).map(function(p) { return p.name; });
+    });
+}
+
+// Switch working party mid-shift: drop the session cart (it belongs to
+// the old party's sale — the Flask session cart is not per-db), store
+// the new party, reload so every screen re-reads it.
+function switchActiveParty(newDb, oldDb) {
+    oldDb = oldDb || getActiveDb();
+    if (!newDb || newDb === oldDb) return Promise.resolve(false);
+    return fetchJSON(API_BASE + '/cart/clear?db=' + encodeURIComponent(oldDb), {method: 'POST'})
+        .catch(function() {})
+        .then(function() {
+            setActiveDb(newDb);
+            window.location.reload();
+            return true;
+        });
+}
+
 function showError(message) {
     // Non-blocking toast: alert() froze the whole kiosk UI until clicked,
     // hiding the sale behind a modal during busy service. Toasts stack

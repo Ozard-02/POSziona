@@ -1,6 +1,6 @@
 /* Dashboard / Reports screen JavaScript */
 document.addEventListener('DOMContentLoaded', function() {
-    const db = 'default';
+    const db = getActiveDb();
 
     const reportType = document.getElementById('report-type');
     const reportDate = document.getElementById('report-date');

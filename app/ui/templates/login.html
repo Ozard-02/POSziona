@@ -34,6 +34,7 @@
     <!-- Login form (hidden until mode is chosen) -->
     <div id="login-form-container" class="login-form-container hidden">
         <div class="login-form">
+            <select id="party-select" data-i18n-aria="party_label" aria-label="Party"></select>
             <input type="text" id="operator-name" placeholder="Operator Name" autocomplete="off">
             <input type="password" id="pin-input" placeholder="PIN" maxlength="4" autocomplete="off">
             <button id="login-btn" class="btn-primary">Login</button>
@@ -60,12 +61,32 @@ document.addEventListener('DOMContentLoaded', function() {
     var pinInput = document.getElementById('pin-input');
     var loginBtn = document.getElementById('login-btn');
     var adminBtn = document.getElementById('admin-login-btn');
+    var partySelect = document.getElementById('party-select');
+
+    // Party dropdown: which party DB this login (and the whole shift)
+    // works against. PINs are per-party, so the db travels with login.
+    var partiesLoaded = false;
+    function showLoginForm() {
+        startupScreen.classList.add('hidden');
+        remoteConnect.classList.add('hidden');
+        loginFormContainer.classList.remove('hidden');
+        if (!partiesLoaded) {
+            partiesLoaded = true;
+            loadPartyOptions(partySelect, getActiveDb()).catch(function() {
+                // Server unreachable? Leave a single fallback option.
+                partySelect.innerHTML = '';
+                var opt = document.createElement('option');
+                opt.value = 'default';
+                opt.textContent = 'default';
+                partySelect.appendChild(opt);
+            });
+        }
+        pinInput.focus();
+    }
 
     // Mode: Local Server — just show the login form
     modeLocalBtn.addEventListener('click', function() {
-        startupScreen.classList.add('hidden');
-        loginFormContainer.classList.remove('hidden');
-        pinInput.focus();
+        showLoginForm();
     });
 
     // Mode: Remote — show the server IP input
@@ -110,8 +131,9 @@ document.addEventListener('DOMContentLoaded', function() {
             pinInput.focus();
             return;
         }
+        var party = (partySelect && partySelect.value) || getActiveDb();
 
-        fetch('/api/auth/login' + (isAdmin ? '/admin' : '') + '?db=default', {
+        fetch('/api/auth/login' + (isAdmin ? '/admin' : '') + '?db=' + encodeURIComponent(party), {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({pin: pin})
@@ -123,11 +145,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 pinInput.value = '';
                 pinInput.focus();
             } else if (data.must_change_pin) {
+                setActiveDb(party);
                 // Factory PIN: send straight to the admin panel (where PINs
                 // are changed) with a flag that raises an unmissable banner.
                 try { sessionStorage.setItem('mustChangePin', '1'); } catch (e) {}
                 window.location.href = '/admin';
             } else {
+                setActiveDb(party);
                 window.location.href = '/pos';
             }
         });

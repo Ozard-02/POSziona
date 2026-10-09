@@ -155,6 +155,11 @@ def create_party_from_template(party_name, template_id, start_date=None, end_dat
 
             conn.commit()
 
+        # Default operators (admin 0000 / operator 1234): without these
+        # nobody can log into a template-created party. Done after the
+        # bulk connection closes (separate connection, like empty-party).
+        _init_default_operators(db_path)
+
     logger.info(f"Created party '{party_name}' from template id={template_id}")
     return db_name
 
