@@ -31,15 +31,21 @@ def start_server():
     """Start Flask server in a background thread."""
     from app.services.backup_service import start_backup_scheduler
     from app.utils.instance_lock import acquire, owner_pid
+    start_server.failed = False
     if not acquire():
         print(f"ERROR: Another POSziona server is already running "
               f"(lock held, owner PID {owner_pid()}).")
         print("Stop it first — two servers on the same data directory "
               "would silently diverge the database.")
-        sys.exit(1)
+        start_server.failed = True
+        return
     start_backup_scheduler()
     print(f"Starting Flask server on {HOST}:{PORT}...")
     app.run(host=HOST, port=PORT, threaded=True, use_reloader=False)
+
+
+# Set at import so readers never hit AttributeError before first start.
+start_server.failed = False
 
 
 def check_server_ready(host, port, timeout=5):
@@ -57,6 +63,26 @@ def check_server_ready(host, port, timeout=5):
             pass
         time.sleep(0.2)
     return False
+
+
+def _wait_for_server(server_thread, timeout=10):
+    """Wait for the daemon server thread to serve, fail, or time out.
+
+    Returns 'ready' (accepting connections), 'failed' (lock held by
+    another server — reason already printed, or thread died), or
+    'timeout'.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if getattr(start_server, 'failed', False):
+            return 'failed'
+        if not server_thread.is_alive():
+            print("ERROR: Server thread died during startup")
+            return 'failed'
+        if check_server_ready(HOST, PORT, timeout=1):
+            return 'ready'
+        time.sleep(0.2)
+    return 'timeout'
 
 
 def _serve_forever():
@@ -109,7 +135,10 @@ def run_server_only():
     server_thread = threading.Thread(target=start_server, daemon=True)
     server_thread.start()
 
-    if not check_server_ready(HOST, PORT, timeout=10):
+    status = _wait_for_server(server_thread)
+    if status == 'failed':
+        sys.exit(1)
+    if status == 'timeout':
         print("ERROR: Server failed to start in time")
         sys.exit(1)
 
@@ -176,7 +205,10 @@ def run_server_and_client():
     server_thread.start()
 
     print("Waiting for server to start...")
-    if not check_server_ready(HOST, PORT, timeout=10):
+    status = _wait_for_server(server_thread)
+    if status == 'failed':
+        sys.exit(1)
+    if status == 'timeout':
         print("ERROR: Server failed to start in time")
         sys.exit(1)
 
