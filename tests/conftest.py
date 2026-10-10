@@ -81,6 +81,7 @@ def _cleanup_test_templates():
     
     This ensures tests that create templates with fixed names
     don't fail due to UNIQUE constraint violations from previous runs.
+    Also clears device-level settings (global across parties).
     """
     if os.path.exists(TEMPLATES_DB):
         conn = sqlite3.connect(TEMPLATES_DB)
@@ -97,3 +98,16 @@ def _cleanup_test_templates():
             conn.commit()
         finally:
             conn.close()
+    try:
+        conn = sqlite3.connect(TEMPLATES_DB)
+        try:
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS global_settings "
+                "(key TEXT PRIMARY KEY, value TEXT)"
+            )
+            conn.execute('DELETE FROM global_settings')
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        pass

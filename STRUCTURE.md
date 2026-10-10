@@ -39,6 +39,7 @@ posziona/
 │   │   │                         # (atomic publish via .tmp+rename; checkpoint_all() for shutdown)
 │   │   ├── printer_service.py    # ESC/POS raw (USB lp / serial termios), ASCII-safe, no deps
 │   │   ├── settings_service.py   # DEFAULT_SETTINGS + get_effective_settings()
+│   │   │                         # (device keys global in shared DB, party keys per DB)
 │   │   └── auth_service.py       # PBKDF2 PIN hashing (+legacy upgrade), verification, audit log
 │   ├── ui/
 │   │   ├── templates/            # Jinja2 pages
