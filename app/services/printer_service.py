@@ -7,11 +7,15 @@ converts that text to ESC/POS bytes and pushes them to the device —
 no receipt-layout duplication, no new dependencies (matters for the
 frozen binary: python-escpos/pyusb would need system libusb too).
 
-Transports (all plain byte sinks):
+Transports (all plain byte sinks), selected by printer_path:
 - /dev/usb/lp*  — USB printers claimed by the usblp kernel driver.
-- /dev/ttyUSB* / /dev/ttyS* — serial printers / USB-serial adapters
-  (baud set via termios, Linux only).
-- 'auto' — first existing of the above (USB preferred).
+- /dev/ttyUSB* / /dev/ttyS* / COM ports — serial printers / USB-serial
+  adapters (baud via termios on POSIX, pyserial on Windows).
+- socket:HOST[:PORT] — network printers (Ethernet/Wi-Fi, 9100 default).
+  Stdlib TCP, all platforms.
+- win32:Name — Windows spooler RAW passthrough to a print queue
+  (USB printers via their installed queue). Needs pywin32.
+- 'auto' — first existing device (USB preferred; Windows: first COM).
 - any other path — opened as a plain file (also how tests fake a
   printer: point printer_path at a temp file and read back the bytes).
 
@@ -127,20 +131,40 @@ def resolve_device(db_name):
     cut = str(settings.get('printer_cut', '1')) == '1'
 
     if raw_path == 'auto':
-        for pattern in ('/dev/usb/lp*', '/dev/ttyUSB*'):
+        import sys
+        if sys.platform == 'win32':
+            coms = list_windows_com_ports()
+            if coms:
+                return 'serial:' + coms[0], baud, cols, cut
+            raise ValueError(
+                'No COM printers found; USB queues need win32:<name> '
+                '(see printer/status for installed queues)')
+        for pattern in ('/dev/usb/lp*', '/dev/ttyUSB*', '/dev/ttyACM*', '/dev/ttyS*'):
             candidates = sorted(glob.glob(pattern))
             if candidates:
                 return candidates[0], baud, cols, cut
-        raise ValueError('No printer found (probed /dev/usb/lp*, /dev/ttyUSB*)')
+        raise ValueError('No printer found (probed /dev/usb/lp*, /dev/ttyUSB*, /dev/ttyACM*, /dev/ttyS*)')
     return raw_path, baud, cols, cut
 
 
 def _open_serial(path, baud):
-    """Open a serial device at baud, 8N1 raw (Linux only)."""
+    """Open a serial device at baud, 8N1 raw.
+
+    Linux/macOS: termios (stdlib). Windows COM ports: pyserial
+    (optional dependency, imported lazily).
+    """
+    import sys
+    if sys.platform == 'win32':
+        return _open_serial_pyserial(path, baud)
+    return _open_serial_termios(path, baud)
+
+
+def _open_serial_termios(path, baud):
+    """POSIX serial open (also used by detect_serial for reading)."""
     try:
         import termios
     except ImportError:
-        raise RuntimeError('Serial printers need Linux (termios unavailable)')
+        raise RuntimeError('Serial printers need Linux/macOS or pyserial')
     const = getattr(termios, f'B{baud}', None)
     if const is None:
         raise ValueError(f'Unsupported baud rate: {baud}')
@@ -169,6 +193,45 @@ def _open_serial(path, baud):
     return os.fdopen(fd, 'wb')
 
 
+def _open_serial_pyserial(path, baud):
+    """COM port via pyserial (Windows; also fallback anywhere)."""
+    try:
+        import serial
+    except ImportError:
+        raise RuntimeError(
+            'COM ports need the pyserial package: pip install pyserial')
+    try:
+        ser = serial.Serial(path, baudrate=baud, bytesize=8,
+                            parity='N', stopbits=1, timeout=2,
+                            write_timeout=5)
+    except Exception as e:
+        raise RuntimeError(f'Cannot open {path}: {e}')
+
+    class _SerSink:
+        def __init__(self, ser):
+            self._ser = ser
+
+        def write(self, data):
+            self._ser.write(data)
+
+        def flush(self):
+            self._ser.flush()
+
+        def close(self):
+            try:
+                self._ser.close()
+            except Exception:
+                pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self.close()
+
+    return _SerSink(ser)
+
+
 DETECT_BAUDS = (9600, 19200, 38400, 57600, 115200)
 
 
@@ -179,10 +242,13 @@ def detect_serial(path, bauds=DETECT_BAUDS, timeout=0.6):
     the 1-byte reply. Open/config failures raise immediately (wrong
     permissions etc. won't heal at another baud); silence tries the next.
     """
+    import sys
+    if sys.platform == 'win32':
+        return _detect_serial_pyserial(path, bauds, timeout)
     import select
     for baud in bauds:
         try:
-            fh = _open_serial(path, baud)
+            fh = _open_serial_termios(path, baud)
         except ValueError:
             raise
         except RuntimeError:
@@ -203,16 +269,192 @@ def detect_serial(path, bauds=DETECT_BAUDS, timeout=0.6):
     return None
 
 
+def _detect_serial_pyserial(path, bauds, timeout):
+    """DLE EOT probe over pyserial (Windows COM ports)."""
+    try:
+        import serial
+    except ImportError:
+        raise RuntimeError(
+            'COM detection needs the pyserial package: pip install pyserial')
+    for baud in bauds:
+        try:
+            ser = serial.Serial(path, baudrate=baud, bytesize=8,
+                                parity='N', stopbits=1, timeout=timeout,
+                                write_timeout=5)
+        except ValueError:
+            raise
+        except Exception as e:
+            raise RuntimeError(f'Cannot open {path}: {e}')
+        try:
+            ser.reset_input_buffer()
+            ser.write(b'\x10\x04\x01')
+            ser.flush()
+            reply = ser.read(8)
+            if len(reply) == 1:
+                logger.info(f"Serial printer on {path} answers at {baud}")
+                return baud
+        except Exception:
+            pass
+        finally:
+            try:
+                ser.close()
+            except Exception:
+                pass
+    return None
+
+
+def _open_network(spec):
+    """TCP raw to a network printer (Ethernet/Wi-Fi, usually port 9100).
+
+    Spec: 'socket:HOST' or 'socket:HOST:PORT'. Stdlib only, all platforms.
+    """
+    import socket
+    hostport = spec.split(':', 1)[1]
+    host, _, port_s = hostport.partition(':')
+    if not host:
+        raise ValueError(f'Bad network printer spec: {spec!r}')
+    try:
+        port = int(port_s or 9100)
+    except ValueError:
+        raise ValueError(f'Bad network printer spec: {spec!r}')
+    try:
+        sock = socket.create_connection((host, port), timeout=5)
+    except OSError as e:
+        raise RuntimeError(f'Cannot reach printer at {host}:{port}: {e}')
+
+    class _SockSink:
+        def __init__(self, sock):
+            self._sock = sock
+            self._fh = sock.makefile('wb')
+
+        def write(self, data):
+            self._fh.write(data)
+
+        def flush(self):
+            self._fh.flush()
+
+        def close(self):
+            try:
+                self._fh.close()
+            finally:
+                try:
+                    self._sock.close()
+                except OSError:
+                    pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self.close()
+
+    return _SockSink(sock)
+
+
+def _open_win32_raw(name):
+    """Windows spooler RAW passthrough (USB printers via their queue).
+
+    Bypasses the driver: ESC/POS bytes go straight to the printer. Needs
+    pywin32 (Windows only, imported lazily).
+    """
+    try:
+        import win32print
+    except ImportError:
+        raise RuntimeError(
+            'Windows print queues need pywin32: pip install pywin32')
+    if not name:
+        raise ValueError('Windows printer name required (win32:<name>)')
+    try:
+        handle = win32print.OpenPrinter(name)
+        win32print.StartDocPrinter(handle, 1, ('POSziona', None, 'RAW'))
+        win32print.StartPagePrinter(handle)
+    except Exception as e:
+        raise RuntimeError(f'Cannot open Windows printer {name!r}: {e}')
+
+    class _WinSink:
+        def __init__(self, handle):
+            self._handle = handle
+            self._closed = False
+
+        def write(self, data):
+            import win32print as _wp
+            view = memoryview(data)
+            while view:
+                n = _wp.WritePrinter(self._handle, view.tobytes())
+                if not n:
+                    raise RuntimeError('Windows spooler refused data')
+                view = view[n:]
+
+        def flush(self):
+            pass
+
+        def close(self):
+            if self._closed:
+                return
+            self._closed = True
+            import win32print as _wp
+            try:
+                _wp.EndPagePrinter(self._handle)
+                _wp.EndDocPrinter(self._handle)
+            finally:
+                try:
+                    _wp.ClosePrinter(self._handle)
+                except Exception:
+                    pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self.close()
+
+    return _WinSink(handle)
+
+
+def list_windows_printers():
+    """Installed Windows print queues (for picking win32:<name>)."""
+    try:
+        import win32print
+    except ImportError:
+        return []
+    try:
+        flags = win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS
+        return sorted(p[2] for p in win32print.EnumPrinters(flags) if len(p) > 2 and p[2])
+    except Exception:
+        return []
+
+
+def list_windows_com_ports():
+    """COM ports present (pyserial, [] when unavailable)."""
+    try:
+        from serial.tools import list_ports
+    except ImportError:
+        return []
+    try:
+        return sorted(p.device for p in list_ports.comports())
+    except Exception:
+        return []
+
+
 def _open_device(path, baud):
-    """Binary sink for bytes: serial (termios) or plain file write."""
-    if os.path.basename(path).startswith('tty'):
+    """Binary sink for bytes, by path scheme (see module docstring)."""
+    import re
+    import sys
+    if path.startswith('socket:'):
+        return _open_network(path)
+    if path.startswith('win32:'):
+        return _open_win32_raw(path[len('win32:'):].strip())
+    if path.startswith('serial:'):
+        return _open_serial(path[len('serial:'):].strip(), baud)
+    base = os.path.basename(path)
+    if base.startswith('tty') or re.fullmatch(r'(?i)com\d+', base):
         return _open_serial(path, baud)
     try:
         return open(path, 'wb')
     except OSError as e:
         hint = ''
         if 'Permission denied' in str(e):
-            hint = ' (add the user to the lp/dialout group?)'
+            hint = ' (add the user to the lp/dialout/uucp group?)'
         raise RuntimeError(f'Cannot open {path}: {e.strerror or e}{hint}')
 
 

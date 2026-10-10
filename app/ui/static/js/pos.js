@@ -919,20 +919,34 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Print receipt button
+    // Print receipt button: thermal printer when configured, else the
+    // browser popup (which is also the fallback if thermal fails, so the
+    // operator always walks away with a receipt).
+    function browserPrint(receiptContent) {
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`<pre>${receiptContent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`);
+        printWindow.document.title = 'Posziona Receipt';
+        printWindow.focus();
+        printWindow.print();
+        printWindow.close();
+    }
     const printReceiptBtn = receiptModal.querySelector('#print-receipt');
     if (printReceiptBtn) {
         printReceiptBtn.addEventListener('click', () => {
-            // Try to print the receipt
             const receiptContent = document.getElementById('receipt-content').textContent;
-            if (receiptContent) {
-                const printWindow = window.open('', '_blank');
-                printWindow.document.write(`<pre>${receiptContent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`);
-                printWindow.document.title = 'Posziona Receipt';
-                printWindow.focus();
-                printWindow.print();
-                printWindow.close();
+            if (!receiptContent) return;
+            var path = (AppState.settings && AppState.settings.printer_path) || '';
+            if (!path) {
+                browserPrint(receiptContent);
+                return;
             }
+            fetchJSON(`${API_BASE}/printer/print?db=${db}`, {
+                method: 'POST',
+                body: JSON.stringify({text: receiptContent})
+            }).catch(function(e) {
+                showError(t('printer_failed') + ': ' + (e.message || e));
+                browserPrint(receiptContent);
+            });
         });
     }
 

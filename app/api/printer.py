@@ -7,8 +7,8 @@ only convert + send. Operator login required (paper costs money).
 from flask import Blueprint, request, jsonify, session
 
 from app.services.printer_service import (
-    build_test_ticket, detect_serial, print_text, resolve_device,
-    DEFAULT_COLS,
+    build_test_ticket, detect_serial, list_windows_printers, print_text,
+    resolve_device, DEFAULT_COLS,
 )
 
 printer_bp = Blueprint('printer', __name__)
@@ -92,6 +92,8 @@ def printer_status():
     try:
         path, baud, cols, cut = resolve_device(db)
         return jsonify({'configured': True, 'device': path,
-                        'baud': baud, 'cols': cols, 'cut': cut})
+                        'baud': baud, 'cols': cols, 'cut': cut,
+                        'win_queues': list_windows_printers()})
     except ValueError as e:
-        return jsonify({'configured': False, 'error': str(e)})
+        return jsonify({'configured': False, 'error': str(e),
+                        'win_queues': list_windows_printers()})
