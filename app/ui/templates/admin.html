@@ -147,7 +147,8 @@
                 <select id="active-party-select"></select>
             </div>
             <form id="settings-form">
-                <h4 data-i18n="group_receipt">Receipt</h4>
+                <details open>
+                <summary data-i18n="group_receipt">Receipt</summary>
                 <div class="form-group">
                     <label data-i18n="receipt_header_label">Receipt header:</label>
                     <input type="text" name="receipt_header" value="" autocomplete="off">
@@ -183,10 +184,12 @@
                         </label>
                     </div>
                 </div>
-                <h4 data-i18n="group_printer">Printer</h4>
+                </details>
+                <details>
+                <summary data-i18n="group_printer">Printer</summary>
                 <div class="form-group">
                     <label data-i18n="printer_path">Printer device path (empty = browser print):</label>
-                    <input type="text" name="printer_path" placeholder="auto or /dev/usb/lp0" autocomplete="off">
+                    <input type="text" name="printer_path" placeholder="auto" autocomplete="off">
                 </div>
                 <div class="form-group">
                     <label data-i18n="printer_baud">Printer baud (serial only):</label>
@@ -203,7 +206,9 @@
                     <label data-i18n="printer_cols">Printer columns:</label>
                     <input type="number" name="printer_cols" value="42" min="16" max="64">
                 </div>
-                <h4 data-i18n="group_pos">Counter</h4>
+                </details>
+                <details>
+                <summary data-i18n="group_pos">Counter</summary>
                 <div class="form-group">
                     <label data-i18n="currency_label">Currency:</label>
                     <input type="text" name="currency" value="€">
@@ -241,11 +246,14 @@
                         </label>
                     </div>
                 </div>
-                <h4 data-i18n="group_system">System</h4>
+                </details>
+                <details>
+                <summary data-i18n="group_system">System</summary>
                 <div class="form-group">
                     <label data-i18n="snapshot_interval">Snapshot Interval (minutes):</label>
                     <input type="number" name="snapshot_interval_minutes" value="5">
                 </div>
+                </details>
                 <button type="submit" class="btn-primary" data-i18n="save_settings">Save Settings</button>
                 <button type="button" id="test-print-btn" class="btn-secondary" data-i18n="test_print">Test print</button>
             </form>

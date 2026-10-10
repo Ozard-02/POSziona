@@ -122,7 +122,9 @@ def resolve_device(db_name):
     Raises ValueError on bad configuration.
     """
     settings = get_effective_settings(db_name)
-    raw_path = (settings.get('printer_path') or '').strip()
+    # Tolerate quote-paste ('auto' typed as ''auto'' etc.): paths never
+    # legitimately start/end with quotes.
+    raw_path = (settings.get('printer_path') or '').strip().strip('\'"').strip()
     if not raw_path:
         raise ValueError('No printer configured (printer_path is empty)')
     baud = _setting_int(settings, 'printer_baud', DEFAULT_BAUD)

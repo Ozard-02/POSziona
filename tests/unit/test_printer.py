@@ -51,6 +51,11 @@ def test_resolve_rejects_bad_config(monkeypatch):
                         lambda db: {'printer_path': ''})
     with pytest.raises(ValueError, match='empty'):
         prn.resolve_device('any')
+    # Quote-paste ('auto' typed as ''auto'') counts as empty, not a path.
+    monkeypatch.setattr(prn, 'get_effective_settings',
+                        lambda db: {'printer_path': "''"})
+    with pytest.raises(ValueError, match='empty'):
+        prn.resolve_device('any')
     monkeypatch.setattr(prn, 'get_effective_settings',
                         lambda db: {'printer_path': '/dev/usb/lp0',
                                     'printer_baud': '777'})

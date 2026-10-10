@@ -66,6 +66,15 @@ body {
     width: 100%;
     margin: 4px 0;
 }
+#admin-settings details {
+    margin: 6px 0;
+}
+#admin-settings summary {
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 16px;
+    margin: 8px 0;
+}
 .modal-header {
     display: flex;
     justify-content: space-between;
