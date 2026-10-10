@@ -126,9 +126,6 @@ const translations = {
         set_stock: 'Set Stock',
         invalid_stock: 'Invalid stock value',
         stock_update_failed: 'Failed to update stock',
-        edit_price: 'Edit Price',
-        set_available: 'Set Available',
-        set_unavailable: 'Set Unavailable',
         enter_new_price: 'Enter new price:',
         enter_new_stock: 'Enter new stock count (leave blank for unlimited):',
 
@@ -187,16 +184,16 @@ const translations = {
         total: 'Totale:',
         checkout: 'Checkout',
         discount_btn: 'Sconto',
-        clear: 'Pulisci',
+        clear: 'Svuota',
         empty_cart: 'Aggiungi prodotti al carrello',
         discount_prompt: "Inserisci sconto:\nPer percentuale: inserisci come '10%'\nPer importo fisso: inserisci come '5' (€5 di sconto)\nLascia vuoto per rimuovere lo sconto",
         invalid_discount: 'Valore sconto non valido',
-        checkout_failed: 'Chiamata fallita',
+        checkout_failed: 'Checkout fallito',
         stock: 'Scorta',
         unavailable: 'Non disponibile',
 
         // Checkout Modal
-        checkout_title: 'Chiamata',
+        checkout_title: 'Checkout',
 
         // Cash Tender Modal
         cash_title: 'Pagamento Contanti',
@@ -231,7 +228,7 @@ const translations = {
         discounts: 'Sconti Totali:',
         items_sold: 'Prodotti Venduti',
         product_col: 'Prodotto',
-        qty_col: 'Qty',
+        qty_col: 'Qtà',
         unit_price_col: 'Prezzo Unitario',
         amount_col: 'Totale',
         no_sales_data: 'Nessun dato di vendita',
@@ -300,9 +297,6 @@ const translations = {
         set_stock: 'Imposta Scorta',
         invalid_stock: 'Valore scorta non valido',
         stock_update_failed: 'Aggiornamento scorta fallito',
-        edit_price: 'Modifica Prezzo',
-        set_available: 'Imposta Disponibile',
-        set_unavailable: 'Imposta Non Disponibile',
         enter_new_price: 'Inserisci nuovo prezzo:',
         enter_new_stock: 'Inserisci nuova scorta (lascia vuoto per illimitato):',
 
