@@ -76,19 +76,22 @@ def build_bytes(text, cols=DEFAULT_COLS, cut=True):
     """Wrap receipt text in a minimal ESC/POS envelope.
 
     ESC @ (init) + left-aligned text + feed + optional partial cut.
+    A form-feed char (\\f) inside the text is a cut marker: the printer
+    cuts there and continues (section slips, then the total recap).
+    With cut=False the markers become plain feeds instead.
     No codepage / font commands: works on any default configuration.
     """
-    body = []
-    for raw_line in str(text).split('\n'):
-        for part in sanitize_line(raw_line, cols).split('\n'):
-            body.append(part.encode('ascii') + b'\n')
     data = bytearray()
     data += ESC + b'@'          # init
     data += ESC + b'a\x00'      # left align
-    data += b''.join(body)
-    data += ESC + b'd\x04'      # feed 4 lines
-    if cut:
-        data += GS + b'V\x01'   # partial cut
+    parts = str(text).split('\f')
+    for part in parts:
+        for raw_line in part.split('\n'):
+            for chunk in sanitize_line(raw_line, cols).split('\n'):
+                data += chunk.encode('ascii') + b'\n'
+        data += ESC + b'd\x04'  # feed 4 lines
+        if cut:
+            data += GS + b'V\x01'   # partial cut (also after last part)
     return bytes(data)
 
 

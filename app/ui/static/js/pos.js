@@ -16,7 +16,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const adminBtn = document.getElementById('admin-btn');
     const dashboardBtn = document.getElementById('dashboard-btn');
     const logoutBtn = document.getElementById('logout-btn');
-    const partySwitch = document.getElementById('party-switch');
+    const partyNameEl = document.getElementById('party-name');
+    const partyMenuEl = document.getElementById('party-menu');
     const checkoutModal = document.getElementById('checkout-modal');
     const receiptModal = document.getElementById('receipt-modal');
     const cashTenderModal = document.getElementById('cash-tender-modal');
@@ -42,19 +43,36 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- Active party: show it, allow mid-shift switch ---
-    // (settings for the operator live here: the POS has no settings page)
-    var partyHeader = document.querySelector('.party-header h2');
-    if (partyHeader) partyHeader.textContent = db;
-    if (partySwitch) {
-        loadPartyOptions(partySwitch, db).catch(function() {});
-        partySwitch.addEventListener('change', function() {
-            if (!partySwitch.value || partySwitch.value === db) return;
-            if (cart.length > 0 && !confirm(t('switch_party_confirm'))) {
-                partySwitch.value = db;
+    // --- Active party: name is clickable, popup lists parties ---
+    // (the operator's party switcher lives here: the POS has no settings page)
+    if (partyNameEl) partyNameEl.textContent = db;
+    if (partyNameEl && partyMenuEl) {
+        partyNameEl.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (!partyMenuEl.classList.contains('hidden')) {
+                partyMenuEl.classList.add('hidden');
                 return;
             }
-            switchActiveParty(partySwitch.value, db);
+            fetchJSON(`${API_BASE}/parties/`).then(function(parties) {
+                partyMenuEl.innerHTML = '';
+                (parties || []).forEach(function(p) {
+                    var btn = document.createElement('button');
+                    btn.textContent = p.name;
+                    if (p.name === db) btn.classList.add('current');
+                    btn.addEventListener('click', function(ev) {
+                        ev.stopPropagation();
+                        partyMenuEl.classList.add('hidden');
+                        if (!p.name || p.name === db) return;
+                        if (cart.length > 0 && !confirm(t('switch_party_confirm'))) return;
+                        switchActiveParty(p.name, db);
+                    });
+                    partyMenuEl.appendChild(btn);
+                });
+                partyMenuEl.classList.remove('hidden');
+            }).catch(function() {});
+        });
+        document.addEventListener('click', function() {
+            partyMenuEl.classList.add('hidden');
         });
     }
 
@@ -872,6 +890,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Display: kitchen slips per section if split_receipts is on,
         // followed by the full customer receipt. If split_receipts is off,
         // just show the single full receipt.
+        var thermalText;
         if (splitReceipts) {
             var slips = sectionsWithItems.map(function(s) {
                 var slipData = { section_name: s.section };
@@ -879,13 +898,16 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             slips.push(buildReceipt(orderData)); // full receipt last
             receiptEl.textContent = slips.join('\n\n' + t('separator') + '\n\n');
+            // Thermal: cut after every section slip and before the recap.
+            thermalText = slips.join('\n\f\n');
         } else {
             receiptEl.textContent = buildReceipt(orderData);
+            thermalText = receiptEl.textContent;
         }
 
         // Thermal printer (if configured): send the same text shown above.
         // Browser-popup printing stays on the Print button as fallback.
-        tryThermalPrint(receiptEl.textContent);
+        tryThermalPrint(thermalText);
 
         // Clear cart and reset state after showing receipt
         cart = [];

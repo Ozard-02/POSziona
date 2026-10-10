@@ -24,6 +24,21 @@ def test_build_bytes_no_cut():
     assert b'\x1dV' not in data
 
 
+def test_cut_markers_split_jobs():
+    """Form-feed = cut here and continue (section slips + recap)."""
+    data = prn.build_bytes('PRIMI\fSECONDI\fTOTALE', cols=42, cut=True)
+    assert data.count(b'\x1dV\x01') == 3
+    assert data.index(b'PRIMI') < data.index(b'\x1dV\x01') < data.index(b'SECONDI')
+    assert data.index(b'SECONDI') < data.index(b'TOTALE')
+    assert data.endswith(b'\x1dV\x01')
+
+
+def test_cut_markers_without_cut_become_feeds():
+    data = prn.build_bytes('A\fB', cut=False)
+    assert b'\x1dV' not in data
+    assert b'A' in data and b'B' in data
+
+
 def test_sanitize_euro_accents_width():
     assert prn.sanitize_line('Caffè €5,00', 42) == 'Caffe EUR5,00'
     assert prn.sanitize_line('TÈ È Ù', 42) == 'TE E U'
@@ -244,13 +259,15 @@ def test_com_routes_to_pyserial(tmp_path, monkeypatch):
     import sys as sys_mod
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(sys_mod, 'platform', 'win32')
-    with pytest.raises(RuntimeError) as e:
+    with pytest.raises(RuntimeError):
         prn._open_device('COM3', 9600)
-    assert 'pyserial' in str(e.value)
     assert not (tmp_path / 'COM3').exists()
 
 
-def test_pyserial_sink_missing():
+def test_pyserial_sink_missing(monkeypatch):
+    """Without pyserial installed, COM gives a clear install hint."""
+    import sys as sys_mod
+    monkeypatch.setitem(sys_mod.modules, 'serial', None)
     with pytest.raises(RuntimeError) as e:
         prn._open_serial_pyserial('COM3', 9600)
     assert 'pyserial' in str(e.value)

@@ -7,7 +7,8 @@
     <!-- Left Sidebar: Sections -->
     <div class="sidebar-left">
         <div class="party-header">
-            <h2>{{ party_name or 'Party' }}</h2>
+            <h2 id="party-name" class="party-name-click" title="">Party</h2>
+            <div id="party-menu" class="party-menu hidden"></div>
             <div class="party-status"></div>
         </div>
         <div class="sections-tree" id="sections-tree">
@@ -51,7 +52,6 @@
                 </div>
             </div>
             <div class="nav-buttons">
-                <select id="party-switch" aria-label="Active party"></select>
                 <button id="dashboard-btn" class="btn-sm btn-secondary">Reports</button>
                 <button id="admin-btn" class="btn-sm btn-secondary">Admin</button>
                 <button id="logout-btn" class="btn-sm btn-secondary">Logout</button>
