@@ -58,6 +58,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // --- Thermal printer: fire-and-forget after the receipt shows ---
+    function tryThermalPrint(text) {
+        var path = (AppState.settings && AppState.settings.printer_path) || '';
+        if (!path || !text) return;
+        fetchJSON(`${API_BASE}/printer/print?db=${db}`, {
+            method: 'POST',
+            body: JSON.stringify({text: text})
+        }).catch(function(e) {
+            showError(t('printer_failed') + ': ' + (e.message || e));
+        });
+    }
+
     // --- Load settings ---
     async function loadSettings() {
         try {
@@ -870,6 +882,10 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             receiptEl.textContent = buildReceipt(orderData);
         }
+
+        // Thermal printer (if configured): send the same text shown above.
+        // Browser-popup printing stays on the Print button as fallback.
+        tryThermalPrint(receiptEl.textContent);
 
         // Clear cart and reset state after showing receipt
         cart = [];

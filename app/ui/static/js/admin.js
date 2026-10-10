@@ -1365,6 +1365,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    document.getElementById('test-print-btn').addEventListener('click', async function() {
+        try {
+            const r = await fetchJSON(`${API_BASE}/printer/test?db=${db}`, {method: 'POST'});
+            alert(t('test_print_ok') + ' (' + r.device + ')');
+        } catch (err) {
+            alert(t('printer_failed') + ': ' + (err.message || err));
+        }
+    });
+
     // === Tag Button Handlers ===
     document.getElementById('create-tag-btn').addEventListener('click', async function() {
         const name = document.getElementById('new-tag-name').value.trim();

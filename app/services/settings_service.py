@@ -22,6 +22,10 @@ DEFAULT_SETTINGS = {
     'language': 'en',  # Supported: en, it
     'default_operator_id': None,
     'printer_model': None,
+    'printer_path': '',  # '' = disabled (browser print); 'auto' or device path
+    'printer_baud': '9600',  # serial only (/dev/ttyUSB*, /dev/ttyS*)
+    'printer_cols': '42',  # receipt width, safe default for 80mm
+    'printer_cut': '1',  # 1 = partial cut after receipt
     'receipt_header': '',
     'receipt_footer': 'Thank you for your purchase!',
     'auto_logout_minutes': 0,  # 0 = no auto-logout

@@ -17,6 +17,7 @@ from app.api.orders import orders_bp
 from app.api.parties import parties_bp
 from app.api.auth import auth_bp
 from app.api.settings import settings_bp
+from app.api.printer import printer_bp
 
 # Register sub-blueprints under their namespaces
 api_bp.register_blueprint(products_bp, url_prefix='/products')
@@ -25,6 +26,7 @@ api_bp.register_blueprint(orders_bp, url_prefix='/orders')
 api_bp.register_blueprint(parties_bp, url_prefix='/parties')
 api_bp.register_blueprint(auth_bp, url_prefix='/auth')
 api_bp.register_blueprint(settings_bp, url_prefix='/settings')
+api_bp.register_blueprint(printer_bp, url_prefix='/printer')
 
 
 @api_bp.route('/events')

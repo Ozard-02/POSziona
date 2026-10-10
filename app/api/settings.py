@@ -59,6 +59,7 @@ def update_settings():
             'currency', 'tax_rate', 'default_payment_method',
             'skip_cash_tender', 'auto_checkout', 'language',
             'default_operator_id', 'printer_model',
+            'printer_path', 'printer_baud', 'printer_cols', 'printer_cut',
             'receipt_header', 'receipt_footer',
             'auto_logout_minutes', 'snapshot_interval_minutes',
             'snapshot_keep_count',

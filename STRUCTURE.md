@@ -13,6 +13,7 @@ posziona/
 │   │   ├── products.py           # Products, sections, subsections, tags, CSV import/export
 │   │   ├── cart.py               # Session-based cart: add/remove/update/discount (discounts audited)
 │   │   ├── orders.py             # Atomic checkout, history, reports, delete (restores stock, audited)
+│   │   ├── printer.py            # Thermal print: text→ESC/POS→device, test ticket, status
 │   │   ├── parties.py            # Party CRUD, duplicate (catalog only), backups/restore, date edit
 │   │   └── settings.py           # Party settings get/set
 │   ├── database/
@@ -36,6 +37,7 @@ posziona/
 │   │   │                         # (template-created parties get default operators: login-ready)
 │   │   ├── backup_service.py     # VACUUM INTO snapshots, prune/restore, background scheduler
 │   │   │                         # (atomic publish via .tmp+rename; checkpoint_all() for shutdown)
+│   │   ├── printer_service.py    # ESC/POS raw (USB lp / serial termios), ASCII-safe, no deps
 │   │   ├── settings_service.py   # DEFAULT_SETTINGS + get_effective_settings()
 │   │   └── auth_service.py       # PBKDF2 PIN hashing (+legacy upgrade), verification, audit log
 │   ├── ui/
@@ -74,6 +76,7 @@ posziona/
 │   ├── unit/test_frozen_config.py  # frozen DATA_DIR default + POSZIONA_DATA_DIR override
 │   ├── unit/test_gui_fallback.py   # no-GUI: all→server-only, client→exit 1 (no traceback)
 │   ├── unit/test_discovery.py      # UDP beacon round-trip, menu pick, opt-outs
+│   ├── unit/test_printer.py        # ESC/POS bytes vs fake device file, API end-to-end
 │   ├── integration/test_party_selection.py  # sale+login land in selected party DB only
 │   ├── integration/test_crash_safety.py     # permanent cookie, SIGTERM exit 0, atomic snapshots, WAL checkpoint
 │   └── integration/              # test_api, test_parties, test_products_search_bulk, test_csv_import,
