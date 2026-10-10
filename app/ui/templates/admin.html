@@ -141,11 +141,69 @@
         <!-- Settings -->
         <div id="admin-settings" class="admin-section">
             <h3>Settings</h3>
+            <h4 data-i18n="group_party">Party</h4>
             <div class="form-group">
                 <label for="active-party-select" data-i18n="active_party">Active party:</label>
                 <select id="active-party-select"></select>
             </div>
             <form id="settings-form">
+                <h4 data-i18n="group_receipt">Receipt</h4>
+                <div class="form-group">
+                    <label data-i18n="receipt_header_label">Receipt header:</label>
+                    <input type="text" name="receipt_header" value="" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label data-i18n="receipt_footer_label">Receipt footer:</label>
+                    <input type="text" name="receipt_footer" value="">
+                </div>
+                <div class="form-group">
+                    <div class="setting-row">
+                        <span class="setting-label" data-i18n="split_receipts">Print one receipt per section</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" name="split_receipts" value="1" class="checkbox-input">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="setting-row">
+                        <span class="setting-label" data-i18n="print_recovery_receipt">Print recovery receipt (always saved to logs)</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" name="print_recovery_receipt" value="1" class="checkbox-input">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="setting-row">
+                        <span class="setting-label" data-i18n="printer_cut">Cut paper after receipt</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" name="printer_cut" value="1" class="checkbox-input">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <h4 data-i18n="group_printer">Printer</h4>
+                <div class="form-group">
+                    <label data-i18n="printer_path">Printer device path (empty = browser print):</label>
+                    <input type="text" name="printer_path" placeholder="auto or /dev/usb/lp0" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label data-i18n="printer_baud">Printer baud (serial only):</label>
+                    <select name="printer_baud">
+                        <option value="9600">9600</option>
+                        <option value="19200">19200</option>
+                        <option value="38400">38400</option>
+                        <option value="57600">57600</option>
+                        <option value="115200">115200</option>
+                    </select>
+                    <button type="button" id="detect-baud-btn" class="btn-secondary" data-i18n="detect_baud">Detect</button>
+                </div>
+                <div class="form-group">
+                    <label data-i18n="printer_cols">Printer columns:</label>
+                    <input type="number" name="printer_cols" value="42" min="16" max="64">
+                </div>
+                <h4 data-i18n="group_pos">Counter</h4>
                 <div class="form-group">
                     <label data-i18n="currency_label">Currency:</label>
                     <input type="text" name="currency" value="€">
@@ -183,55 +241,10 @@
                         </label>
                     </div>
                 </div>
-                <div class="form-group">
-                    <div class="setting-row">
-                        <span class="setting-label" data-i18n="split_receipts">Print one receipt per section</span>
-                        <label class="toggle-switch">
-                            <input type="checkbox" name="split_receipts" value="1" class="checkbox-input">
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <div class="setting-row">
-                        <span class="setting-label" data-i18n="print_recovery_receipt">Print recovery receipt (always saved to logs)</span>
-                        <label class="toggle-switch">
-                            <input type="checkbox" name="print_recovery_receipt" value="1" class="checkbox-input">
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                </div>
+                <h4 data-i18n="group_system">System</h4>
                 <div class="form-group">
                     <label data-i18n="snapshot_interval">Snapshot Interval (minutes):</label>
                     <input type="number" name="snapshot_interval_minutes" value="5">
-                </div>
-                <div class="form-group">
-                    <label data-i18n="printer_path">Printer device path (empty = browser print):</label>
-                    <input type="text" name="printer_path" placeholder="auto or /dev/usb/lp0" autocomplete="off">
-                </div>
-                <div class="form-group">
-                    <label data-i18n="printer_baud">Printer baud (serial only):</label>
-                    <select name="printer_baud">
-                        <option value="9600">9600</option>
-                        <option value="19200">19200</option>
-                        <option value="38400">38400</option>
-                        <option value="57600">57600</option>
-                        <option value="115200">115200</option>
-                    </select>
-                    <button type="button" id="detect-baud-btn" class="btn-secondary" data-i18n="detect_baud">Detect</button>
-                </div>
-                <div class="form-group">
-                    <label data-i18n="printer_cols">Printer columns:</label>
-                    <input type="number" name="printer_cols" value="42" min="16" max="64">
-                </div>
-                <div class="form-group">
-                    <div class="setting-row">
-                        <span class="setting-label" data-i18n="printer_cut">Cut paper after receipt</span>
-                        <label class="toggle-switch">
-                            <input type="checkbox" name="printer_cut" value="1" class="checkbox-input">
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
                 </div>
                 <button type="submit" class="btn-primary" data-i18n="save_settings">Save Settings</button>
                 <button type="button" id="test-print-btn" class="btn-secondary" data-i18n="test_print">Test print</button>

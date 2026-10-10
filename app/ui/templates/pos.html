@@ -53,6 +53,7 @@
             <div class="nav-buttons">
                 <button id="dashboard-btn" class="btn-sm btn-secondary">Reports</button>
                 <button id="admin-btn" class="btn-sm btn-secondary">Admin</button>
+                <button id="op-settings-btn" class="btn-sm btn-secondary" aria-label="Settings">⚙</button>
                 <button id="logout-btn" class="btn-sm btn-secondary">Logout</button>
             </div>
         </div>
@@ -122,14 +123,40 @@
         </div>
     </div>
 </div>
+<!-- Operator settings modal -->
+<div id="op-settings" class="modal hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="op-settings-title">Settings</h3>
+            <button id="op-settings-close" class="modal-x" aria-label="Close">✕</button>
+        </div>
+        <div class="form-group">
+            <label for="op-lang" data-i18n="language_label">Language:</label>
+            <select id="op-lang">
+                <option value="" data-i18n="party_default">Party default</option>
+                <option value="en">English</option>
+                <option value="it">Italiano</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <div class="setting-row">
+                <span class="setting-label" data-i18n="beep_on_sale">Beep on add/sale</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="op-beep" class="checkbox-input" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
 <!-- Party switcher modal -->
 <div id="party-menu" class="modal hidden">
     <div class="modal-content">
-        <h3 id="party-menu-title">Select party</h3>
-        <div id="party-menu-list"></div>
-        <div class="modal-buttons">
-            <button id="party-menu-close" class="btn-secondary">Cancel</button>
+        <div class="modal-header">
+            <h3 id="party-menu-title">Select party</h3>
+            <button id="party-menu-close" class="modal-x" aria-label="Close">✕</button>
         </div>
+        <div id="party-menu-list"></div>
     </div>
 </div>
 {% endblock %}

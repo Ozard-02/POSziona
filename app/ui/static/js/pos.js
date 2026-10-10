@@ -54,7 +54,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (partyNameEl && partyMenu && partyMenuList) {
         partyNameEl.addEventListener('click', function() {
             document.getElementById('party-menu-title').textContent = t('select_party');
-            partyMenuClose.textContent = t('cancel');
             fetchJSON(`${API_BASE}/parties/`).then(function(parties) {
                 partyMenuList.innerHTML = '';
                 (parties || []).forEach(function(p) {
@@ -90,6 +89,74 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // --- Operator preferences (this device, this browser tab) ---
+    // Language + beep live in localStorage: per-operator, survives party
+    // switches and reloads, never touches party settings.
+    function loadPrefs() {
+        try {
+            return JSON.parse(sessionStorage.getItem('posPrefs') || '{}') || {};
+        } catch (e) {
+            return {};
+        }
+    }
+    function savePrefs(prefs) {
+        try { sessionStorage.setItem('posPrefs', JSON.stringify(prefs)); } catch (e) {}
+    }
+    function beep(freq) {
+        if (loadPrefs().beep === '0') return;
+        try {
+            var Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!Ctx) return;
+            beep.ctx = beep.ctx || new Ctx();
+            var ctx = beep.ctx;
+            if (ctx.state === 'suspended') ctx.resume();
+            var o = ctx.createOscillator(), g = ctx.createGain();
+            o.type = 'sine';
+            o.frequency.value = freq || 880;
+            g.gain.setValueAtTime(0.001, ctx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+            o.connect(g);
+            g.connect(ctx.destination);
+            o.start();
+            o.stop(ctx.currentTime + 0.18);
+        } catch (e) {}
+    }
+
+    // --- Operator settings modal wiring ---
+    var opSettingsBtn = document.getElementById('op-settings-btn');
+    var opSettings = document.getElementById('op-settings');
+    var opSettingsClose = document.getElementById('op-settings-close');
+    var opLang = document.getElementById('op-lang');
+    var opBeep = document.getElementById('op-beep');
+    function closeOpSettings() {
+        if (opSettings) opSettings.classList.add('hidden');
+    }
+    if (opSettingsBtn && opSettings) {
+        opSettingsBtn.addEventListener('click', function() {
+            document.getElementById('op-settings-title').textContent = t('settings');
+            var prefs = loadPrefs();
+            opLang.value = prefs.lang || '';
+            opBeep.checked = prefs.beep !== '0';
+            opSettings.classList.remove('hidden');
+        });
+        opSettingsClose.addEventListener('click', closeOpSettings);
+        opSettings.addEventListener('click', function(e) {
+            if (e.target === opSettings) closeOpSettings();
+        });
+        opLang.addEventListener('change', function() {
+            var prefs = loadPrefs();
+            prefs.lang = opLang.value;
+            savePrefs(prefs);
+            window.location.reload(); // cart lives server-side: safe
+        });
+        opBeep.addEventListener('change', function() {
+            var prefs = loadPrefs();
+            prefs.beep = opBeep.checked ? '1' : '0';
+            savePrefs(prefs);
+        });
+    }
+
     // --- Load settings ---
     async function loadSettings() {
         try {
@@ -98,6 +165,9 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Failed to load settings:', e);
             AppState.settings = {};
         }
+        // Operator language preference wins over the party default.
+        var prefLang = loadPrefs().lang;
+        if (prefLang) AppState.settings.language = prefLang;
         translatePage();
     }
 
@@ -315,6 +385,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             cart = data.cart;
             updateCartDisplay();
+            beep(880); // item added
         } catch (e) {
             console.error('Failed to add to cart:', e);
             if (e.includes) {
@@ -839,6 +910,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function showReceipt(orderData) {
+        beep(1320); // sale completed
         var settings = AppState.settings || {};
         var splitReceipts = settings.split_receipts == '1';
         var showRecovery = settings.print_recovery_receipt == '1';
