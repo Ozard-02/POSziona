@@ -59,6 +59,31 @@ def test_beacon_opt_out(monkeypatch):
     assert stop.is_set()
 
 
+def test_lan_ip_is_plain_ipv4():
+    """get_lan_ip returns dotted IPv4 (loopback when offline)."""
+    import re
+    ip = discovery.get_lan_ip()
+    assert re.fullmatch(r'\d{1,3}(\.\d{1,3}){3}', ip), ip
+
+
+def test_broadcast_targets_cover_all_interfaces(monkeypatch):
+    """Limited broadcast always; directed /24 per local interface."""
+    monkeypatch.setattr(discovery, '_local_ipv4s',
+                        lambda: {'192.168.1.10', '10.0.0.5'})
+    targets = discovery._broadcast_targets()
+    hosts = {t[0] for t in targets}
+    assert '255.255.255.255' in hosts
+    assert '192.168.1.255' in hosts
+    assert '10.0.0.255' in hosts
+    assert all(t[1] == discovery.DISCOVERY_PORT for t in targets)
+
+
+def test_server_binds_all_interfaces():
+    """Remote clients need 0.0.0.0 (loopback-only rejects LAN)."""
+    from app.utils.config import BIND_HOST
+    import os
+    assert BIND_HOST == os.environ.get('POSZIONA_BIND_HOST', '0.0.0.0')
+
 def test_beacon_loop_emits(monkeypatch):
     """Loop sends immediately, then periodically, until stopped."""
     monkeypatch.delenv('POSZIONA_NO_BEACON', raising=False)

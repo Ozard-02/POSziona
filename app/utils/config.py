@@ -31,6 +31,12 @@ HOST = '127.0.0.1'
 PORT = 5000
 DEBUG = False
 
+# Interface the server binds to. 0.0.0.0 = reachable from other devices
+# on the same Wi-Fi/hotspot (the whole point of client mode + LAN
+# discovery). Local URLs/checks keep using HOST (loopback).
+# Override for locked-down boxes: POSZIONA_BIND_HOST=127.0.0.1.
+BIND_HOST = os.environ.get('POSZIONA_BIND_HOST', '0.0.0.0')
+
 # App settings
 DEFAULT_CURRENCY = '€'
 

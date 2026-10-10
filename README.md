@@ -33,6 +33,12 @@ python scripts/run_pos.py
 - Data lives in `~/.posziona/` (`POSZIONA_DATA_DIR` overrides).
 - Clients find servers on the same Wi-Fi automatically (UDP beacon,
   opt out: `POSZIONA_NO_BEACON=1`).
+- Same machine: run server in one terminal, client in another — localhost
+  is detected automatically, one shared `~/.posziona/`.
+- Wi-Fi / hotspot: the server prints `Other devices on this network:
+  http://<lan-ip>:5000/`. If the client finds nothing (some hotspots and
+  guest networks block discovery broadcasts — iPhone hotspots isolate
+  clients entirely), type that URL in manually when asked.
 
 ## Structure
 

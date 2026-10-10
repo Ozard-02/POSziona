@@ -19,7 +19,7 @@ import webview
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app
-from app.utils.config import HOST, PORT
+from app.utils.config import HOST, PORT, BIND_HOST
 
 webview.settings['ALLOW_DOWNLOADS'] = True
 
@@ -48,8 +48,8 @@ def start_server():
     from app.utils.discovery import start_beacon_loop
     start_beacon_loop(PORT)
     start_backup_scheduler()
-    print(f"Starting Flask server on {HOST}:{PORT}...")
-    app.run(host=HOST, port=PORT, threaded=True, use_reloader=False)
+    print(f"Starting Flask server on {BIND_HOST}:{PORT}...")
+    app.run(host=BIND_HOST, port=PORT, threaded=True, use_reloader=False)
 
 
 # Threading events shared between start_server (daemon thread) and the
@@ -240,10 +240,22 @@ def run_server_only():
 
     print("Server ready. Running in server-only mode (no UI window).")
     print(f"Access the POS at http://{HOST}:{PORT}/  in a browser,")
+    _print_lan_hint()
     print(f"or start a separate client with:  python scripts/run_pos.py --mode client")
     print("Press Ctrl+C to stop.")
 
     _serve_forever()
+
+
+def _print_lan_hint():
+    """Show the URL other devices on the same Wi-Fi/hotspot can use."""
+    try:
+        from app.utils.discovery import get_lan_ip
+        lan = get_lan_ip()
+    except Exception:
+        lan = None
+    if lan:
+        print(f"Other devices on this network: http://{lan}:{PORT}/")
 
 
 def _normalize_server_url(user_input):
@@ -367,6 +379,7 @@ def run_server_and_client():
         # of dying with a traceback.
         print("  Continuing in server-only mode.", flush=True)
         _gui_missing_message(exc, f'http://{HOST}:{PORT}/')
+        _print_lan_hint()
         _open_browser(f'http://{HOST}:{PORT}/')
         print("Press Ctrl+C to stop.")
         _serve_forever()

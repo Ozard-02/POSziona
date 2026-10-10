@@ -22,6 +22,57 @@ BEACON_INTERVAL = 2.0
 LISTEN_WINDOW = 5.0
 
 
+def _local_ipv4s():
+    """Non-loopback IPv4 addresses of this machine (stdlib only)."""
+    ips = set()
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if ip and not ip.startswith('127.'):
+                ips.add(ip)
+    except socket.gaierror:
+        pass
+    try:
+        # IP of the default-route interface (connect sends no packets).
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            probe.connect(('8.8.8.8', 80))
+            ip = probe.getsockname()[0]
+            if ip and not ip.startswith('127.'):
+                ips.add(ip)
+        finally:
+            probe.close()
+    except OSError:
+        pass
+    return ips
+
+
+def get_lan_ip():
+    """Best-guess LAN IP to show other devices (loopback if offline)."""
+    ips = _local_ipv4s()
+    if not ips:
+        return '127.0.0.1'
+    # Prefer the default-route interface; deterministic otherwise.
+    return sorted(ips, key=lambda ip: (ip.startswith('169.254.'), ip))[0]
+
+
+def _broadcast_targets():
+    """Where to send beacons: limited broadcast + per-interface /24.
+
+    The limited broadcast covers the common single-Wi-Fi case. The
+    directed /24s cover multi-homed machines (ethernet + Wi-Fi) and
+    hotspots whose interface is not the default route. /24 is a guess —
+    wrong mask only means one redundant datagram every 2 s.
+    """
+    targets = [('255.255.255.255', DISCOVERY_PORT)]
+    for ip in _local_ipv4s():
+        parts = ip.split('.')
+        if len(parts) == 4:
+            targets.append(('.'.join(parts[:3] + ['255']), DISCOVERY_PORT))
+    seen = set()
+    return [t for t in targets if not (t in seen or seen.add(t))]
+
+
 def _beacon_payload(port):
     return json.dumps({
         'magic': MAGIC,
@@ -30,13 +81,22 @@ def _beacon_payload(port):
     }).encode('utf-8')
 
 
-def send_beacon(port, dest=('255.255.255.255', DISCOVERY_PORT)):
-    """Emit one announcement datagram (best effort, never raises)."""
+def send_beacon(port, dest=None):
+    """Emit one announcement datagram per broadcast target.
+
+    Best effort, never raises. `dest` overrides targets (tests).
+    """
+    payload = _beacon_payload(port)
+    targets = [dest] if dest else _broadcast_targets()
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            sock.sendto(_beacon_payload(port), dest)
+            for target in targets:
+                try:
+                    sock.sendto(payload, target)
+                except OSError:
+                    pass
         finally:
             sock.close()
     except OSError:
