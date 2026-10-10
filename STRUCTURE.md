@@ -13,7 +13,7 @@ posziona/
 │   │   ├── products.py           # Products, sections, subsections, tags, CSV import/export
 │   │   ├── cart.py               # Session-based cart: add/remove/update/discount (discounts audited)
 │   │   ├── orders.py             # Atomic checkout, history, reports, delete (restores stock, audited)
-│   │   ├── printer.py            # Thermal print: text→ESC/POS→device, test ticket, status
+│   │   ├── printer.py            # Thermal print: text→ESC/POS→device, test ticket, baud detect, status
 │   │   ├── parties.py            # Party CRUD, duplicate (catalog only), backups/restore, date edit
 │   │   └── settings.py           # Party settings get/set
 │   ├── database/

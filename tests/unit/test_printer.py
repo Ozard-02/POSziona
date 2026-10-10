@@ -3,6 +3,9 @@ Thermal printing without hardware: the device is a temp file.
 
 Bytes asserted: ESC @ init, sanitized text, alignment, partial cut.
 """
+import os
+import threading
+
 import pytest
 
 from app.services import printer_service as prn
@@ -56,6 +59,53 @@ def test_open_serial_rejects_baud():
         prn._open_serial('/dev/ttyUSB0', 12345)
 
 
+pty = pytest.importorskip('pty')
+
+
+def _responder(master_fd, stop):
+    """Fake ESC/POS printer: answer DLE EOT with one status byte."""
+    import select as select_mod
+    while not stop.is_set():
+        r, _, _ = select_mod.select([master_fd], [], [], 0.2)
+        if not r:
+            continue
+        try:
+            data = os.read(master_fd, 64)
+        except OSError:
+            return
+        if not data:
+            return
+        if b'\x10\x04' in data:
+            try:
+                os.write(master_fd, b'\x12')
+            except OSError:
+                return
+
+
+def test_detect_serial_finds_baud():
+    master, slave = pty.openpty()
+    stop = threading.Event()
+    t = threading.Thread(target=_responder, args=(master, stop), daemon=True)
+    t.start()
+    try:
+        assert prn.detect_serial(os.ttyname(slave)) == 9600
+    finally:
+        stop.set()
+        t.join(timeout=5)
+        os.close(master)
+        os.close(slave)
+
+
+def test_detect_serial_silence_returns_none():
+    master, slave = pty.openpty()  # held open, never answers
+    try:
+        assert prn.detect_serial(os.ttyname(slave),
+                                 bauds=(9600,), timeout=0.2) is None
+    finally:
+        os.close(master)
+        os.close(slave)
+
+
 def _login(client, db_name):
     r = client.post(f'/api/auth/login?db={db_name}', json={'pin': '1234'})
     assert r.status_code == 200
@@ -107,3 +157,32 @@ def test_print_unconfigured(client, clean_db):
     _login(client, db_name)
     r = client.post(f'/api/printer/print?db={db_name}', json={'text': 'x'})
     assert r.status_code == 400
+
+
+def test_detect_endpoint_finds_printer(client, clean_db):
+    """Full stack: endpoint → serial probe → baud (fake printer on pty)."""
+    import threading
+    db_name = clean_db
+    _login(client, db_name)
+    master, slave = pty.openpty()
+    stop = threading.Event()
+    t = threading.Thread(target=_responder, args=(master, stop), daemon=True)
+    t.start()
+    try:
+        r = client.post(f'/api/printer/detect?db={db_name}',
+                        json={'path': os.ttyname(slave)})
+        assert r.status_code == 200, r.get_json()
+        assert r.get_json()['baud'] == 9600
+    finally:
+        stop.set()
+        t.join(timeout=5)
+        os.close(master)
+        os.close(slave)
+
+
+def test_detect_endpoint_silence(client, clean_db):
+    db_name = clean_db
+    _login(client, db_name)
+    r = client.post(f'/api/printer/detect?db={db_name}',
+                    json={'path': '/dev/ttyUSB99'})
+    assert r.status_code in (400, 500), r.get_json()

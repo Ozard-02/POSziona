@@ -145,7 +145,7 @@ def _open_serial(path, baud):
     if const is None:
         raise ValueError(f'Unsupported baud rate: {baud}')
     try:
-        fd = os.open(path, os.O_WRONLY | os.O_NOCTTY)
+        fd = os.open(path, os.O_RDWR | os.O_NOCTTY)
     except OSError as e:
         raise RuntimeError(f'Cannot open {path}: {e.strerror or e}')
     try:
@@ -167,6 +167,40 @@ def _open_serial(path, baud):
         os.close(fd)
         raise RuntimeError(f'Cannot configure {path}: {e}')
     return os.fdopen(fd, 'wb')
+
+
+DETECT_BAUDS = (9600, 19200, 38400, 57600, 115200)
+
+
+def detect_serial(path, bauds=DETECT_BAUDS, timeout=0.6):
+    """Find the baud rate of an ESC/POS serial printer, or None.
+
+    Sends DLE EOT (real-time status request) at each baud and waits for
+    the 1-byte reply. Open/config failures raise immediately (wrong
+    permissions etc. won't heal at another baud); silence tries the next.
+    """
+    import select
+    for baud in bauds:
+        try:
+            fh = _open_serial(path, baud)
+        except ValueError:
+            raise
+        except RuntimeError:
+            raise  # systematic (permissions, missing device, not Linux)
+        try:
+            fh.write(b'\x10\x04\x01')  # DLE EOT n=1: paper-sensor status
+            fh.flush()
+            ready, _, _ = select.select([fh.fileno()], [], [], timeout)
+            if ready:
+                reply = os.read(fh.fileno(), 8)
+                if len(reply) == 1:
+                    logger.info(f"Serial printer on {path} answers at {baud}")
+                    return baud
+        except OSError:
+            pass
+        finally:
+            fh.close()
+    return None
 
 
 def _open_device(path, baud):

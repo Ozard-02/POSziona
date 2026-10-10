@@ -7,7 +7,7 @@ only convert + send. Operator login required (paper costs money).
 from flask import Blueprint, request, jsonify, session
 
 from app.services.printer_service import (
-    build_test_ticket, print_text, resolve_device,
+    build_test_ticket, detect_serial, print_text, resolve_device,
     DEFAULT_COLS,
 )
 
@@ -55,6 +55,31 @@ def test_print():
         return jsonify({'error': str(e)}), 400
     except RuntimeError as e:
         return jsonify({'error': str(e)}), 500
+
+
+@printer_bp.route('/detect', methods=['POST'])
+def detect_printer():
+    """Probe a serial path for an answering ESC/POS printer.
+
+    Body: {"path": "/dev/ttyUSB0"}. Returns {"baud": N} or 400 when
+    nothing answers (wrong cable, printer off, brltty holding the port).
+    """
+    denied = _require_operator()
+    if denied:
+        return denied
+    data = request.get_json() or {}
+    path = (data.get('path') or '').strip()
+    if not path:
+        return jsonify({'error': 'Serial path required'}), 400
+    try:
+        baud = detect_serial(path)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except RuntimeError as e:
+        return jsonify({'error': str(e)}), 500
+    if baud is None:
+        return jsonify({'error': f'No printer answers on {path}'}), 400
+    return jsonify({'baud': baud, 'path': path})
 
 
 @printer_bp.route('/status', methods=['GET'])

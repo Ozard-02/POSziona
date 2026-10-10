@@ -1374,6 +1374,36 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    document.getElementById('detect-baud-btn').addEventListener('click', async function() {
+        const pathInput = document.querySelector('#settings-form [name="printer_path"]');
+        const baudSelect = document.querySelector('#settings-form [name="printer_baud"]');
+        const path = (pathInput && pathInput.value.trim()) || '';
+        if (!path) {
+            alert(t('printer_path_first'));
+            return;
+        }
+        this.disabled = true;
+        try {
+            const r = await fetchJSON(`${API_BASE}/printer/detect?db=${db}`, {
+                method: 'POST',
+                body: JSON.stringify({path})
+            });
+            let opt = Array.from(baudSelect.options).find(o => o.value === String(r.baud));
+            if (!opt) {
+                opt = document.createElement('option');
+                opt.value = String(r.baud);
+                opt.textContent = String(r.baud);
+                baudSelect.appendChild(opt);
+            }
+            baudSelect.value = String(r.baud);
+            alert(t('detect_baud_ok') + ': ' + r.baud);
+        } catch (err) {
+            alert(t('printer_failed') + ': ' + (err.message || err));
+        } finally {
+            this.disabled = false;
+        }
+    });
+
     // === Tag Button Handlers ===
     document.getElementById('create-tag-btn').addEventListener('click', async function() {
         const name = document.getElementById('new-tag-name').value.trim();
