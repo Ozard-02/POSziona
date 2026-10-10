@@ -89,18 +89,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- Operator preferences (this device, this browser tab) ---
-    // Language + beep live in localStorage: per-operator, survives party
-    // switches and reloads, never touches party settings.
+    // --- Operator preferences (this device, this browser) ---
+    // Language + beep live in localStorage: per-operator, survive party
+    // switches, reloads and browser restarts, never touch party settings.
     function loadPrefs() {
         try {
-            return JSON.parse(sessionStorage.getItem('posPrefs') || '{}') || {};
+            return JSON.parse(window.localStorage.getItem('posPrefs') || '{}') || {};
         } catch (e) {
             return {};
         }
     }
     function savePrefs(prefs) {
-        try { sessionStorage.setItem('posPrefs', JSON.stringify(prefs)); } catch (e) {}
+        try { window.localStorage.setItem('posPrefs', JSON.stringify(prefs)); } catch (e) {}
     }
     function beep(freq) {
         if (loadPrefs().beep === '0') return;

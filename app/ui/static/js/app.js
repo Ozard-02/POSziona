@@ -24,25 +24,36 @@ function formatCurrency(amount) {
 
 // --- Active party: which party DB the sales go to ---
 // Single source of truth, shared by pos/admin/dashboard/login.
-// Stored per browser tab (sessionStorage): closing the client logs the
-// operator out of that party; the server-side data is untouched.
+// localStorage: survives tab/browser restarts (like the 24 h login
+// cookie) so the shift setup is still there in the morning. Private
+// windows / pywebview private_mode may block it → default then.
 var ACTIVE_DB_KEY = 'posDb';
 
-function getActiveDb() {
+function _storeGet(key) {
     try {
-        var v = sessionStorage.getItem(ACTIVE_DB_KEY);
-        // Mirror of backend validate_db_name: no separators, no traversal.
-        if (typeof v === 'string' && v && v.length <= 100 &&
-            v.indexOf('/') === -1 && v.indexOf('\\') === -1 &&
-            v.indexOf('..') === -1 && v.indexOf('\x00') === -1) {
-            return v;
-        }
-    } catch (e) { /* storage unavailable (private mode) → default */ }
+        return window.localStorage.getItem(key);
+    } catch (e) {
+        return null;
+    }
+}
+
+function _storeSet(key, value) {
+    try { window.localStorage.setItem(key, value); } catch (e) {}
+}
+
+function getActiveDb() {
+    var v = _storeGet(ACTIVE_DB_KEY);
+    // Mirror of backend validate_db_name: no separators, no traversal.
+    if (typeof v === 'string' && v && v.length <= 100 &&
+        v.indexOf('/') === -1 && v.indexOf('\\') === -1 &&
+        v.indexOf('..') === -1 && v.indexOf('\x00') === -1) {
+        return v;
+    }
     return 'default';
 }
 
 function setActiveDb(name) {
-    try { sessionStorage.setItem(ACTIVE_DB_KEY, name); } catch (e) {}
+    _storeSet(ACTIVE_DB_KEY, name);
 }
 
 // Fill a <select> with the existing parties (by modification date,
