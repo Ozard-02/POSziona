@@ -36,7 +36,6 @@ body {
 
 .party-header {
     display: flex;
-    position: relative;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 15px;
@@ -62,32 +61,10 @@ body {
 .party-name-click:hover {
     text-decoration: underline;
 }
-.party-menu {
-    position: absolute;
-    z-index: 50;
-    background: #fff;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    min-width: 160px;
-    max-height: 260px;
-    overflow-y: auto;
-}
-.party-menu button {
+.party-menu-btn {
     display: block;
     width: 100%;
-    text-align: left;
-    padding: 8px 12px;
-    border: none;
-    background: none;
-    cursor: pointer;
-    font-size: 15px;
-}
-.party-menu button:hover {
-    background: #f0f0f0;
-}
-.party-menu button.current {
-    font-weight: bold;
+    margin: 4px 0;
 }
 
 .party-status {

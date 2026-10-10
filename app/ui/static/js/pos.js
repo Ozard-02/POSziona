@@ -17,7 +17,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const dashboardBtn = document.getElementById('dashboard-btn');
     const logoutBtn = document.getElementById('logout-btn');
     const partyNameEl = document.getElementById('party-name');
-    const partyMenuEl = document.getElementById('party-menu');
     const checkoutModal = document.getElementById('checkout-modal');
     const receiptModal = document.getElementById('receipt-modal');
     const cashTenderModal = document.getElementById('cash-tender-modal');
@@ -43,36 +42,39 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- Active party: name is clickable, popup lists parties ---
+    // --- Active party: name is clickable, centered modal lists parties ---
     // (the operator's party switcher lives here: the POS has no settings page)
+    const partyMenu = document.getElementById('party-menu');
+    const partyMenuList = document.getElementById('party-menu-list');
+    const partyMenuClose = document.getElementById('party-menu-close');
     if (partyNameEl) partyNameEl.textContent = db;
-    if (partyNameEl && partyMenuEl) {
-        partyNameEl.addEventListener('click', function(e) {
-            e.stopPropagation();
-            if (!partyMenuEl.classList.contains('hidden')) {
-                partyMenuEl.classList.add('hidden');
-                return;
-            }
+    function closePartyMenu() {
+        if (partyMenu) partyMenu.classList.add('hidden');
+    }
+    if (partyNameEl && partyMenu && partyMenuList) {
+        partyNameEl.addEventListener('click', function() {
+            document.getElementById('party-menu-title').textContent = t('select_party');
+            partyMenuClose.textContent = t('cancel');
             fetchJSON(`${API_BASE}/parties/`).then(function(parties) {
-                partyMenuEl.innerHTML = '';
+                partyMenuList.innerHTML = '';
                 (parties || []).forEach(function(p) {
                     var btn = document.createElement('button');
-                    btn.textContent = p.name;
-                    if (p.name === db) btn.classList.add('current');
-                    btn.addEventListener('click', function(ev) {
-                        ev.stopPropagation();
-                        partyMenuEl.classList.add('hidden');
+                    btn.textContent = p.name + (p.name === db ? ' ✓' : '');
+                    btn.className = 'btn-secondary party-menu-btn';
+                    btn.addEventListener('click', function() {
+                        closePartyMenu();
                         if (!p.name || p.name === db) return;
                         if (cart.length > 0 && !confirm(t('switch_party_confirm'))) return;
                         switchActiveParty(p.name, db);
                     });
-                    partyMenuEl.appendChild(btn);
+                    partyMenuList.appendChild(btn);
                 });
-                partyMenuEl.classList.remove('hidden');
+                partyMenu.classList.remove('hidden');
             }).catch(function() {});
         });
-        document.addEventListener('click', function() {
-            partyMenuEl.classList.add('hidden');
+        partyMenuClose.addEventListener('click', closePartyMenu);
+        partyMenu.addEventListener('click', function(e) {
+            if (e.target === partyMenu) closePartyMenu();
         });
     }
 

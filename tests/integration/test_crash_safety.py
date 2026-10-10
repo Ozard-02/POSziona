@@ -16,6 +16,8 @@ import subprocess
 import sys
 import time
 
+import pytest
+
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
@@ -118,6 +120,12 @@ def _wait_port(port, timeout=15):
 
 def test_sigterm_checkpoints_and_exits_zero(tmp_path):
     """Real server: SIGTERM → checkpoint message + exit code 0."""
+    try:
+        busy = socket.create_connection(('127.0.0.1', 5000), timeout=1)
+        busy.close()
+        pytest.skip('port 5000 busy (dev server running)')
+    except OSError:
+        pass
     data_dir = tmp_path / 'sigterm-data'
     env = dict(os.environ, POSZIONA_DATA_DIR=str(data_dir))
     proc = subprocess.Popen(
