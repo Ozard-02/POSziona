@@ -6,7 +6,7 @@ Verified against the real tree on 2026-09-18.
 posziona/
 ├── app/                          # Main application package
 │   ├── __init__.py               # Flask app factory create_app() + JSON error handlers
-│   ├── main.py                   # Entry point: server+client / server / client modes + pywebview (no-GUI fallback)
+│   ├── main.py                   # Entry point: server+client / server / client modes + pywebview (no-GUI fallback: distro hint + browser auto-open, LAN discovery)
 │   ├── api/                      # REST API (Flask blueprints, thin)
 │   │   ├── __init__.py           # Registers sub-blueprints + GET /api/events (SSE) + /api/status (health)
 │   │   ├── auth.py               # PIN login/logout (rate-limited), operator mgmt
@@ -61,6 +61,7 @@ posziona/
 │   │   ├── events.py             # SSE broadcaster: broadcast(), sse_response(), prune/heartbeat
 │   │   ├── rate_limit.py         # In-memory fixed-window throttle (login endpoints)
 │   │   ├── instance_lock.py      # Single-server OS lock (split-brain guard)
+│   │   ├── discovery.py          # LAN UDP beacon (server) + discover() menu (client), opt-out POSZIONA_NO_BEACON
 │   │   └── logger.py             # Rotating logs → app/logs/pos.log (5MB × 4); frozen → DATA_DIR/logs
 │   ├── logs/                     # Runtime logs (pos.log; .gitkeep tracked)
 │   └── data/                     # Runtime data (gitignored): parties/*.db, templates.db, backups/
@@ -72,6 +73,7 @@ posziona/
 │   ├── unit/test_models.py
 │   ├── unit/test_frozen_config.py  # frozen DATA_DIR default + POSZIONA_DATA_DIR override
 │   ├── unit/test_gui_fallback.py   # no-GUI: all→server-only, client→exit 1 (no traceback)
+│   ├── unit/test_discovery.py      # UDP beacon round-trip, menu pick, opt-outs
 │   ├── integration/test_party_selection.py  # sale+login land in selected party DB only
 │   ├── integration/test_crash_safety.py     # permanent cookie, SIGTERM exit 0, atomic snapshots, WAL checkpoint
 │   └── integration/              # test_api, test_parties, test_products_search_bulk, test_csv_import,

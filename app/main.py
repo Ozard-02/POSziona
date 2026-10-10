@@ -44,6 +44,9 @@ def start_server():
     # binding the port — the main thread must not mistake another
     # server's open port for ours (ready/lock race).
     _server_serving.set()
+    # LAN beacon so clients on the same Wi-Fi can discover this server.
+    from app.utils.discovery import start_beacon_loop
+    start_beacon_loop(PORT)
     start_backup_scheduler()
     print(f"Starting Flask server on {HOST}:{PORT}...")
     app.run(host=HOST, port=PORT, threaded=True, use_reloader=False)
@@ -131,6 +134,41 @@ def _install_shutdown_handler():
         pass  # not main thread / platform without SIGTERM
 
 
+def _gui_install_hint(os_release='/etc/os-release'):
+    """Distro-specific command to install pywebview GUI libs.
+
+    Best effort: unknown distros (or unreadable os-release) get a generic
+    pointer. Testable via the path parameter.
+    """
+    distro = ''
+    try:
+        with open(os_release, 'r') as f:
+            for line in f:
+                if line.startswith('ID='):
+                    distro = line.split('=', 1)[1].strip().strip('"').lower()
+                    break
+    except OSError:
+        pass
+    apt_like = {'debian', 'ubuntu', 'linuxmint', 'pop', 'raspbian'}
+    if distro in apt_like:
+        return ('  To enable the desktop window instead:\n'
+                '    sudo apt install python3-gi gir1.2-gtk-3.0 gir1.2-webkit2gtk-4.1\n'
+                '  (then run from source — the standalone binary may not see\n'
+                '  distro packages: it embeds its own Python)')
+    if distro in {'fedora', 'rhel', 'centos', 'rocky', 'almalinux'}:
+        return ('  To enable the desktop window instead:\n'
+                '    sudo dnf install python3-gobject gtk3 webkit2gtk4.1\n'
+                '  (then run from source — the standalone binary may not see\n'
+                '  distro packages: it embeds its own Python)')
+    if distro in {'arch', 'manjaro', 'endeavouros'}:
+        return ('  To enable the desktop window instead:\n'
+                '    sudo pacman -S python-gobject gtk3 webkit2gtk\n'
+                '  (then run from source — the standalone binary may not see\n'
+                '  distro packages: it embeds its own Python)')
+    return ('  To enable the desktop window, install your distro\'s\n'
+          '  GTK+WebKit2GTK (or Qt) packages, then run from source.')
+
+
 def _gui_missing_message(exc, server_url):
     """Explain why the pywebview window could not open."""
     # flush=True: frozen binaries are block-buffered on pipes/files —
@@ -139,6 +177,25 @@ def _gui_missing_message(exc, server_url):
     print("  pywebview needs GTK+WebKit2GTK (or Qt) system libraries,", flush=True)
     print("  which are not installed on this machine.", flush=True)
     print(f"  Open {server_url} in a browser instead.", flush=True)
+    print(_gui_install_hint(), flush=True)
+
+
+def _open_browser(server_url):
+    """Auto-open the system browser (stdlib only, zero host deps).
+
+    Returns True when a browser was launched. Opt out with
+    POSZIONA_NO_BROWSER=1 (headless boxes, kiosk scripts).
+    """
+    if os.environ.get('POSZIONA_NO_BROWSER'):
+        return False
+    try:
+        import webbrowser
+        if webbrowser.open(server_url, new=1):
+            print(f"  Opened system browser at {server_url}", flush=True)
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def select_mode():
@@ -189,6 +246,51 @@ def run_server_only():
     _serve_forever()
 
 
+def _normalize_server_url(user_input):
+    """Turn '192.168.1.10:5000' or a full URL into a normalized server URL."""
+    if not user_input.startswith('http://') and not user_input.startswith('https://'):
+        user_input = f'http://{user_input}'
+    return user_input.rstrip('/') + '/'
+
+
+def _discover_or_ask_server():
+    """Find a server: LAN beacons first, manual entry as fallback.
+
+    Returns a server URL, or starts a local server (hybrid mode) when the
+    user enters nothing — preserving the previous behaviour.
+    """
+    from app.utils.discovery import discover
+    print(f"No server detected on {HOST}:{PORT}.")
+    print("  Scanning the local network for POSziona servers...")
+    found = discover()
+    if found:
+        print("  Found on this network:")
+        for i, srv in enumerate(found, 1):
+            print(f"    {i}. {srv['name']} — {srv['url']}")
+        print("    0. Enter address manually")
+        choice = input("  Select server [1-%d] (default 1): " % len(found)).strip()
+        if choice == '' or choice == '0':
+            pass  # fall through to manual entry below
+        elif choice.isdigit() and 1 <= int(choice) <= len(found):
+            return found[int(choice) - 1]['url']
+        else:
+            print("  Invalid choice, enter the address manually.")
+    else:
+        print("  No servers found on this network.")
+    print("  To connect to a server on another machine, enter its address below.")
+    print("  Leave blank to start a local server instead (hybrid mode).\n")
+    user_input = input("  Server IP/URL (e.g., 192.168.1.10:5000 or http://192.168.1.10:5000/): ").strip()
+    if user_input:
+        return _normalize_server_url(user_input)
+    print("  Starting a local server as fallback (hybrid mode).")
+    server_thread = threading.Thread(target=start_server, daemon=True)
+    server_thread.start()
+    if not check_server_ready(HOST, PORT, timeout=10):
+        print("ERROR: Server failed to start in time")
+        sys.exit(1)
+    return f'http://{HOST}:{PORT}/'
+
+
 def run_client_only(server_url=None):
     """Mode 3: Open pywebview window only, connecting to a specified server.
 
@@ -199,23 +301,7 @@ def run_client_only(server_url=None):
         if check_server_ready(HOST, PORT, timeout=3):
             server_url = f'http://{HOST}:{PORT}/'
         else:
-            print(f"No server detected on {HOST}:{PORT}.")
-            print("  To connect to a server on another machine, enter its address below.")
-            print("  Leave blank to start a local server instead (hybrid mode).\n")
-            user_input = input("  Server IP/URL (e.g., 192.168.1.10:5000 or http://192.168.1.10:5000/): ").strip()
-            if user_input:
-                # Normalize user input into a full URL
-                if not user_input.startswith('http://') and not user_input.startswith('https://'):
-                    user_input = f'http://{user_input}'
-                server_url = user_input.rstrip('/') + '/'
-            else:
-                print("  Starting a local server as fallback (hybrid mode).")
-                server_thread = threading.Thread(target=start_server, daemon=True)
-                server_thread.start()
-                if not check_server_ready(HOST, PORT, timeout=10):
-                    print("ERROR: Server failed to start in time")
-                    sys.exit(1)
-                server_url = f'http://{HOST}:{PORT}/'
+            server_url = _discover_or_ask_server()
 
     print(f"Opening pywebview window (client-only mode)...")
     print(f"  Connecting to: {server_url}")
@@ -235,6 +321,7 @@ def run_client_only(server_url=None):
         # A client window is the whole point of this mode, so exit with a
         # clear message instead of a traceback.
         _gui_missing_message(exc, server_url)
+        _open_browser(server_url)
         sys.exit(1)
 
 
@@ -280,6 +367,7 @@ def run_server_and_client():
         # of dying with a traceback.
         print("  Continuing in server-only mode.", flush=True)
         _gui_missing_message(exc, f'http://{HOST}:{PORT}/')
+        _open_browser(f'http://{HOST}:{PORT}/')
         print("Press Ctrl+C to stop.")
         _serve_forever()
 

@@ -22,6 +22,7 @@ def _no_gui(monkeypatch):
     monkeypatch.setattr(main_mod, 'check_server_ready', lambda *a, **k: True)
     monkeypatch.setattr(main_mod.webview, 'create_window', lambda **kw: object())
     main_mod._server_serving.set()
+    monkeypatch.setattr('webbrowser.open', lambda *a, **k: False)
 
     def boom(*a, **k):
         raise Exception('You must have either QT or GTK')
@@ -104,3 +105,66 @@ def test_shutdown_flag_stops_server_loop(monkeypatch, capsys):
     main_mod._serve_forever()  # must return immediately, not hang
     assert 'Shutting down' in capsys.readouterr().out
     main_mod._shutdown_requested.clear()
+
+
+def test_all_mode_auto_opens_browser(monkeypatch):
+    """Fallback launches the system browser at the server URL."""
+    _no_gui(monkeypatch)
+    opened = []
+    monkeypatch.setattr('webbrowser.open',
+                        lambda url, new=0: opened.append(url) or True)
+
+    def stop_at_once(timeout=None):
+        raise KeyboardInterrupt
+    monkeypatch.setattr(main_mod._shutdown_requested, 'wait', stop_at_once)
+
+    main_mod.run_server_and_client()
+    assert opened == [f'http://{main_mod.HOST}:{main_mod.PORT}/']
+
+
+def test_browser_opt_out(monkeypatch):
+    """POSZIONA_NO_BROWSER=1 → message printed, no browser launched."""
+    _no_gui(monkeypatch)
+    monkeypatch.setenv('POSZIONA_NO_BROWSER', '1')
+    opened = []
+    monkeypatch.setattr('webbrowser.open',
+                        lambda url, new=0: opened.append(url) or True)
+
+    def stop_at_once(timeout=None):
+        raise KeyboardInterrupt
+    monkeypatch.setattr(main_mod._shutdown_requested, 'wait', stop_at_once)
+
+    main_mod.run_server_and_client()
+    assert opened == []
+
+
+def test_client_mode_opens_browser_then_exits(monkeypatch, capsys):
+    """Client mode without GUI: browser courtesy open, then exit 1."""
+    _no_gui(monkeypatch)
+    opened = []
+    monkeypatch.setattr('webbrowser.open',
+                        lambda url, new=0: opened.append(url) or True)
+
+    with pytest.raises(SystemExit) as exc_info:
+        main_mod.run_client_only(server_url='http://127.0.0.1:5000/')
+
+    assert exc_info.value.code == 1
+    assert opened == ['http://127.0.0.1:5000/']
+    assert 'browser' in capsys.readouterr().out
+
+
+def test_gui_install_hint_per_distro(tmp_path):
+    """Distro-specific install commands; generic fallback otherwise."""
+    ubuntu = tmp_path / 'os-ubuntu'
+    ubuntu.write_text('NAME="Ubuntu"\nID=ubuntu\n')
+    assert 'apt install' in main_mod._gui_install_hint(str(ubuntu))
+
+    fedora = tmp_path / 'os-fedora'
+    fedora.write_text('ID=fedora\n')
+    assert 'dnf install' in main_mod._gui_install_hint(str(fedora))
+
+    arch = tmp_path / 'os-arch'
+    arch.write_text('ID="arch"\n')
+    assert 'pacman' in main_mod._gui_install_hint(str(arch))
+
+    assert 'distro' in main_mod._gui_install_hint(str(tmp_path / 'nope')).lower()
