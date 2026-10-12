@@ -56,6 +56,14 @@ def test_client_mode_clean_error(monkeypatch, capsys):
     assert 'browser' in out
 
 
+def test_gui_missing_message_has_source_recipe(monkeypatch, capsys):
+    """Fallback prints the exact source-window recipe (copy-paste ready)."""
+    main_mod._gui_missing_message(Exception('no GUI'), 'http://x:5000/')
+    out = capsys.readouterr().out
+    assert 'system-site-packages' in out
+    assert 'scripts/run_pos.py' in out
+
+
 def test_second_server_exits_on_lock(monkeypatch, capsys):
     """Lock held → clean exit(1), no lingering server-less process."""
     import time as _time

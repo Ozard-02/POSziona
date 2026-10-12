@@ -178,6 +178,12 @@ def _gui_missing_message(exc, server_url):
     print("  which are not installed on this machine.", flush=True)
     print(f"  Open {server_url} in a browser instead.", flush=True)
     print(_gui_install_hint(), flush=True)
+    print("  Or run the app window from source (uses the system Python,", flush=True)
+    print("  which can see the distro GTK packages — the frozen binary", flush=True)
+    print("  cannot). One time setup, then a real window:", flush=True)
+    print("    python3 -m venv --system-site-packages syswin", flush=True)
+    print("    syswin/bin/pip install flask pywebview flask-cors", flush=True)
+    print("    syswin/bin/python scripts/run_pos.py", flush=True)
 
 
 def _open_browser(server_url):
