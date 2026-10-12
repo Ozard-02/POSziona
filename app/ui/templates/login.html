@@ -14,8 +14,8 @@
 
             <div class="mode-options">
                 <button id="mode-local" class="btn-primary mode-btn">
-                    <span class="mode-label">Local Server</span>
-                    <span class="mode-desc">Use server on this machine</span>
+                    <span class="mode-label">This Server</span>
+                    <span class="mode-desc">Log in on the server in the address bar</span>
                 </button>
                 <button id="mode-remote" class="btn-secondary mode-btn">
                     <span class="mode-label">Connect to Remote</span>
@@ -84,6 +84,19 @@ document.addEventListener('DOMContentLoaded', function() {
         pinInput.focus();
     }
 
+    // ?mode=local (set by the Connect button when hopping to another
+    // server) → skip mode selection, show the login form straight away.
+    // Without this, Connect reloaded the mode screen forever.
+    var params;
+    try {
+        params = new URLSearchParams(window.location.search);
+    } catch (e) {
+        params = null;
+    }
+    if (params && params.get('mode') === 'local') {
+        showLoginForm();
+    }
+
     // Mode: Local Server — just show the login form
     modeLocalBtn.addEventListener('click', function() {
         showLoginForm();
@@ -115,8 +128,23 @@ document.addEventListener('DOMContentLoaded', function() {
             input = 'http://' + input;
         }
         input = input.replace(/\/+$/, '') + '/';
-        // Navigate to the remote server
-        window.location.href = input;
+        var target;
+        try {
+            target = new URL(input);
+        } catch (e) {
+            alert('Invalid address: ' + input);
+            serverInput.focus();
+            return;
+        }
+        if (target.origin === window.location.origin) {
+            // Already on that server (e.g. retyped its own IP) — just
+            // show the login instead of reloading the mode screen.
+            showLoginForm();
+            return;
+        }
+        // Navigate to the remote server and skip ITS mode screen:
+        // ?mode=local opens the login form directly there.
+        window.location.href = target.origin + '/?mode=local';
     });
 
     // Allow Enter key on server input

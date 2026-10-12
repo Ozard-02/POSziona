@@ -133,8 +133,8 @@ const translations = {
         // Startup screen
         startup_title: 'Posziona',
         startup_subtitle: 'Select startup mode',
-        mode_local: 'Local Server',
-        mode_local_desc: 'Use server on this machine',
+        mode_local: 'This Server',
+        mode_local_desc: 'Log in on the server in the address bar',
         mode_remote: 'Connect to Remote',
         mode_remote_desc: 'Enter a server IP address',
         server_ip_placeholder: '192.168.1.10:5000',
@@ -305,8 +305,8 @@ const translations = {
         // Startup screen
         startup_title: 'Posziona',
         startup_subtitle: 'Seleziona modalità di avvio',
-        mode_local: 'Server Locale',
-        mode_local_desc: 'Usa il server su questa macchina',
+        mode_local: 'Questo Server',
+        mode_local_desc: 'Accedi sul server nella barra degli indirizzi',
         mode_remote: 'Connetti a Remoto',
         mode_remote_desc: 'Inserisci un indirizzo IP del server',
         server_ip_placeholder: '192.168.1.10:5000',
