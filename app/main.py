@@ -336,7 +336,8 @@ def _discover_or_ask_server():
     if found:
         print("  Found on this network:")
         for i, srv in enumerate(found, 1):
-            print(f"    {i}. {srv['name']} — {srv['url']}")
+            tag = f"  (v{srv['version']})" if srv.get('version') else ''
+            print(f"    {i}. {srv['name']} — {srv['url']}{tag}")
         print("    0. Enter address manually")
         raw = _safe_input("  Select server [1-%d] (default 1): " % len(found))
         if raw is None:

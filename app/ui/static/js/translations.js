@@ -140,6 +140,8 @@ const translations = {
         server_ip_placeholder: '192.168.1.10:5000',
         connect: 'Connect',
         back: 'Back',
+        recent_servers: 'Recent servers — tap to reconnect',
+        server_name_label: 'Server name shown to connecting clients (empty = machine name):',
 
         // Auth
         login: 'Login',
@@ -312,6 +314,8 @@ const translations = {
         server_ip_placeholder: '192.168.1.10:5000',
         connect: 'Connetti',
         back: 'Indietro',
+        recent_servers: 'Server recenti — tocca per riconnetterti',
+        server_name_label: 'Nome server mostrato ai client (vuoto = nome macchina):',
 
         // Auth
         login: 'Accedi',
@@ -396,6 +400,9 @@ function translateLoginPage() {
 
     var connectBtn = document.getElementById('connect-btn');
     if (connectBtn) connectBtn.textContent = t('connect');
+
+    var recentTitleEl = document.getElementById('recent-title');
+    if (recentTitleEl) recentTitleEl.textContent = t('recent_servers');
 
     var backBtn = document.getElementById('back-to-modes');
     if (backBtn) backBtn.textContent = t('back');

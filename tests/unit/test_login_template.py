@@ -41,6 +41,15 @@ def test_remote_panel_lives_outside_hidden_parent(client):
     assert html.count("startupScreen.classList.add('hidden')") == 1
 
 
+def test_recent_servers_ui(client):
+    """Login page offers one-tap reconnect (localStorage recent list)."""
+    html = client.get('/').get_data(as_text=True)
+    assert 'id="recent-servers"' in html
+    assert 'id="recent-list"' in html
+    assert 'posServers' in html
+    assert 'recent-title' in html  # label text comes from translations.js
+
+
 def test_inline_login_js_parses():
     """Syntax smoke for the inline <script> (node --check when available)."""
     import shutil

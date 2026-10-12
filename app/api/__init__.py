@@ -62,9 +62,12 @@ def status():
         disk_free_mb = -1
 
     degraded = not db_writable
+    from app.utils.config import APP_VERSION
+    from app.utils.discovery import get_server_name
     return jsonify({
         'status': 'degraded' if degraded else 'ok',
-        'version': '0.1.3',
+        'version': APP_VERSION,
+        'server_name': get_server_name(),
         'db_writable': db_writable,
         'disk_free_mb': disk_free_mb,
     })

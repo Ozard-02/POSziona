@@ -12,6 +12,11 @@
             <h2 id="startup-title">Posziona</h2>
             <p id="startup-subtitle">Select startup mode</p>
 
+            <div id="recent-servers" class="recent-servers hidden">
+                <p id="recent-title">Recent servers — tap to reconnect</p>
+                <div id="recent-list" class="mode-options"></div>
+            </div>
+
             <div class="mode-options" id="mode-options">
                 <button id="mode-local" class="btn-primary mode-btn">
                     <span class="mode-label">This Server</span>
@@ -85,6 +90,68 @@ document.addEventListener('DOMContentLoaded', function() {
         pinInput.focus();
     }
 
+    // --- Recent servers: one-tap reconnect (localStorage, max 5) ---
+    // Typing the IP once is enough; afterwards the server is a button.
+    // Storage may be blocked (private window) → stay silent, hide section.
+    var RECENT_KEY = 'posServers';
+    var recentWrap = document.getElementById('recent-servers');
+    var recentList = document.getElementById('recent-list');
+    var recentTitle = document.getElementById('recent-title');
+
+    function loadRecent() {
+        try {
+            var v = JSON.parse(window.localStorage.getItem(RECENT_KEY) || '[]');
+            return Array.isArray(v) ? v : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveRecent(list) {
+        try {
+            window.localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 5)));
+        } catch (e) {}
+    }
+
+    function renderRecent() {
+        if (!recentWrap || !recentList) return;
+        var here = '';
+        try { here = window.location.origin; } catch (e) {}
+        recentList.innerHTML = '';
+        var shown = 0;
+        loadRecent().forEach(function(s) {
+            if (!s || !s.url || s.url === here || s.url === 'null') return;
+            var btn = document.createElement('button');
+            btn.className = 'btn-secondary mode-btn';
+            var label = document.createElement('span');
+            label.className = 'mode-label';
+            label.textContent = s.name || s.url;
+            var desc = document.createElement('span');
+            desc.className = 'mode-desc';
+            desc.textContent = s.url;
+            btn.appendChild(label);
+            btn.appendChild(desc);
+            btn.addEventListener('click', function() {
+                window.location.href = s.url.replace(/\/+$/, '') + '/?mode=local';
+            });
+            recentList.appendChild(btn);
+            shown++;
+        });
+        recentWrap.classList.toggle('hidden', shown === 0);
+    }
+
+    function rememberThisServer() {
+        var origin = '';
+        try { origin = window.location.origin; } catch (e) {}
+        if (!origin || origin === 'null') { renderRecent(); return; }
+        fetch('/api/status').then(function(r) { return r.json(); }).then(function(st) {
+            var list = loadRecent().filter(function(s) { return s && s.url !== origin; });
+            list.unshift({name: (st && st.server_name) || origin, url: origin});
+            saveRecent(list);
+            renderRecent();
+        }).catch(function() { renderRecent(); });
+    }
+
     // ?mode=local (set by the Connect button when hopping to another
     // server) → skip mode selection, show the login form straight away.
     // Without this, Connect reloaded the mode screen forever.
@@ -97,6 +164,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (params && params.get('mode') === 'local') {
         showLoginForm();
     }
+    rememberThisServer();
 
     // Mode: Local Server — just show the login form
     modeLocalBtn.addEventListener('click', function() {

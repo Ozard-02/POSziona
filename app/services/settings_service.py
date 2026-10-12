@@ -36,6 +36,7 @@ GLOBAL_KEYS = frozenset({
     'printer_cols',
     'printer_cut',
     'auto_logout_minutes',
+    'server_name',
 })
 
 
@@ -63,6 +64,7 @@ DEFAULT_SETTINGS = {
     'snapshot_keep_count': 12,  # how many snapshots to retain
     'split_receipts': '0',  # 1 = print one receipt per section
     'print_recovery_receipt': '0',  # 1 = print/display the recovery receipt
+    'server_name': '',  # tag shown to connecting clients ('' = machine hostname)
 }
 
 

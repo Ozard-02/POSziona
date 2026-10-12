@@ -64,6 +64,7 @@ def update_settings():
             'auto_logout_minutes', 'snapshot_interval_minutes',
             'snapshot_keep_count',
             'split_receipts', 'print_recovery_receipt',
+            'server_name',
         ]:
             update_setting(db, key, str(value))
             broadcast('settings_update', {

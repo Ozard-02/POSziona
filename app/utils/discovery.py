@@ -63,6 +63,23 @@ def _default_route_ip():
     return None
 
 
+def get_server_name():
+    """Friendly tag this server announces to clients.
+
+    Admin → System → server name (device-global setting); falls back to
+    the machine hostname so old installs still announce something useful.
+    Never raises — beacons must not die on a locked DB.
+    """
+    try:
+        from app.services.settings_service import get_device_settings
+        name = (get_device_settings().get('server_name') or '').strip()
+        if name:
+            return name
+    except Exception:
+        pass
+    return socket.gethostname()
+
+
 def get_lan_ip():
     """Best-guess LAN IP to show other devices (loopback if offline).
 
@@ -99,10 +116,12 @@ def _broadcast_targets():
 
 
 def _beacon_payload(port):
+    from app.utils.config import APP_VERSION
     return json.dumps({
         'magic': MAGIC,
-        'name': socket.gethostname(),
+        'name': get_server_name(),
         'port': port,
+        'version': APP_VERSION,
     }).encode('utf-8')
 
 
@@ -172,6 +191,8 @@ def discover(timeout=LISTEN_WINDOW, port=DISCOVERY_PORT):
                 'host': host,
                 'port': srv_port,
                 'url': f'http://{host}:{srv_port}/',
+                # Absent on pre-0.1.4 servers — display tolerates None.
+                'version': msg.get('version'),
             }
     except OSError:
         pass  # port busy (another client discovering) → no suggestions

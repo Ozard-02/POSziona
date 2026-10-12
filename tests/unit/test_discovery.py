@@ -113,6 +113,25 @@ def test_beacon_loop_emits(monkeypatch):
     assert sent == [5000] * len(sent)
 
 
+def test_discover_menu_shows_tag_and_version(monkeypatch, capsys):
+    """Picker lists friendly tags (+version when the server sends one)."""
+    import builtins
+    import app.main as main_mod
+
+    servers = [
+        {'name': 'CASSA-1', 'host': '192.168.1.10', 'port': 5000,
+         'url': 'http://192.168.1.10:5000/', 'version': '0.1.4'},
+        {'name': 'oldbox', 'host': '192.168.1.11', 'port': 5000,
+         'url': 'http://192.168.1.11:5000/'},
+    ]
+    monkeypatch.setattr('app.utils.discovery.discover', lambda *a, **k: servers)
+    monkeypatch.setattr(builtins, 'input', lambda *a: '1')
+
+    assert main_mod._discover_or_ask_server() == 'http://192.168.1.10:5000/'
+    out = capsys.readouterr().out
+    assert 'CASSA-1' in out and '(v0.1.4)' in out and 'oldbox' in out
+
+
 def test_discover_menu_picks_server(monkeypatch, capsys):
     """Client offers found servers numbered; choice returns its URL."""
     import builtins
@@ -201,6 +220,61 @@ def test_manual_unreachable_reprompts_then_accepts(monkeypatch, capsys):
         'http://192.168.178.128:5000/'
     out = capsys.readouterr().out
     assert 'Cannot reach' in out
+
+
+def test_beacon_payload_has_tag_and_version():
+    """Beacon announces the server tag + release (client picker needs both)."""
+    import json
+    import app.utils.discovery as disc
+    from app.utils.config import APP_VERSION
+
+    payload = json.loads(disc._beacon_payload(5000).decode('utf-8'))
+    assert payload['magic'] == disc.MAGIC
+    assert payload['port'] == 5000
+    assert payload['version'] == APP_VERSION
+    assert payload['name']
+
+
+def test_server_name_defaults_to_hostname(monkeypatch):
+    """No tag configured → machine hostname (old installs keep working)."""
+    import socket
+    import app.utils.discovery as disc
+
+    monkeypatch.setattr('app.services.settings_service.get_device_settings',
+                        lambda: {})
+    assert disc.get_server_name() == socket.gethostname()
+
+
+def test_server_name_uses_device_setting(monkeypatch):
+    """Admin-set tag wins over hostname."""
+    import app.utils.discovery as disc
+
+    monkeypatch.setattr('app.services.settings_service.get_device_settings',
+                        lambda: {'server_name': '  CASSA-1 '})
+    assert disc.get_server_name() == 'CASSA-1'
+
+
+def test_discover_returns_version():
+    """discover() surfaces beacon version (None-tolerant for old servers)."""
+    import threading
+    import time
+    import app.utils.discovery as disc
+    from app.utils.config import APP_VERSION
+
+    port = 42201
+    results = []
+    listener = threading.Thread(
+        target=lambda: results.extend(disc.discover(timeout=3, port=port)),
+        daemon=True,
+    )
+    listener.start()
+    time.sleep(0.3)
+    disc.send_beacon(5000, dest=('127.0.0.1', port))
+    listener.join(timeout=10)
+
+    assert len(results) == 1
+    assert results[0]['version'] == APP_VERSION
+    assert results[0]['name']
 
 
 def test_server_reachable_loopback():

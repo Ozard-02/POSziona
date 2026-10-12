@@ -753,6 +753,20 @@ body {
     text-align: center;
 }
 
+.recent-servers {
+    margin-bottom: 20px;
+}
+
+.recent-servers p {
+    font-size: 14px;
+    color: #bdc3c7;
+    margin-bottom: 10px;
+}
+
+.recent-servers .mode-options {
+    margin-bottom: 0;
+}
+
 /* ===== Admin Panel ===== */
 .admin-layout {
     display: flex;

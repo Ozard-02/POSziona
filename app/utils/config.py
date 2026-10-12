@@ -31,6 +31,11 @@ HOST = '127.0.0.1'
 PORT = 5000
 DEBUG = False
 
+# Single source of truth for the release version (used by /api/status and
+# LAN beacons; the JS bundle and packaging files carry their own copies —
+# bump them together, see docs/connection.md).
+APP_VERSION = '0.1.4'
+
 # Interface the server binds to. 0.0.0.0 = reachable from other devices
 # on the same Wi-Fi/hotspot (the whole point of client mode + LAN
 # discovery). Local URLs/checks keep using HOST (loopback).
