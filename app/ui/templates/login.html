@@ -12,7 +12,7 @@
             <h2 id="startup-title">Posziona</h2>
             <p id="startup-subtitle">Select startup mode</p>
 
-            <div class="mode-options">
+            <div class="mode-options" id="mode-options">
                 <button id="mode-local" class="btn-primary mode-btn">
                     <span class="mode-label">This Server</span>
                     <span class="mode-desc">Log in on the server in the address bar</span>
@@ -50,6 +50,7 @@ document.addEventListener('DOMContentLoaded', function() {
     translateLoginPage();
 
     var startupScreen = document.getElementById('startup-screen');
+    var modeOptions = document.getElementById('mode-options');
     var loginFormContainer = document.getElementById('login-form-container');
     var remoteConnect = document.getElementById('remote-connect');
     var modeLocalBtn = document.getElementById('mode-local');
@@ -102,9 +103,11 @@ document.addEventListener('DOMContentLoaded', function() {
         showLoginForm();
     });
 
-    // Mode: Remote — show the server IP input
+    // Mode: Remote — hide only the mode buttons (NOT the whole
+    // startup screen: #remote-connect lives inside it, hiding the
+    // parent kept the input invisible forever) and show the IP input.
     modeRemoteBtn.addEventListener('click', function() {
-        startupScreen.classList.add('hidden');
+        modeOptions.classList.add('hidden');
         remoteConnect.classList.remove('hidden');
         serverInput.focus();
     });
@@ -112,7 +115,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Back from remote screen to mode selection
     backToModesBtn.addEventListener('click', function() {
         remoteConnect.classList.add('hidden');
-        startupScreen.classList.remove('hidden');
+        modeOptions.classList.remove('hidden');
     });
 
     // Connect to remote server

@@ -27,6 +27,20 @@ def test_connect_handler_skips_mode_screen(client):
     assert "target.origin + '/?mode=local'" in html
 
 
+def test_remote_panel_lives_outside_hidden_parent(client):
+    """'Connect to Remote' must reveal the IP input (2026-10-12: dead button).
+
+    The #remote-connect panel used to sit inside #startup-screen while its
+    handler hid that parent — the input stayed invisible forever.
+    """
+    html = client.get('/').get_data(as_text=True)
+    assert 'id="mode-options"' in html
+    assert "modeOptions.classList.add('hidden')" in html
+    assert "modeOptions.classList.remove('hidden')" in html
+    # Only showLoginForm may hide the whole startup screen.
+    assert html.count("startupScreen.classList.add('hidden')") == 1
+
+
 def test_inline_login_js_parses():
     """Syntax smoke for the inline <script> (node --check when available)."""
     import shutil
