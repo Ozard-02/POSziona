@@ -40,7 +40,7 @@ Target: verify on 2 real devices from the GitHub release assets.
 - [x] Version bump 0.1.3 → 0.1.4 (pyproject, api/status, app.js, test_api,
       AppImageBuilder.yml, build_exe.bat + `APP_VERSION` single source in config)
 - [x] Full suite green
-- [ ] Commit + `git tag -a v0.1.4` + push main + push tag (CI publishes
+- [x] Commit f722ba2 + `git tag -a v0.1.4` + push main + push tag (CI publishes
       `posziona` + `posziona.exe` on GitHub Releases)
 
 ## Files
