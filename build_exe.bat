@@ -20,7 +20,7 @@ REM defines a one-file EXE, so just run pyinstaller with the spec.
 
 setlocal
 set APP_NAME=posziona
-set VERSION=0.1.4
+set VERSION=0.1.5
 
 echo === Building Posziona .exe ===
 

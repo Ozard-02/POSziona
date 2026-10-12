@@ -11,7 +11,7 @@ def test_status_endpoint(client):
     assert resp.status_code == 200
     data = resp.get_json()
     assert data['status'] == 'ok'
-    assert data['version'] == '0.1.4'
+    assert data['version'] == '0.1.5'
     assert data['server_name']  # tag for the client picker (hostname fallback)
 
 
