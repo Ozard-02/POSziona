@@ -47,12 +47,37 @@ def _local_ipv4s():
     return ips
 
 
+def _default_route_ip():
+    """IP of the default-route interface (connect sends no packets)."""
+    try:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            probe.connect(('8.8.8.8', 80))
+            ip = probe.getsockname()[0]
+            if ip and not ip.startswith('127.'):
+                return ip
+        finally:
+            probe.close()
+    except OSError:
+        pass
+    return None
+
+
 def get_lan_ip():
-    """Best-guess LAN IP to show other devices (loopback if offline)."""
+    """Best-guess LAN IP to show other devices (loopback if offline).
+
+    Prefers the default-route interface: alphabetical fallback kept
+    picking docker/virtual bridges (e.g. 172.17.0.1) over the real Wi-Fi
+    address (seen live 2026-10-12: hint showed docker0, server was on
+    192.168.178.x).
+    """
+    primary = _default_route_ip()
+    if primary:
+        return primary
     ips = _local_ipv4s()
     if not ips:
         return '127.0.0.1'
-    # Prefer the default-route interface; deterministic otherwise.
+    # Deterministic otherwise.
     return sorted(ips, key=lambda ip: (ip.startswith('169.254.'), ip))[0]
 
 

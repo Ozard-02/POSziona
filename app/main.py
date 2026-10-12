@@ -258,11 +258,69 @@ def _print_lan_hint():
         print(f"Other devices on this network: http://{lan}:{PORT}/")
 
 
-def _normalize_server_url(user_input):
-    """Turn '192.168.1.10:5000' or a full URL into a normalized server URL."""
+def _normalize_server_url(user_input, default_port=None):
+    """Turn '192.168.1.10', '192.168.1.10:5000' or a full URL into a normalized server URL.
+
+    A bare IP/hostname gets the default POS port appended — without it
+    the client would hit port 80 and land on a dead page.
+    """
+    from urllib.parse import urlsplit, urlunsplit
+    if default_port is None:
+        default_port = PORT
+    user_input = user_input.strip()
     if not user_input.startswith('http://') and not user_input.startswith('https://'):
         user_input = f'http://{user_input}'
-    return user_input.rstrip('/') + '/'
+    parts = urlsplit(user_input)
+    host = parts.hostname or ''
+    if not host:
+        return user_input.rstrip('/') + '/'
+    try:
+        port = parts.port
+    except ValueError:
+        port = None  # garbage port text → keep as-is, probe will reject
+    if port is None and ':' not in (parts.netloc.rsplit('@', 1)[-1]):
+        netloc = f'{host}:{default_port}'
+        if parts.username:
+            auth = parts.username + (f':{parts.password}' if parts.password else '') + '@'
+            netloc = auth + netloc
+        parts = parts._replace(netloc=netloc)
+    return urlunsplit(parts).rstrip('/') + '/'
+
+
+def _server_reachable(server_url, timeout=3):
+    """TCP-probe the host:port of a server URL (no HTTP needed)."""
+    from urllib.parse import urlsplit
+    try:
+        parts = urlsplit(server_url)
+        host = parts.hostname
+        port = parts.port or PORT
+        if not host:
+            return False
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.settimeout(timeout)
+            return sock.connect_ex((host, port)) == 0
+        finally:
+            sock.close()
+    except Exception:
+        return False
+
+
+def _unreachable_hint(server_url):
+    """Concrete next steps when a server URL answers nothing."""
+    print(f"  Cannot reach {server_url}", flush=True)
+    print("  Check that:", flush=True)
+    print("  - the server is started (mode 'server' or 'all'),", flush=True)
+    print("  - both machines share the same Wi-Fi/LAN,", flush=True)
+    print(f"  - no firewall blocks TCP port {PORT} (nor UDP 42137 for auto-discovery).", flush=True)
+
+
+def _safe_input(prompt):
+    """input() that returns None on EOF/Ctrl-C instead of a traceback."""
+    try:
+        return input(prompt)
+    except (EOFError, KeyboardInterrupt):
+        return None
 
 
 def _discover_or_ask_server():
@@ -280,8 +338,15 @@ def _discover_or_ask_server():
         for i, srv in enumerate(found, 1):
             print(f"    {i}. {srv['name']} — {srv['url']}")
         print("    0. Enter address manually")
-        choice = input("  Select server [1-%d] (default 1): " % len(found)).strip()
-        if choice == '' or choice == '0':
+        raw = _safe_input("  Select server [1-%d] (default 1): " % len(found))
+        if raw is None:
+            print("  Aborted. Tip: pass the server directly with "
+                  "--server-url http://<ip>:5000/")
+            sys.exit(1)
+        choice = raw.strip()
+        if choice == '':
+            return found[0]['url']
+        if choice == '0':
             pass  # fall through to manual entry below
         elif choice.isdigit() and 1 <= int(choice) <= len(found):
             return found[int(choice) - 1]['url']
@@ -291,9 +356,21 @@ def _discover_or_ask_server():
         print("  No servers found on this network.")
     print("  To connect to a server on another machine, enter its address below.")
     print("  Leave blank to start a local server instead (hybrid mode).\n")
-    user_input = input("  Server IP/URL (e.g., 192.168.1.10:5000 or http://192.168.1.10:5000/): ").strip()
-    if user_input:
-        return _normalize_server_url(user_input)
+    while True:
+        raw = _safe_input(
+            "  Server IP/URL (e.g., 192.168.1.10 or 192.168.1.10:5000): ")
+        if raw is None:
+            print("  Aborted. Tip: pass the server directly with "
+                  "--server-url http://<ip>:5000/")
+            sys.exit(1)
+        user_input = raw.strip()
+        if not user_input:
+            break
+        server_url = _normalize_server_url(user_input)
+        if _server_reachable(server_url):
+            return server_url
+        _unreachable_hint(server_url)
+        print("  Try again, or leave blank for a local server.\n")
     print("  Starting a local server as fallback (hybrid mode).")
     server_thread = threading.Thread(target=start_server, daemon=True)
     server_thread.start()
@@ -314,6 +391,11 @@ def run_client_only(server_url=None):
             server_url = f'http://{HOST}:{PORT}/'
         else:
             server_url = _discover_or_ask_server()
+    else:
+        server_url = _normalize_server_url(server_url)
+        if not _server_reachable(server_url):
+            _unreachable_hint(server_url)
+            print("  Continuing anyway (explicit --server-url).", flush=True)
 
     print(f"Opening pywebview window (client-only mode)...")
     print(f"  Connecting to: {server_url}")

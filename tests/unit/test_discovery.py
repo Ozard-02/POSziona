@@ -66,6 +66,22 @@ def test_lan_ip_is_plain_ipv4():
     assert re.fullmatch(r'\d{1,3}(\.\d{1,3}){3}', ip), ip
 
 
+def test_lan_ip_prefers_default_route_over_docker(monkeypatch):
+    """Live bug 2026-10-12: hint showed 172.17.0.1 (docker0), not Wi-Fi."""
+    monkeypatch.setattr(discovery, '_default_route_ip',
+                        lambda: '192.168.178.171')
+    monkeypatch.setattr(discovery, '_local_ipv4s',
+                        lambda: {'172.17.0.1', '192.168.178.171'})
+    assert discovery.get_lan_ip() == '192.168.178.171'
+
+
+def test_lan_ip_falls_back_when_offline(monkeypatch):
+    """No route and no interfaces → loopback."""
+    monkeypatch.setattr(discovery, '_default_route_ip', lambda: None)
+    monkeypatch.setattr(discovery, '_local_ipv4s', lambda: set())
+    assert discovery.get_lan_ip() == '127.0.0.1'
+
+
 def test_broadcast_targets_cover_all_interfaces(monkeypatch):
     """Limited broadcast always; directed /24 per local interface."""
     monkeypatch.setattr(discovery, '_local_ipv4s',
@@ -123,5 +139,82 @@ def test_discover_fallback_to_manual(monkeypatch):
 
     monkeypatch.setattr('app.utils.discovery.discover', lambda *a, **k: [])
     monkeypatch.setattr(builtins, 'input', lambda *a: '192.168.1.99:5000')
+    monkeypatch.setattr(main_mod, '_server_reachable', lambda *a, **k: True)
 
     assert main_mod._discover_or_ask_server() == 'http://192.168.1.99:5000/'
+
+
+def test_normalize_bare_ip_gets_default_port():
+    """Bare IP/hostname → :5000 appended (was: port 80 dead page)."""
+    import app.main as main_mod
+
+    assert main_mod._normalize_server_url('192.168.178.128') == \
+        'http://192.168.178.128:5000/'
+    assert main_mod._normalize_server_url('http://192.168.178.128') == \
+        'http://192.168.178.128:5000/'
+    assert main_mod._normalize_server_url('cassa1') == \
+        'http://cassa1:5000/'
+
+
+def test_normalize_keeps_explicit_port_and_path():
+    """Explicit port/path untouched."""
+    import app.main as main_mod
+
+    assert main_mod._normalize_server_url('192.168.1.10:5000') == \
+        'http://192.168.1.10:5000/'
+    assert main_mod._normalize_server_url('http://192.168.1.10:5001/pos') == \
+        'http://192.168.1.10:5001/pos/'
+    assert main_mod._normalize_server_url('http://192.168.1.10:5000/') == \
+        'http://192.168.1.10:5000/'
+
+
+def test_discover_menu_empty_picks_first(monkeypatch):
+    """Enter on the menu selects server 1, as the prompt promises."""
+    import builtins
+    import app.main as main_mod
+
+    servers = [
+        {'name': 'cassa1', 'host': '192.168.1.10', 'port': 5000,
+         'url': 'http://192.168.1.10:5000/'},
+        {'name': 'cassa2', 'host': '192.168.1.11', 'port': 5000,
+         'url': 'http://192.168.1.11:5000/'},
+    ]
+    monkeypatch.setattr('app.utils.discovery.discover', lambda *a, **k: servers)
+    monkeypatch.setattr(builtins, 'input', lambda *a: '')
+
+    assert main_mod._discover_or_ask_server() == 'http://192.168.1.10:5000/'
+
+
+def test_manual_unreachable_reprompts_then_accepts(monkeypatch, capsys):
+    """Dead IP → hint + re-prompt; reachable IP → returned normalized."""
+    import builtins
+    import app.main as main_mod
+
+    monkeypatch.setattr('app.utils.discovery.discover', lambda *a, **k: [])
+    answers = iter(['192.168.178.128', '192.168.178.128:5000'])
+    monkeypatch.setattr(builtins, 'input', lambda *a: next(answers))
+    probes = iter([False, True])
+    monkeypatch.setattr(main_mod, '_server_reachable',
+                        lambda *a, **k: next(probes))
+
+    assert main_mod._discover_or_ask_server() == \
+        'http://192.168.178.128:5000/'
+    out = capsys.readouterr().out
+    assert 'Cannot reach' in out
+
+
+def test_server_reachable_loopback():
+    """Probe: open port reachable, closed port not (real sockets)."""
+    import socket
+    import app.main as main_mod
+
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(('127.0.0.1', 0))
+    srv.listen(1)
+    open_url = f'http://127.0.0.1:{srv.getsockname()[1]}/'
+    try:
+        assert main_mod._server_reachable(open_url) is True
+    finally:
+        srv.close()
+    assert main_mod._server_reachable('http://127.0.0.1:9/') is False
