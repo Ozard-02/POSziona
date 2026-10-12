@@ -702,6 +702,12 @@ body {
     margin-bottom: 25px;
 }
 
+.server-identity {
+    font-size: 13px;
+    color: #f1c40f;
+    margin-bottom: 15px;
+}
+
 .mode-options {
     display: flex;
     flex-direction: column;

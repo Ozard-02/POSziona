@@ -215,7 +215,10 @@ def select_mode():
     print()
 
     while True:
-        choice = input("Select mode [1-3] (default 1): ").strip()
+        raw = _safe_input("Select mode [1-3] (default 1): ")
+        if raw is None:
+            return 'all'
+        choice = raw.strip()
         if choice == '' or choice == '1':
             return 'all'
         elif choice == '2':
@@ -326,8 +329,9 @@ def _safe_input(prompt):
 def _discover_or_ask_server():
     """Find a server: LAN beacons first, manual entry as fallback.
 
-    Returns a server URL, or starts a local server (hybrid mode) when the
-    user enters nothing — preserving the previous behaviour.
+    Returns a server URL. Loops until the user gives a reachable address
+    (blank re-prompts — it must NOT start a silent local server, which
+    would split sales across two databases in multi-machine setups).
     """
     from app.utils.discovery import discover
     print(f"No server detected on {HOST}:{PORT}.")
@@ -355,8 +359,7 @@ def _discover_or_ask_server():
             print("  Invalid choice, enter the address manually.")
     else:
         print("  No servers found on this network.")
-    print("  To connect to a server on another machine, enter its address below.")
-    print("  Leave blank to start a local server instead (hybrid mode).\n")
+    print("  To connect to a server on another machine, enter its address below.\n")
     while True:
         raw = _safe_input(
             "  Server IP/URL (e.g., 192.168.1.10 or 192.168.1.10:5000): ")
@@ -366,19 +369,16 @@ def _discover_or_ask_server():
             sys.exit(1)
         user_input = raw.strip()
         if not user_input:
-            break
+            # No silent local server here: in a 2-machine setup that would
+            # fork sales into a second database (split-brain). 'all' mode
+            # starts a local server on purpose.
+            print("  Enter a server address (or Ctrl-C to quit).\n")
+            continue
         server_url = _normalize_server_url(user_input)
         if _server_reachable(server_url):
             return server_url
         _unreachable_hint(server_url)
-        print("  Try again, or leave blank for a local server.\n")
-    print("  Starting a local server as fallback (hybrid mode).")
-    server_thread = threading.Thread(target=start_server, daemon=True)
-    server_thread.start()
-    if not check_server_ready(HOST, PORT, timeout=10):
-        print("ERROR: Server failed to start in time")
-        sys.exit(1)
-    return f'http://{HOST}:{PORT}/'
+        print("  Try again.\n")
 
 
 def run_client_only(server_url=None):
@@ -390,6 +390,9 @@ def run_client_only(server_url=None):
     if server_url is None:
         if check_server_ready(HOST, PORT, timeout=3):
             server_url = f'http://{HOST}:{PORT}/'
+            print(f"  Using the server on this machine: {server_url}")
+            print("  (to pick another, restart with "
+                  "--server-url http://<ip>:5000/)")
         else:
             server_url = _discover_or_ask_server()
     else:
@@ -473,12 +476,16 @@ def main(mode=None, server_url=None):
 
     Args:
         mode: 'all' (server+client, default), 'server', or 'client'.
-               If None, defaults to 'all' (server + client).
+               If None: prompt on a terminal, 'all' otherwise.
         server_url: For 'client' mode only, the URL of the POS server.
                      If None, checks localhost; if not found, prompts for IP.
     """
     if mode is None:
-        mode = 'all'
+        try:
+            interactive = sys.stdin.isatty()
+        except Exception:
+            interactive = False
+        mode = select_mode() if interactive else 'all'
 
     print(f"Mode: {mode}")
     if mode == 'server':

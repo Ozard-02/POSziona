@@ -141,6 +141,7 @@ const translations = {
         connect: 'Connect',
         back: 'Back',
         recent_servers: 'Recent servers — tap to reconnect',
+        this_server: 'This server',
         server_name_label: 'Server name shown to connecting clients (empty = machine name):',
 
         // Auth
@@ -315,6 +316,7 @@ const translations = {
         connect: 'Connetti',
         back: 'Indietro',
         recent_servers: 'Server recenti — tocca per riconnetterti',
+        this_server: 'Questo server',
         server_name_label: 'Nome server mostrato ai client (vuoto = nome macchina):',
 
         // Auth

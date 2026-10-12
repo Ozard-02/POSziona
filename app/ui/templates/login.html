@@ -11,6 +11,7 @@
         <div class="startup-card">
             <h2 id="startup-title">Posziona</h2>
             <p id="startup-subtitle">Select startup mode</p>
+            <p id="server-identity" class="server-identity hidden"></p>
 
             <div id="recent-servers" class="recent-servers hidden">
                 <p id="recent-title">Recent servers — tap to reconnect</p>
@@ -146,9 +147,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!origin || origin === 'null') { renderRecent(); return; }
         fetch('/api/status').then(function(r) { return r.json(); }).then(function(st) {
             var list = loadRecent().filter(function(s) { return s && s.url !== origin; });
-            list.unshift({name: (st && st.server_name) || origin, url: origin});
+            var name = (st && st.server_name) || origin;
+            list.unshift({name: name, url: origin});
             saveRecent(list);
             renderRecent();
+            // Identity line: with 2 machines running, staff must see WHICH
+            // box this page comes from before logging in.
+            var ident = document.getElementById('server-identity');
+            if (ident) {
+                var ver = (st && st.version) ? ' (v' + st.version + ')' : '';
+                ident.textContent = t('this_server') + ': ' + name + ver;
+                ident.classList.remove('hidden');
+            }
         }).catch(function() { renderRecent(); });
     }
 

@@ -43,6 +43,19 @@ Target: verify on 2 real devices from the GitHub release assets.
 - [x] Commit f722ba2 + `git tag -a v0.1.4` + push main + push tag (CI publishes
       `posziona` + `posziona.exe` on GitHub Releases)
 
+## Rules for event day (read this with 2 machines)
+
+- **Exactly ONE server.** Only one box runs `--mode server` (or `all`).
+  Every other box runs `--mode client` (or a plain browser). Two servers =
+  two databases = sales split and unrecoverable without merging by hand.
+- The login screen tells you which box you are on
+  (`This server: CASSA-1 (v0.1.4)`). If both boxes show a server identity,
+  one of them must be stopped.
+- Blank answers never start a server implicitly: client mode loops until it
+  gets a reachable address. Start local servers explicitly (`all`).
+- Use ONE address per server consistently (browser sessions/cookies are
+  per-origin — the Recent buttons reuse the stored origin).
+
 ## Files
 
 - `app/utils/discovery.py` — beacon payload + discover
