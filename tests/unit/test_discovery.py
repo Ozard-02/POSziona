@@ -277,6 +277,45 @@ def test_discover_returns_version():
     assert results[0]['name']
 
 
+def test_normalize_rejects_garbage_without_raising():
+    """Arrow-key escapes / trailing junk → None, never a traceback."""
+    import app.main as main_mod
+
+    assert main_mod._normalize_server_url('') is None
+    assert main_mod._normalize_server_url('   ') is None
+    assert main_mod._normalize_server_url('\x1b[A') is None
+    assert main_mod._normalize_server_url('http://[::1') is None
+    # Trailing junk after a valid address is harmless (kept as path,
+    # the reachability probe rejects it with a re-prompt).
+    assert main_mod._normalize_server_url('192.168.1.10:5000/\x1b[A') == \
+        'http://192.168.1.10:5000/[A/'
+
+
+def test_manual_garbage_reprompts(monkeypatch, capsys):
+    """Garbage input re-asks with 'Not a valid address', then accepts."""
+    import builtins
+    import app.main as main_mod
+
+    monkeypatch.setattr('app.utils.discovery.discover', lambda *a, **k: [])
+    answers = iter(['\x1b[A', '192.168.1.5:5000'])
+    monkeypatch.setattr(builtins, 'input', lambda *a: next(answers))
+    monkeypatch.setattr(main_mod, '_server_reachable', lambda *a, **k: True)
+
+    assert main_mod._discover_or_ask_server() == 'http://192.168.1.5:5000/'
+    assert 'Not a valid address' in capsys.readouterr().out
+
+
+def test_explicit_garbage_server_url_exits(monkeypatch, capsys):
+    """--server-url garbage → exit 1 with example, not a traceback."""
+    import pytest
+    import app.main as main_mod
+
+    with pytest.raises(SystemExit) as exc_info:
+        main_mod.run_client_only(server_url='\x1b[A')
+    assert exc_info.value.code == 1
+    assert 'Example' in capsys.readouterr().out
+
+
 def test_server_reachable_loopback():
     """Probe: open port reachable, closed port not (real sockets)."""
     import socket

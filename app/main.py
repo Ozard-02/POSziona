@@ -272,14 +272,24 @@ def _normalize_server_url(user_input, default_port=None):
 
     A bare IP/hostname gets the default POS port appended — without it
     the client would hit port 80 and land on a dead page.
+
+    Returns None for empty/garbage input (arrow-key escapes, pasted
+    terminal noise, unparseable URLs) — the manual prompt re-asks instead
+    of dying with a traceback. Never raises.
     """
+    import re
     from urllib.parse import urlsplit, urlunsplit
     if default_port is None:
         default_port = PORT
-    user_input = user_input.strip()
-    if not user_input.startswith('http://') and not user_input.startswith('https://'):
-        user_input = f'http://{user_input}'
-    parts = urlsplit(user_input)
+    try:
+        user_input = re.sub(r'[\x00-\x20\x7f]+', '', (user_input or '').strip())
+        if not user_input:
+            return None
+        if not user_input.startswith('http://') and not user_input.startswith('https://'):
+            user_input = f'http://{user_input}'
+        parts = urlsplit(user_input)
+    except ValueError:
+        return None
     host = parts.hostname or ''
     if not host:
         return user_input.rstrip('/') + '/'
@@ -381,6 +391,9 @@ def _discover_or_ask_server():
             print("  Enter a server address (or Ctrl-C to quit).\n")
             continue
         server_url = _normalize_server_url(user_input)
+        if server_url is None:
+            print(f"  Not a valid address: {user_input!r} — try again.\n")
+            continue
         if _server_reachable(server_url):
             return server_url
         _unreachable_hint(server_url)
@@ -402,7 +415,12 @@ def run_client_only(server_url=None):
         else:
             server_url = _discover_or_ask_server()
     else:
-        server_url = _normalize_server_url(server_url)
+        normalized = _normalize_server_url(server_url)
+        if normalized is None:
+            print(f"  Invalid --server-url {server_url!r}.", flush=True)
+            print("  Example: --server-url http://192.168.178.171:5000/")
+            sys.exit(1)
+        server_url = normalized
         if not _server_reachable(server_url):
             _unreachable_hint(server_url)
             print("  Continuing anyway (explicit --server-url).", flush=True)

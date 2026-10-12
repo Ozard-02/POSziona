@@ -1,5 +1,5 @@
 /* Main app JavaScript */
-const APP_VERSION = '0.1.5';
+const APP_VERSION = '0.1.6';
 const API_BASE = '/api';
 
 // Global app state
