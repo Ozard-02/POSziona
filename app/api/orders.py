@@ -4,6 +4,7 @@ Handles checkout, order history, and order details.
 """
 
 from flask import Blueprint, request, jsonify, session, Response
+from app.api.guard import require_admin
 from app.services.order_service import (
     build_recap_csv,
     checkout_order,
@@ -162,12 +163,11 @@ def order_details(order_id):
 # ============================================================
 
 @orders_bp.route('/<int:order_id>', methods=['DELETE'])
+@require_admin
 def delete_order(order_id):
     """Delete or revoke an order (admin only).
     If the order has stock-counted products, stock is restored."""
     db = request.args.get('db', 'default')
-    if session.get('operator_role') != 'admin':
-        return jsonify({'error': 'Admin access required'}), 403
     try:
         result = delete_order_by_id(db, order_id)
         if result:

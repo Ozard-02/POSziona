@@ -4,6 +4,7 @@ Handles operator login (PIN-based) and admin access.
 """
 
 from flask import Blueprint, request, jsonify, session
+from app.api.guard import require_admin
 from app.services.auth_service import (
     authenticate_operator,
     authenticate_admin,
@@ -164,23 +165,21 @@ def get_auth_status():
 # ============================================================
 
 @auth_bp.route('/operators', methods=['GET'])
+@require_admin
 def list_operators():
     """List all operators (admin only)."""
     db = request.args.get('db', 'default')
 
-    if session.get('operator_role') != 'admin':
-        return jsonify({'error': 'Admin access required'}), 403
 
     return jsonify(get_all_operators(db))
 
 
 @auth_bp.route('/operators', methods=['POST'])
+@require_admin
 def create_operator():
     """Create a new operator (admin only)."""
     db = request.args.get('db', 'default')
 
-    if session.get('operator_role') != 'admin':
-        return jsonify({'error': 'Admin access required'}), 403
 
     data = request.get_json()
     name = data.get('name', '').strip()
@@ -199,12 +198,11 @@ def create_operator():
 
 
 @auth_bp.route('/operators/<int:operator_id>/reset-pin', methods=['POST'])
+@require_admin
 def reset_pin(operator_id):
     """Reset an operator's PIN (admin only)."""
     db = request.args.get('db', 'default')
 
-    if session.get('operator_role') != 'admin':
-        return jsonify({'error': 'Admin access required'}), 403
 
     data = request.get_json()
     new_pin = data.get('pin', '').strip()

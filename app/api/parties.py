@@ -3,6 +3,7 @@ Party management API endpoints.
 """
 
 from flask import Blueprint, request, jsonify, Response, session
+from app.api.guard import require_admin
 from app.services.order_service import build_recap_csv
 from app.services.party_service import (
     create_party_from_template,
@@ -256,10 +257,9 @@ def get_backups():
 
 
 @parties_bp.route('/backups', methods=['POST'])
+@require_admin
 def take_backup():
     """Trigger a snapshot backup right now (admin only)."""
-    if session.get('operator_role') != 'admin':
-        return jsonify({'error': 'Admin access required'}), 403
     try:
         name = run_snapshots()
         return jsonify({'message': 'Snapshot created', 'snapshot': name}), 201
@@ -271,6 +271,7 @@ def take_backup():
 
 
 @parties_bp.route('/<db_name>/restore', methods=['POST'])
+@require_admin
 def restore_party(db_name):
     """Restore a party database from a snapshot (admin only).
 
@@ -278,8 +279,6 @@ def restore_party(db_name):
     sales recorded after the snapshot are lost — this is the escape
     hatch for corruption/disaster, not routine use.
     """
-    if session.get('operator_role') != 'admin':
-        return jsonify({'error': 'Admin access required'}), 403
     data = request.get_json() or {}
     snapshot = data.get('snapshot', '').strip()
     if not snapshot:

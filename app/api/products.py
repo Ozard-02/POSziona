@@ -33,6 +33,7 @@ from app.services.product_service import (
 )
 from app.utils.events import broadcast
 from app.utils.logger import get_logger
+from app.api.guard import require_admin
 
 logger = get_logger('api.products')
 
@@ -52,6 +53,7 @@ def list_sections():
 
 
 @products_bp.route('/sections', methods=['POST'])
+@require_admin
 def add_section():
     """Create a new section."""
     db = request.args.get('db', 'default')
@@ -65,6 +67,7 @@ def add_section():
 
 
 @products_bp.route('/sections/reorder', methods=['POST'])
+@require_admin
 def reorder_sections_route():
     """Reorder sections by setting sort_order based on provided order."""
     db = request.args.get('db', 'default')
@@ -77,6 +80,7 @@ def reorder_sections_route():
 
 
 @products_bp.route('/subsections', methods=['POST'])
+@require_admin
 def add_subsection():
     """Create a new subsection under a section."""
     db = request.args.get('db', 'default')
@@ -146,6 +150,7 @@ def search_products_route():
 
 
 @products_bp.route('/products/bulk', methods=['POST'])
+@require_admin
 def bulk_update_products_route():
     """Bulk update multiple products (admin only).
 
@@ -156,8 +161,6 @@ def bulk_update_products_route():
                  tags (list of tag IDs).
     """
     db = request.args.get('db', 'default')
-    if not _is_admin():
-        return jsonify({'error': 'Admin access required'}), 403
 
     data = request.get_json()
     product_ids = data.get('product_ids', [])
@@ -186,11 +189,10 @@ def bulk_update_products_route():
 
 
 @products_bp.route('/products/<int:product_id>/status', methods=['PUT'])
+@require_admin
 def update_product_status_route(product_id):
     """Toggle active/archived status for a single product (admin only)."""
     db = request.args.get('db', 'default')
-    if not _is_admin():
-        return jsonify({'error': 'Admin access required'}), 403
 
     data = request.get_json()
     is_active = data.get('is_active')
@@ -232,6 +234,7 @@ def get_product(product_id):
 
 
 @products_bp.route('/products', methods=['POST'])
+@require_admin
 def add_product():
     """Create a new product."""
     db = request.args.get('db', 'default')
@@ -274,6 +277,7 @@ def add_product():
 
 
 @products_bp.route('/products/<int:product_id>', methods=['PUT'])
+@require_admin
 def edit_product(product_id):
     """Update a product."""
     db = request.args.get('db', 'default')
@@ -307,6 +311,7 @@ def edit_product(product_id):
 
 
 @products_bp.route('/products/<int:product_id>', methods=['DELETE'])
+@require_admin
 def remove_product(product_id):
     """Delete or archive a product."""
     db = request.args.get('db', 'default')
@@ -342,11 +347,10 @@ def list_tags():
 
 
 @products_bp.route('/tags', methods=['POST'])
+@require_admin
 def add_tag():
     """Create a new tag (admin only)."""
     db = request.args.get('db', 'default')
-    if not _is_admin():
-        return jsonify({'error': 'Admin access required'}), 403
     data = request.get_json()
     name = data.get('name', '').strip()
     if not name:
@@ -372,11 +376,10 @@ def get_tag(tag_id):
 
 
 @products_bp.route('/tags/<int:tag_id>', methods=['PUT'])
+@require_admin
 def edit_tag(tag_id):
     """Update a tag including its styling rules (admin only)."""
     db = request.args.get('db', 'default')
-    if not _is_admin():
-        return jsonify({'error': 'Admin access required'}), 403
     data = request.get_json()
     try:
         update_tag(
@@ -393,11 +396,10 @@ def edit_tag(tag_id):
 
 
 @products_bp.route('/tags/<int:tag_id>', methods=['DELETE'])
+@require_admin
 def remove_tag(tag_id):
     """Delete a tag (admin only)."""
     db = request.args.get('db', 'default')
-    if not _is_admin():
-        return jsonify({'error': 'Admin access required'}), 403
     delete_tag(db, tag_id)
     return jsonify({'message': 'Tag deleted'})
 
@@ -410,11 +412,10 @@ def get_product_tag_list(product_id):
 
 
 @products_bp.route('/<int:product_id>/tags', methods=['POST'])
+@require_admin
 def assign_product_tag(product_id):
     """Assign a tag to a product (admin only)."""
     db = request.args.get('db', 'default')
-    if not _is_admin():
-        return jsonify({'error': 'Admin access required'}), 403
     data = request.get_json()
     tag_id = data.get('tag_id')
     if tag_id is None:
@@ -424,21 +425,19 @@ def assign_product_tag(product_id):
 
 
 @products_bp.route('/<int:product_id>/tags/<int:tag_id>', methods=['DELETE'])
+@require_admin
 def unassign_product_tag(product_id, tag_id):
     """Remove a tag from a product (admin only)."""
     db = request.args.get('db', 'default')
-    if not _is_admin():
-        return jsonify({'error': 'Admin access required'}), 403
     remove_tag_from_product(db, product_id, tag_id)
     return jsonify({'message': 'Tag removed from product'})
 
 
 @products_bp.route('/<int:product_id>/tags', methods=['PUT'])
+@require_admin
 def set_product_tag_list(product_id):
     """Replace all tags on a product (admin only)."""
     db = request.args.get('db', 'default')
-    if not _is_admin():
-        return jsonify({'error': 'Admin access required'}), 403
     data = request.get_json()
     tag_ids = data.get('tags', [])
     set_product_tags(db, product_id, [int(t) for t in tag_ids])
@@ -458,17 +457,12 @@ def _parse_price(value):
     return price
 
 
-def _is_admin():
-    """Check if the current session user is an admin."""
-    from flask import session
-    return session.get('operator_role') == 'admin'
-
-
 # ============================================================
 # CSV IMPORT / EXPORT
 # ============================================================
 
 @products_bp.route('/import-csv', methods=['POST'])
+@require_admin
 def import_csv_file():
     """Import products from a CSV file upload or JSON rows."""
     db = request.args.get('db', 'default')
