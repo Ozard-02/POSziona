@@ -83,7 +83,7 @@ function switchActiveParty(newDb, oldDb) {
         });
 }
 
-function showError(message) {
+function showToast(message, kind) {
     // Non-blocking toast: alert() froze the whole kiosk UI until clicked,
     // hiding the sale behind a modal during busy service. Toasts stack
     // (max 5), auto-dismiss after 5s, and click-to-dismiss.
@@ -94,7 +94,7 @@ function showError(message) {
         document.body.appendChild(container);
     }
     const toast = document.createElement('div');
-    toast.className = 'toast toast-error';
+    toast.className = 'toast toast-' + kind;
     toast.textContent = message;
     toast.addEventListener('click', () => toast.remove());
     container.appendChild(toast);
@@ -105,6 +105,14 @@ function showError(message) {
         toast.classList.add('toast-hide');
         setTimeout(() => toast.remove(), 300);
     }, 5000);
+}
+
+function showError(message) {
+    showToast(message, 'error');
+}
+
+function showSuccess(message) {
+    showToast(message, 'success');
 }
 
 function showBanner(message) {

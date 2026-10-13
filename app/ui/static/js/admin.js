@@ -117,7 +117,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         } catch (e) {
-            alert('Failed to export recap: ' + (e.message || e));
+            showError('Failed to export recap: ' + (e.message || e));
         }
     }
 
@@ -157,7 +157,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!newPriceStr) return;
         const newPrice = parseFloat(newPriceStr);
         if (isNaN(newPrice) || newPrice < 0) {
-            alert('Please enter a valid price');
+            showError('Please enter a valid price');
             return;
         }
         try {
@@ -167,7 +167,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             currentPriceCell.textContent = formatCurrency(newPrice);
         } catch (e) {
-            alert('Failed to update price: ' + (e.message || e));
+            showError('Failed to update price: ' + (e.message || e));
         }
     }
 
@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', function() {
             availCell.textContent = available ? 'Yes' : 'No';
             availCell.className = available ? 'status-active' : 'status-inactive';
         } catch (e) {
-            alert('Failed to update availability: ' + (e.message || e));
+            showError('Failed to update availability: ' + (e.message || e));
         }
     }
     
@@ -350,7 +350,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 isActive: document.getElementById('edit-product-active').checked ? 1 : 0
             };
             if (!formData.name || isNaN(formData.price)) {
-                alert('Name and price are required');
+                showError('Name and price are required');
                 return false;
             }
         };
@@ -375,7 +375,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             loadProducts();
         } catch (e) {
-            alert('Failed to update product: ' + (e.message || e));
+            showError('Failed to update product: ' + (e.message || e));
         }
     }
 
@@ -385,7 +385,7 @@ document.addEventListener('DOMContentLoaded', function() {
             await fetchJSON(`${API_BASE}/products/products/${productId}?db=${db}`, { method: 'DELETE' });
             loadProducts();
         } catch(e) {
-            alert('Failed to delete product: ' + (e.message || e));
+            showError('Failed to delete product: ' + (e.message || e));
         }
     }
 
@@ -487,7 +487,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Parse CSV into JSON rows (handles quoted fields with embedded commas/newlines)
         const result = parseCsv(csvText);
         if (result.lines.length < 2) {
-            alert('CSV must have a header row and at least one data row');
+            showError('CSV must have a header row and at least one data row');
             return;
         }
 
@@ -496,7 +496,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const requiredCols = ['section', 'name', 'price'];
         const missingCols = requiredCols.filter(c => !headers.includes(c));
         if (missingCols.length > 0) {
-            alert('CSV is missing required columns: ' + missingCols.join(', ') +
+            showError('CSV is missing required columns: ' + missingCols.join(', ') +
                   '\n\nExpected columns: section, subsection, name, price, sku (optional), stock_count (optional), tags (optional)');
             return;
         }
@@ -546,7 +546,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (rows.length === 0) {
-            alert('No valid data rows found after validation');
+            showError('No valid data rows found after validation');
             return;
         }
 
@@ -555,10 +555,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 method: 'POST',
                 body: JSON.stringify({ rows: rows })
             });
-            alert(result.message);
+            showSuccess(result.message);
             loadProducts();
         } catch(e) {
-            alert('Import failed: ' + (e.message || e));
+            showError('Import failed: ' + (e.message || e));
         }
     }
 
@@ -589,7 +589,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 csvText = document.getElementById('csv-input').value.trim();
             }
             if (!csvText) {
-                alert('Please select a CSV file or paste CSV content');
+                showError('Please select a CSV file or paste CSV content');
                 return false; // Don't close the dialog
             }
         };
@@ -629,7 +629,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 URL.revokeObjectURL(dataUrl);
             }, 5000);
         } catch(e) {
-            alert('Export failed: ' + (e.message || e));
+            showError('Export failed: ' + (e.message || e));
         }
     }
 
@@ -687,7 +687,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (sectionDupBtn) {
                 sectionDupBtn.onclick = () => {
                     if (!selectedParty) {
-                        alert('Please select a party to duplicate first.');
+                        showError('Please select a party to duplicate first.');
                         return;
                     }
                     duplicateParty(selectedParty);
@@ -747,7 +747,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 endDate: document.getElementById('dup-party-end-date').value
             };
             if (!formData.name) {
-                alert('Party name is required');
+                showError('Party name is required');
                 return false;
             }
         };
@@ -766,13 +766,13 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             loadParties();
         } catch (e) {
-            alert('Failed to duplicate party: ' + (e.message || e));
+            showError('Failed to duplicate party: ' + (e.message || e));
         }
     }
 
     async function exportPartyRecapCsv(partyName) {
         if (!partyName) {
-            alert('Please select a party to export first.');
+            showError('Please select a party to export first.');
             return;
         }
         try {
@@ -793,7 +793,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         } catch (e) {
-            alert('Failed to export recap: ' + (e.message || e));
+            showError('Failed to export recap: ' + (e.message || e));
         }
     }
     
@@ -803,7 +803,7 @@ document.addEventListener('DOMContentLoaded', function() {
             await fetch(`${API_BASE}/parties/${partyName}?db=${db}`, { method: 'DELETE' });
             loadParties();
         } catch (e) {
-            alert('Failed to delete party');
+            showError('Failed to delete party');
         }
     }
     
@@ -834,7 +834,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function resetOperatorPin(operatorId) {
         const newPin = prompt('Enter new 4-digit PIN:');
         if (!newPin || !/^\d{4}$/.test(newPin)) {
-            alert('PIN must be 4 digits');
+            showError('PIN must be 4 digits');
             return;
         }
         
@@ -845,7 +845,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             loadOperators();
         } catch (e) {
-            alert('Failed to reset PIN');
+            showError('Failed to reset PIN');
         }
     }
     
@@ -1091,7 +1091,7 @@ document.addEventListener('DOMContentLoaded', function() {
             };
             
             if (!formData.name || isNaN(formData.price)) {
-                alert('Name and price are required');
+                showError('Name and price are required');
                 return false; // Don't close the dialog
             }
         };
@@ -1143,7 +1143,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Create new section if requested
             if (formData.sectionId === '__new_section__') {
                 if (!formData.newSectionName) {
-                    alert('New section name is required');
+                    showError('New section name is required');
                     return;
                 }
                 await fetchJSON(`${API_BASE}/products/sections?db=${db}`, {
@@ -1153,7 +1153,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const updatedSections = await fetchJSON(`${API_BASE}/products/?db=${db}`);
                 const newSection = updatedSections.find(s => s.name === formData.newSectionName);
                 if (!newSection) {
-                    alert('Failed to create section');
+                    showError('Failed to create section');
                     return;
                 }
                 sectionId = newSection.id;
@@ -1162,12 +1162,12 @@ document.addEventListener('DOMContentLoaded', function() {
             // Create new subsection if requested
             if (formData.subsectionId === '__new_subsection__') {
                 if (!formData.newSubsectionName) {
-                    alert('New subsection name is required');
+                    showError('New subsection name is required');
                     return;
                 }
                 const sid = parseInt(sectionId);
                 if (!sid) {
-                    alert('Section must be selected before creating a subsection');
+                    showError('Section must be selected before creating a subsection');
                     return;
                 }
                 await fetchJSON(`${API_BASE}/products/subsections?db=${db}`, {
@@ -1178,14 +1178,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 const matchingSection = updatedSections.find(s => s.id == sid);
                 const newSub = matchingSection ? matchingSection.subsections.find(s => s.name === formData.newSubsectionName) : null;
                 if (!newSub) {
-                    alert('Failed to create subsection');
+                    showError('Failed to create subsection');
                     return;
                 }
                 subsectionId = newSub.id;
             }
 
             if (!sectionId || !subsectionId || formData.sectionId === '' || formData.subsectionId === '') {
-                alert('Section and subsection are required');
+                showError('Section and subsection are required');
                 return;
             }
 
@@ -1202,7 +1202,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             loadProducts();
         } catch(e) {
-            alert('Failed to create product: ' + (e.message || e));
+            showError('Failed to create product: ' + (e.message || e));
         }
     }
 
@@ -1272,7 +1272,7 @@ document.addEventListener('DOMContentLoaded', function() {
             };
 
             if (!formData.name) {
-                alert('Party name is required');
+                showError('Party name is required');
                 return false; // Don't close the dialog
             }
         };
@@ -1303,7 +1303,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             loadParties();
         } catch(e) {
-            alert('Failed to create party: ' + (e.message || e));
+            showError('Failed to create party: ' + (e.message || e));
         }
     });
 
@@ -1327,7 +1327,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({ name, pin, role: 'operator' })
             }).then(() => loadOperators());
         } else {
-            alert('Invalid name or PIN');
+            showError('Invalid name or PIN');
         }
     });
     
@@ -1355,22 +1355,22 @@ document.addEventListener('DOMContentLoaded', function() {
             method: 'POST',
             body: JSON.stringify(settings)
         }).then(() => {
-            alert('Settings saved');
+            showSuccess(t('settings_saved'));
             // Go back to dashboard after saving
             sections.forEach(s => s.classList.remove('active'));
             document.getElementById('admin-dashboard').classList.add('active');
             navLinks.forEach(l => l.classList.remove('active'));
         }).catch(err => {
-            alert('Failed to save settings: ' + err);
+            showError('Failed to save settings: ' + err);
         });
     });
 
     document.getElementById('test-print-btn').addEventListener('click', async function() {
         try {
             const r = await fetchJSON(`${API_BASE}/printer/test?db=${db}`, {method: 'POST'});
-            alert(t('test_print_ok') + ' (' + r.device + ')');
+            showSuccess(t('test_print_ok') + ' (' + r.device + ')');
         } catch (err) {
-            alert(t('printer_failed') + ': ' + (err.message || err));
+            showError(t('printer_failed') + ': ' + (err.message || err));
         }
     });
 
@@ -1379,7 +1379,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const baudSelect = document.querySelector('#settings-form [name="printer_baud"]');
         const path = (pathInput && pathInput.value.trim()) || '';
         if (!path) {
-            alert(t('printer_path_first'));
+            showError(t('printer_path_first'));
             return;
         }
         this.disabled = true;
@@ -1396,9 +1396,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 baudSelect.appendChild(opt);
             }
             baudSelect.value = String(r.baud);
-            alert(t('detect_baud_ok') + ': ' + r.baud);
+            showSuccess(t('detect_baud_ok') + ': ' + r.baud);
         } catch (err) {
-            alert(t('printer_failed') + ': ' + (err.message || err));
+            showError(t('printer_failed') + ': ' + (err.message || err));
         } finally {
             this.disabled = false;
         }
@@ -1412,7 +1412,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const textColor = document.getElementById('new-tag-text-color').value;
 
         if (!name) {
-            alert('Tag name is required');
+            showError('Tag name is required');
             return;
         }
 
@@ -1434,7 +1434,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Refresh tag list
             loadTags();
         } catch(e) {
-            alert('Failed to create tag: ' + (e.message || e));
+            showError('Failed to create tag: ' + (e.message || e));
         }
     });
 
@@ -1443,7 +1443,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const tagId = document.getElementById('tag-select').value;
 
         if (!productId || !tagId) {
-            alert('Select a product and a tag');
+            showError('Select a product and a tag');
             return;
         }
 
@@ -1454,7 +1454,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             loadProductTags(productId);
         } catch(e) {
-            alert('Failed to assign tag: ' + e);
+            showError('Failed to assign tag: ' + e);
         }
     });
 
@@ -1569,7 +1569,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Bulk Edit Attributes button
     document.getElementById('bulk-edit-btn').addEventListener('click', async function() {
         if (selectedProductIds.length === 0) {
-            alert('No products selected');
+            showError('No products selected');
             return;
         }
         const updates = await showBulkEditDialog();
@@ -1583,10 +1583,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     updates: updates
                 })
             });
-            alert(result.message);
+            showSuccess(result.message);
             loadProducts();
         } catch (e) {
-            alert('Bulk update failed: ' + (e.message || e));
+            showError('Bulk update failed: ' + (e.message || e));
         }
     });
 
@@ -1604,7 +1604,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             loadProducts();
         } catch (e) {
-            alert('Failed to update: ' + (e.message || e));
+            showError('Failed to update: ' + (e.message || e));
         }
     });
 
@@ -1621,7 +1621,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             loadProducts();
         } catch (e) {
-            alert('Failed to update: ' + (e.message || e));
+            showError('Failed to update: ' + (e.message || e));
         }
     });
 
@@ -1636,12 +1636,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     method: 'DELETE'
                 });
             }
-            alert(`Deleted ${selectedProductIds.length} product(s)`);
+            showSuccess(`Deleted ${selectedProductIds.length} product(s)`);
             selectedProductIds = [];
             document.getElementById('bulk-edit-bar').style.display = 'none';
             loadProducts();
         } catch(e) {
-            alert('Failed to delete products: ' + (e.message || e));
+            showError('Failed to delete products: ' + (e.message || e));
         }
     });
 
@@ -1733,7 +1733,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // === Assign Tags to Selected Products ===
     document.getElementById('bulk-assign-tags-btn').addEventListener('click', async function() {
         if (selectedProductIds.length === 0) {
-            alert('No products selected');
+            showError('No products selected');
             return;
         }
 
@@ -1755,7 +1755,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const selectedTagOpts = document.getElementById('bulk-assign-tags-select').selectedOptions;
             selectedTagIds = Array.from(selectedTagOpts).map(opt => parseInt(opt.value));
             if (selectedTagIds.length === 0) {
-                alert('Please select at least one tag');
+                showError('Please select at least one tag');
                 return false; // Don't close the dialog
             }
         };
@@ -1771,10 +1771,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     updates: { tags: selectedTagIds }
                 })
             });
-            alert(`Assigned ${selectedTagIds.length} tag(s) to ${selectedProductIds.length} product(s)`);
+            showSuccess(`Assigned ${selectedTagIds.length} tag(s) to ${selectedProductIds.length} product(s)`);
             loadProducts();
         } catch (e) {
-            alert('Failed to assign tags: ' + (e.message || e));
+            showError('Failed to assign tags: ' + (e.message || e));
         }
     });
 

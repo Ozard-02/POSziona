@@ -1391,6 +1391,11 @@ body {
     color: #fff;
 }
 
+.toast-success {
+    background: #27794a;
+    color: #fff;
+}
+
 /* Inline form errors (login / remote-connect): red text, no popup. */
 .error {
     color: #c0392b;

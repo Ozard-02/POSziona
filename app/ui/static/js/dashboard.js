@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', function() {
             renderReport(currentReportData);
         } catch (e) {
             console.error('Report generation failed:', e);
-            alert(t('report_failed') + ': ' + (e.message || e));
+            showError(t('report_failed') + ': ' + (e.message || e));
         }
     }
 
