@@ -29,9 +29,21 @@ def _no_gui(monkeypatch):
     monkeypatch.setattr(main_mod.webview, 'start', boom)
 
 
-def test_all_mode_falls_back_to_server(monkeypatch, capsys):
-    """'all' without GUI libs keeps serving instead of tracebacks."""
+import pytest
+
+
+@pytest.mark.parametrize('no_browser,expected_opened', [
+    (False, 'open'),
+    (True, 'skip'),
+])
+def test_all_mode_fallback(monkeypatch, capsys, no_browser, expected_opened):
+    """'all' without GUI keeps serving; browser auto-opens unless opted out."""
     _no_gui(monkeypatch)
+    if no_browser:
+        monkeypatch.setenv('POSZIONA_NO_BROWSER', '1')
+    opened = []
+    monkeypatch.setattr('webbrowser.open',
+                        lambda url, new=0: opened.append(url) or True)
 
     def stop_at_once(timeout=None):
         raise KeyboardInterrupt
@@ -42,18 +54,25 @@ def test_all_mode_falls_back_to_server(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert 'browser' in out
     assert f"{main_mod.HOST}:{main_mod.PORT}" in out
+    if expected_opened == 'open':
+        assert opened == [f'http://{main_mod.HOST}:{main_mod.PORT}/']
+    else:
+        assert opened == []
 
 
-def test_client_mode_clean_error(monkeypatch, capsys):
-    """'client' without GUI libs exits(1) with a hint, no traceback."""
+def test_client_mode_no_gui(monkeypatch, capsys):
+    """'client' without GUI: courtesy browser open, then exit(1) with a hint."""
     _no_gui(monkeypatch)
+    opened = []
+    monkeypatch.setattr('webbrowser.open',
+                        lambda url, new=0: opened.append(url) or True)
 
     with pytest.raises(SystemExit) as exc_info:
         main_mod.run_client_only(server_url='http://127.0.0.1:5000/')
 
     assert exc_info.value.code == 1
-    out = capsys.readouterr().out
-    assert 'browser' in out
+    assert opened == ['http://127.0.0.1:5000/']
+    assert 'browser' in capsys.readouterr().out
 
 
 def test_gui_missing_message_has_source_recipe(monkeypatch, capsys):
@@ -113,52 +132,6 @@ def test_shutdown_flag_stops_server_loop(monkeypatch, capsys):
     main_mod._serve_forever()  # must return immediately, not hang
     assert 'Shutting down' in capsys.readouterr().out
     main_mod._shutdown_requested.clear()
-
-
-def test_all_mode_auto_opens_browser(monkeypatch):
-    """Fallback launches the system browser at the server URL."""
-    _no_gui(monkeypatch)
-    opened = []
-    monkeypatch.setattr('webbrowser.open',
-                        lambda url, new=0: opened.append(url) or True)
-
-    def stop_at_once(timeout=None):
-        raise KeyboardInterrupt
-    monkeypatch.setattr(main_mod._shutdown_requested, 'wait', stop_at_once)
-
-    main_mod.run_server_and_client()
-    assert opened == [f'http://{main_mod.HOST}:{main_mod.PORT}/']
-
-
-def test_browser_opt_out(monkeypatch):
-    """POSZIONA_NO_BROWSER=1 → message printed, no browser launched."""
-    _no_gui(monkeypatch)
-    monkeypatch.setenv('POSZIONA_NO_BROWSER', '1')
-    opened = []
-    monkeypatch.setattr('webbrowser.open',
-                        lambda url, new=0: opened.append(url) or True)
-
-    def stop_at_once(timeout=None):
-        raise KeyboardInterrupt
-    monkeypatch.setattr(main_mod._shutdown_requested, 'wait', stop_at_once)
-
-    main_mod.run_server_and_client()
-    assert opened == []
-
-
-def test_client_mode_opens_browser_then_exits(monkeypatch, capsys):
-    """Client mode without GUI: browser courtesy open, then exit 1."""
-    _no_gui(monkeypatch)
-    opened = []
-    monkeypatch.setattr('webbrowser.open',
-                        lambda url, new=0: opened.append(url) or True)
-
-    with pytest.raises(SystemExit) as exc_info:
-        main_mod.run_client_only(server_url='http://127.0.0.1:5000/')
-
-    assert exc_info.value.code == 1
-    assert opened == ['http://127.0.0.1:5000/']
-    assert 'browser' in capsys.readouterr().out
 
 
 def test_gui_install_hint_per_distro(tmp_path):

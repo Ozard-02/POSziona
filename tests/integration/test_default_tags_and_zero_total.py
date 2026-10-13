@@ -1,109 +1,55 @@
 """
 Tests for default tag seeding and 0.00 total checkout edge cases.
 """
-import pytest
 import os
-import sqlite3
 
-from app.database.connection import PartyDatabase, _get_party_db_path, PARTY_DB_DIR
+import pytest
+
+from app.database.connection import _get_party_db_path
 
 
-def test_default_tags_seeded_on_new_db(client):
-    """Test that a new party DB gets default tags seeded via auto-creation."""
+def _drop(db_name):
+    db_path = _get_party_db_path(db_name)
+    for ext in ('', '-wal', '-shm', '-journal'):
+        p = db_path + ext
+        if os.path.exists(p):
+            os.remove(p)
+
+
+def test_default_tags_seeded_and_assigned(client):
+    """Fresh DBs get default tags, assigned to the default products."""
     db_name = 'tags_test_party'
+    try:
+        # Login as admin (triggers DB auto-creation with seed products + tags)
+        client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
 
-    # Login as admin (this triggers _ensure_party_db_exists which seeds default products + tags)
-    client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
+        resp = client.get(f'/api/products/tags?db={db_name}')
+        assert resp.status_code == 200
+        tag_names = [t['name'] for t in resp.get_json()]
+        assert 'Hot' in tag_names
+        assert 'Popular' in tag_names
 
-    # Trigger product loading which uses PartyDatabase (DB auto-created here)
-    resp = client.get(f'/api/products/?db={db_name}')
-    assert resp.status_code == 200
-
-    # Now check tags
-    resp = client.get(f'/api/products/tags?db={db_name}')
-    tags = resp.get_json()
-    tag_names = [t['name'] for t in tags]
-    assert 'Hot' in tag_names
-    assert 'Popular' in tag_names
-
-    # Cleanup
-    db_path = _get_party_db_path(db_name)
-    for ext in ['', '-wal', '-shm']:
-        p = db_path + ext
-        if os.path.exists(p):
-            os.remove(p)
-
-
-def test_default_tags_assigned_to_default_products(client):
-    """Test that default products have tags assigned."""
-    db_name = 'tags_assign_test_party'
-
-    client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
-
-    # Trigger DB init by loading sections
-    resp = client.get(f'/api/products/?db={db_name}')
-    assert resp.status_code == 200
-
-    # Products in the Hot Drinks subsection should have the 'Hot' tag
-    sections = resp.get_json()
-    hot_drinks = None
-    for section in sections:
-        for sub in section.get('subsections', []):
-            if sub['name'] == 'Hot Drinks':
-                hot_drinks = sub['id']
-                break
-
-    assert hot_drinks is not None
-
-    resp = client.get(f'/api/products/{hot_drinks}/products?db={db_name}')
-    products = resp.get_json()
-    assert len(products) > 0
-
-    # At least some products should have the 'Hot' tag
-    products_with_tags = [p for p in products if p.get('tags') and len(p['tags']) > 0]
-    assert len(products_with_tags) > 0
-    tag_names = set()
-    for p in products_with_tags:
-        for t in p['tags']:
-            tag_names.add(t['name'])
-    assert 'Hot' in tag_names
-
-    # Cleanup
-    db_path = _get_party_db_path(db_name)
-    for ext in ['', '-wal', '-shm']:
-        p = db_path + ext
-        if os.path.exists(p):
-            os.remove(p)
+        # Products in the Hot Drinks subsection carry the 'Hot' tag
+        sections = client.get(f'/api/products/?db={db_name}').get_json()
+        hot_drinks = next(
+            sub['id'] for section in sections
+            for sub in section.get('subsections', [])
+            if sub['name'] == 'Hot Drinks')
+        products = client.get(
+            f'/api/products/{hot_drinks}/products?db={db_name}').get_json()
+        assert len(products) > 0
+        tag_names = {t['name'] for p in products for t in p.get('tags', [])}
+        assert 'Hot' in tag_names
+    finally:
+        _drop(db_name)
 
 
-def test_zero_total_checkout_card(clean_db, client):
-    """Test checkout with 0.00 total (after 100% discount) works for card."""
-    db_name = clean_db
-
-    client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
-
-    # Setup product
-    client.post(f'/api/products/sections?db={db_name}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db_name}', json={'section_id': 1, 'name': 'Coffee'})
-    client.post(f'/api/products/products?db={db_name}', json={
-        'name': 'Free Coffee', 'price': 5.00, 'section_id': 1, 'subsection_id': 1
-    })
-
-    # Add to cart
-    client.post(f'/api/cart/add?db={db_name}', json={'product_id': 1, 'quantity': 1})
-
-    # Apply 100% discount to make total 0.00
-    resp = client.post(f'/api/cart/discount?db={db_name}', json={'type': 'percentage', 'value': 100})
-    assert resp.get_json()['total'] == 0.0
-
-    # Checkout with card
-    resp = client.post(f'/api/orders/checkout?db={db_name}', json={'payment_method': 'card'})
-    assert resp.status_code == 201
-    assert resp.get_json()['total'] == 0.0
-
-
-def test_zero_total_checkout_cash(clean_db, client):
-    """Test checkout with 0.00 total for cash payment."""
+@pytest.mark.parametrize('payment_method,extra', [
+    ('card', {}),
+    ('cash', {'tendered': 0}),
+])
+def test_zero_total_checkout(clean_db, client, payment_method, extra):
+    """100%-discounted sales close at 0.00 on any payment method."""
     db_name = clean_db
 
     client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
@@ -117,12 +63,12 @@ def test_zero_total_checkout_cash(clean_db, client):
 
     # Add to cart and apply 100% discount
     client.post(f'/api/cart/add?db={db_name}', json={'product_id': 1, 'quantity': 1})
-    client.post(f'/api/cart/discount?db={db_name}', json={'type': 'percentage', 'value': 100})
+    resp = client.post(f'/api/cart/discount?db={db_name}', json={'type': 'percentage', 'value': 100})
+    assert resp.get_json()['total'] == 0.0
 
-    # Checkout with cash, tendered=0
-    resp = client.post(f'/api/orders/checkout?db={db_name}', json={
-        'payment_method': 'cash', 'tendered': 0
-    })
+    body = {'payment_method': payment_method}
+    body.update(extra)
+    resp = client.post(f'/api/orders/checkout?db={db_name}', json=body)
     assert resp.status_code == 201
     assert resp.get_json()['total'] == 0.0
 

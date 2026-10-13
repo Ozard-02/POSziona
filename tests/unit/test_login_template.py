@@ -8,23 +8,24 @@ selection again — typing the very IP you were already on looped forever.
 import re
 
 
-def test_login_page_serves_with_mode_param(client):
-    """'/?mode=local' renders the same login shell (JS skips the mode screen)."""
+def test_login_shell_markers(client):
+    """Login shell renders on / and /?mode=local, with connect + reconnect hooks."""
     for path in ('/', '/?mode=local'):
         r = client.get(path)
         assert r.status_code == 200, path
         html = r.get_data(as_text=True)
         assert 'startup-screen' in html
         assert 'login-form-container' in html
-
-
-def test_connect_handler_skips_mode_screen(client):
-    """Inline Connect logic: same-origin shows login, hop carries ?mode=local."""
-    html = client.get('/').get_data(as_text=True)
+    # Connect: same-origin shows login, hop carries ?mode=local (no mode loop).
     assert "?mode=local" in html
     assert "params.get('mode') === 'local'" in html
     assert "target.origin === window.location.origin" in html
     assert "target.origin + '/?mode=local'" in html
+    # One-tap reconnect: localStorage recent list.
+    assert 'id="recent-servers"' in html
+    assert 'id="recent-list"' in html
+    assert 'posServers' in html
+    assert 'recent-title' in html  # label text comes from translations.js
 
 
 def test_remote_panel_lives_outside_hidden_parent(client):
@@ -39,15 +40,6 @@ def test_remote_panel_lives_outside_hidden_parent(client):
     assert "modeOptions.classList.remove('hidden')" in html
     # Only showLoginForm may hide the whole startup screen.
     assert html.count("startupScreen.classList.add('hidden')") == 1
-
-
-def test_recent_servers_ui(client):
-    """Login page offers one-tap reconnect (localStorage recent list)."""
-    html = client.get('/').get_data(as_text=True)
-    assert 'id="recent-servers"' in html
-    assert 'id="recent-list"' in html
-    assert 'posServers' in html
-    assert 'recent-title' in html  # label text comes from translations.js
 
 
 def test_inline_login_js_parses():
