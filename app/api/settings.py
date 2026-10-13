@@ -4,7 +4,8 @@ Handles party-level settings like default payment method, currency, tax rate, et
 """
 
 from flask import Blueprint, request, jsonify
-from app.services.settings_service import get_effective_settings, get_setting, update_setting
+from app.services.settings_service import (
+    DEFAULT_SETTINGS, get_effective_settings, get_setting, update_setting)
 from app.utils.events import broadcast
 
 settings_bp = Blueprint('settings', __name__)
@@ -52,22 +53,15 @@ def update_settings():
     data = request.get_json() or {}
 
     for key, value in data.items():
-        if key in [
-            'currency', 'tax_rate', 'default_payment_method',
-            'skip_cash_tender', 'auto_checkout', 'language',
-            'default_operator_id', 'printer_model',
-            'printer_path', 'printer_baud', 'printer_cols', 'printer_cut',
-            'receipt_header', 'receipt_footer',
-            'auto_logout_minutes', 'snapshot_interval_minutes',
-            'snapshot_keep_count',
-            'split_receipts', 'print_recovery_receipt',
-            'server_name',
-        ]:
-            update_setting(db, key, str(value))
+        if key in DEFAULT_SETTINGS:
+            # Preserve None (stored as NULL = "unset") instead of the
+            # string 'None', which would e.g. become a bogus printer path.
+            value = None if value is None else str(value)
+            update_setting(db, key, value)
             broadcast('settings_update', {
                 'db': db,
                 'key': key,
-                'value': str(value)
+                'value': value
             })
 
     return jsonify({'message': 'Settings updated'})
