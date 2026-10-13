@@ -1,5 +1,11 @@
 # Posziona — Codebase Structure & Logic
 
+> STALE (2026-10-13): this walkthrough predates the Phase R refactor and
+> still describes removed code (`app/models/`, `create_order`,
+> `record_payment`, `decrement_stock`, …). `STRUCTURE.md` and
+> `ARCHITECTURE.md` are the source of truth; this file is kept for
+> historical context only.
+
 ## Overview
 
 Posziona is a **desktop Point of Sale (POS) application** built with Python (Flask backend) and pywebview (native desktop shell). It's designed for parties, events, and pop-up venues to manage product catalogs, operator authentication, cart-based ordering, and checkout with tax/discount support.
