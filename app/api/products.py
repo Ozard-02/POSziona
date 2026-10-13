@@ -498,8 +498,7 @@ def export_products():
 
     products = get_all_products(db)
     for p in products:
-        tags = get_product_tags(db, p['id'])
-        tag_names = ','.join(t['name'] for t in tags)
+        tag_names = ','.join(t['name'] for t in p.get('tags', []))
         writer.writerow([
             p.get('section_name', ''),
             p.get('subsection_name', ''),

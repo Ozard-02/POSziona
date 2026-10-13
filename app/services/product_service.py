@@ -93,6 +93,36 @@ def create_subsection(db_name, section_id, name):
 # PRODUCT OPERATIONS
 # ============================================================
 
+def _fetch_tags_map(conn, product_ids):
+    """Map {product_id: [tag, ...]} for the given products, one query.
+
+    Tag shape is fixed: id, name, color, bg_color, text_color
+    (inactive tags excluded).
+    """
+    tags_by_product = {pid: [] for pid in product_ids}
+    if not product_ids:
+        return tags_by_product
+    placeholders = ','.join('?' * len(product_ids))
+    tag_rows = conn.execute(
+        f"""
+        SELECT pt.product_id, t.id, t.name, t.color, t.bg_color, t.text_color
+        FROM product_tags pt
+        JOIN tags t ON pt.tag_id = t.id
+        WHERE pt.product_id IN ({placeholders}) AND t.is_active = 1
+        """,
+        list(product_ids)
+    ).fetchall()
+    for row in tag_rows:
+        tags_by_product[row['product_id']].append({
+            'id': row['id'],
+            'name': row['name'],
+            'color': row['color'],
+            'bg_color': row['bg_color'],
+            'text_color': row['text_color']
+        })
+    return tags_by_product
+
+
 def get_products_by_subsection(db_name, subsection_id):
     """Get all active products in a subsection, including their tags."""
     with PartyDatabase(db_name) as conn:
@@ -106,35 +136,14 @@ def get_products_by_subsection(db_name, subsection_id):
         ).fetchall()
         products = [dict(row) for row in rows]
         # Fetch tags for each product in a single query
-        if products:
-            product_ids = [p['id'] for p in products]
-            placeholders = ','.join('?' * len(product_ids))
-            tag_rows = conn.execute(
-                f"""
-                SELECT pt.product_id, t.id, t.name, t.color, t.bg_color, t.text_color
-                FROM product_tags pt
-                JOIN tags t ON pt.tag_id = t.id
-                WHERE pt.product_id IN ({placeholders}) AND t.is_active = 1
-                """,
-                product_ids
-            ).fetchall()
-            # Group tags by product_id
-            tags_by_product = {}
-            for row in tag_rows:
-                pid = row['product_id']
-                if pid not in tags_by_product:
-                    tags_by_product[pid] = []
-                tags_by_product[pid].append(dict(row))
-            for p in products:
-                p['tags'] = tags_by_product.get(p['id'], [])
-        else:
-            for p in products:
-                p['tags'] = []
+        tags_by_product = _fetch_tags_map(conn, [p['id'] for p in products])
+        for p in products:
+            p['tags'] = tags_by_product.get(p['id'], [])
         return products
 
 
 def get_all_products(db_name):
-    """Get all non-archived products with their section and subsection names.
+    """Get all non-archived products with section/subsection names and tags.
 
     Inactive products (is_active = 0) are included so they remain visible and
     editable in the admin products table — previously they were filtered out,
@@ -152,7 +161,11 @@ def get_all_products(db_name):
             ORDER BY s.sort_order, s.name, ss.name, p.name
             """
         ).fetchall()
-        return [dict(row) for row in rows]
+        products = [dict(row) for row in rows]
+        tags_by_product = _fetch_tags_map(conn, [p['id'] for p in products])
+        for p in products:
+            p['tags'] = tags_by_product.get(p['id'], [])
+        return products
 
 
 def search_products(db_name, search=None, section_id=None, subsection_id=None,
@@ -236,32 +249,7 @@ def search_products(db_name, search=None, section_id=None, subsection_id=None,
             return products
 
         # Fetch tags for all products in a single query
-        product_ids = [p['id'] for p in products]
-        placeholders = ','.join('?' * len(product_ids))
-
-        tag_rows = conn.execute(
-            f"""
-            SELECT pt.product_id, t.id, t.name, t.color, t.bg_color, t.text_color
-            FROM product_tags pt
-            JOIN tags t ON pt.tag_id = t.id
-            WHERE pt.product_id IN ({placeholders}) AND t.is_active = 1
-            """,
-            product_ids
-        ).fetchall()
-
-        # Group tags by product_id
-        tags_by_product = {}
-        for row in tag_rows:
-            pid = row['product_id']
-            if pid not in tags_by_product:
-                tags_by_product[pid] = []
-            tags_by_product[pid].append({
-                'id': row['id'],
-                'name': row['name'],
-                'color': row['color'],
-                'bg_color': row['bg_color'],
-                'text_color': row['text_color']
-            })
+        tags_by_product = _fetch_tags_map(conn, [p['id'] for p in products])
 
         for p in products:
             p['tags'] = tags_by_product.get(p['id'], [])
@@ -373,16 +361,7 @@ def get_product_by_id(db_name, product_id):
             return None
         product = dict(row)
         # Fetch tags
-        tag_rows = conn.execute(
-            """
-            SELECT t.id, t.name, t.color, t.bg_color, t.text_color
-            FROM product_tags pt
-            JOIN tags t ON pt.tag_id = t.id
-            WHERE pt.product_id = ? AND t.is_active = 1
-            """,
-            (product_id,)
-        ).fetchall()
-        product['tags'] = [dict(row) for row in tag_rows]
+        product['tags'] = _fetch_tags_map(conn, [product_id]).get(product_id, [])
         return product
 
 
