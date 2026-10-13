@@ -25,16 +25,12 @@ const translations = {
 
         // Cash Tender Modal
         cash_title: 'Cash Payment',
-        total_due: 'Total Due:',
-        amount_received: 'Amount Received (press Enter or click Complete):',
-        change_due: 'Change Due:',
         cancel: 'Cancel',
         complete_sale: 'Complete Sale',
 
         // Receipt
         receipt_title: 'Receipt',
         items: 'Items:',
-        total_label: 'Total:',
         payment: 'Payment:',
         tendered: 'Tendered:',
         change: 'Change:',
@@ -44,11 +40,9 @@ const translations = {
         done: 'Done',
         separator: '---------',
         other: 'Other',
-        kitchen_cuisine: 'Cucina',
 
         // Dashboard
         reports_title: 'Reports',
-        back: '← Back',
         print: 'Print',
         summary: 'Summary',
         revenue: 'Total Revenue:',
@@ -147,8 +141,6 @@ const translations = {
         // Auth
         login: 'Login',
         admin_login: 'Admin Login',
-        operator_name: 'Operator Name',
-        pin: 'PIN',
         log_out_confirm: 'Log out?',
 
         // Settings
@@ -201,16 +193,12 @@ const translations = {
 
         // Cash Tender Modal
         cash_title: 'Pagamento Contanti',
-        total_due: 'Totale Da Pagare:',
-        amount_received: 'Importo Ricevuto (premi Invio o clicca Completa):',
-        change_due: 'Resto:',
         cancel: 'Annulla',
         complete_sale: 'Completa Vendita',
 
         // Receipt
         receipt_title: 'Ricevuta',
         items: 'Prodotti:',
-        total_label: 'Totale:',
         payment: 'Pagamento:',
         tendered: 'Versato:',
         change: 'Resto:',
@@ -220,11 +208,9 @@ const translations = {
         done: 'Fatto',
         separator: '---------',
         other: 'Altro',
-        kitchen_cuisine: 'Cucina',
 
         // Dashboard
         reports_title: 'Rapporti',
-        back: '← Indietro',
         print: 'Stampa',
         summary: 'Riepilogo',
         revenue: 'Ricavo Totale:',
@@ -236,7 +222,6 @@ const translations = {
         unit_price_col: 'Prezzo Unitario',
         amount_col: 'Totale',
         no_sales_data: 'Nessun dato di vendita',
-        subsections: 'sottosezioni',
         today: 'Oggi',
         whole_party: 'Tutta la Festa',
         report_date: 'Data (per Oggi):',
@@ -322,8 +307,6 @@ const translations = {
         // Auth
         login: 'Accedi',
         admin_login: 'Accesso Admin',
-        operator_name: 'Nome Operatore',
-        pin: 'PIN',
         log_out_confirm: 'Uscire?',
 
         // Settings
@@ -414,24 +397,4 @@ function translateLoginPage() {
 
     var adminBtn = document.getElementById('admin-login-btn');
     if (adminBtn) adminBtn.textContent = t('admin_login');
-}
-
-// Load settings and then translate — call this on page load for POS/Dashboard/Admin
-async function initTranslations() {
-    if (typeof AppState === 'undefined') {
-        window.AppState = { settings: {} };
-    }
-    try {
-        var lang = getLang();
-        if (lang === 'en') {
-            // Default language, no API call needed
-            return;
-        }
-        var resp = await fetch(`${API_BASE}/settings/?db=default`);
-        if (resp.ok) {
-            AppState.settings = await resp.json();
-        }
-    } catch (e) {
-        console.error('Failed to load settings for translation:', e);
-    }
 }

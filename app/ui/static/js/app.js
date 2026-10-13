@@ -2,15 +2,10 @@
 const APP_VERSION = '0.1.6';
 const API_BASE = '/api';
 
-// Global app state
+// Global app state (pages keep their own cart/sections; only the operator
+// and the merged settings live here).
 const AppState = {
-    currentParty: 'default',
     operator: null,
-    cart: [],
-    discount: null,
-    sections: [],
-    currentSection: null,
-    currentSubsection: null,
     settings: null
 };
 
@@ -157,17 +152,6 @@ function fetchJSON(url, options = {}) {
     });
 }
 
-// Load app settings on startup
-async function loadSettings() {
-    try {
-        const data = await fetchJSON(`${API_BASE}/settings/?db=${AppState.currentParty}`);
-        AppState.settings = data;
-    } catch (e) {
-        console.error('Failed to load settings:', e);
-        AppState.settings = {};
-    }
-}
-
 // Check auth status on page load
 // Only enforces auth on protected pages (not the login page itself)
 async function checkAuth() {
@@ -206,5 +190,4 @@ async function checkAuth() {
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
     checkAuth();
-    loadSettings();
 });

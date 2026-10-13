@@ -182,8 +182,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (currentOrderEl) currentOrderEl.textContent = t('current_order');
         var subtotalLabel = document.querySelector('.cart-totals .total-row');
         if (subtotalLabel) subtotalLabel.querySelector('span').textContent = t('subtotal');
-        var discountRow = document.querySelector('#discount-row');
-        if (discountRow) discountRow.querySelector('span').textContent = t('discount');
+        var discountLabelRow = document.querySelector('#discount-row');
+        if (discountLabelRow) discountLabelRow.querySelector('span').textContent = t('discount');
         var totalRow = document.querySelector('.grand-total');
         if (totalRow) totalRow.querySelector('span').textContent = t('total');
 
@@ -199,9 +199,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Cash tender modal
         var tenderTitle = cashTenderModal.querySelector('h3');
         if (tenderTitle) tenderTitle.textContent = t('cash_title');
-        var tenderTotalLabel = cashTenderModal.querySelector('.grand-total span');
-        if (tenderTotalLabel) {
-            var spans = cashTenderModal.querySelector('.grand-total').querySelectorAll('span');
+        var tenderTotal = cashTenderModal.querySelector('.grand-total');
+        if (tenderTotal) {
+            var spans = tenderTotal.querySelectorAll('span');
             if (spans.length > 0) spans[0].textContent = t('total_due');
         }
         var tenderLabel = cashTenderModal.querySelector('label');
@@ -388,9 +388,7 @@ document.addEventListener('DOMContentLoaded', function() {
             beep(880); // item added
         } catch (e) {
             console.error('Failed to add to cart:', e);
-            if (e.includes) {
-                showError(e);
-            }
+            showError(e.message || e);
         }
     }
 
@@ -949,17 +947,20 @@ document.addEventListener('DOMContentLoaded', function() {
         checkoutModal.classList.add('hidden');
         receiptModal.classList.remove('hidden');
 
-        // Always build and log the recovery (full) receipt to the server.
+        // Always build and log the recovery (full) receipt to the server,
+        // unless the party disabled recovery receipts in settings.
         var recoveryReceipt = buildReceipt(orderData);
-        fetchJSON(`${API_BASE}/orders/log-receipt?db=${db}`, {
-            method: 'POST',
-            body: JSON.stringify({
-                order_id: orderData.order_id,
-                receipt: recoveryReceipt
-            })
-        }).catch(function(e) {
-            console.error('Failed to log recovery receipt:', e);
-        });
+        if (showRecovery) {
+            fetchJSON(`${API_BASE}/orders/log-receipt?db=${db}`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    order_id: orderData.order_id,
+                    receipt: recoveryReceipt
+                })
+            }).catch(function(e) {
+                console.error('Failed to log recovery receipt:', e);
+            });
+        }
 
         // Display: kitchen slips per section if split_receipts is on,
         // followed by the full customer receipt. If split_receipts is off,
@@ -999,12 +1000,6 @@ document.addEventListener('DOMContentLoaded', function() {
             loadProducts(activeSub.dataset.subsectionId);
         }
     }
-
-    window.closeReceipt = function() {
-        receiptModal.classList.add('hidden');
-        // Re-enable the complete-cash-sale button for the next checkout
-        window._completeCashSaleInProgress = false;
-    };
 
     // --- Button event handlers (set up after DOM elements exist) ---
     // Cancel checkout button
@@ -1046,11 +1041,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Close receipt button
+    // Close receipt button (also re-enables cash sales for the next checkout)
     const closeReceiptBtn = receiptModal.querySelector('#close-receipt');
     if (closeReceiptBtn) {
         closeReceiptBtn.addEventListener('click', () => {
             receiptModal.classList.add('hidden');
+            window._completeCashSaleInProgress = false;
         });
     }
 
@@ -1344,26 +1340,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Update stock count display if provided
         if (payload.stock_count !== undefined && payload.stock_count !== null) {
-            if (productBtn) {
-                const stockEl = productBtn.querySelector('.product-stock');
-                if (stockEl) {
-                    stockEl.textContent = `${t('stock')}: ${payload.stock_count}`;
-                }
-                // Update out-of-stock class based on new stock count
-                if (payload.stock_count <= 0) {
-                    productBtn.classList.add('out-of-stock');
-                    productBtn.onclick = function(e) { e.preventDefault(); };
-                }
+            const stockEl = productBtn.querySelector('.product-stock');
+            if (stockEl) {
+                stockEl.textContent = `${t('stock')}: ${payload.stock_count}`;
+            }
+            // Update out-of-stock class based on new stock count
+            if (payload.stock_count <= 0) {
+                productBtn.classList.add('out-of-stock');
+                productBtn.onclick = function(e) { e.preventDefault(); };
             }
             // If this product is in the cart and stock is now insufficient,
             // trim the cart quantity to the new available stock (silent)
             _trimCartForStock([payload.product_id], payload.stock_count);
         }
     }
-
-    // --- Init ---
-    loadSettings();
-    loadSections();
 
     // --- Live availability updates via SSE ---
     // Connect to the server-sent events stream so that when an admin
