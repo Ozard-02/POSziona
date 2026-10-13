@@ -4,6 +4,7 @@ Products API endpoints.
 
 import csv
 import io
+import math
 from flask import Blueprint, request, jsonify
 from app.services.product_service import (
     get_all_sections_with_subsections,
@@ -169,12 +170,7 @@ def bulk_update_products_route():
 
     # Validate price if present in bulk updates
     if 'price' in updates:
-        try:
-            price = float(updates['price'])
-            if price < 0:
-                return jsonify({'error': 'Price must be non-negative'}), 400
-        except (TypeError, ValueError):
-            return jsonify({'error': 'Price must be a valid number'}), 400
+        _parse_price(updates['price'])
 
     count = bulk_update_products(db, product_ids, updates)
     # Broadcast availability changes to POS clients
@@ -250,12 +246,7 @@ def add_product():
     if not name:
         return jsonify({'error': 'name must not be empty'}), 400
 
-    try:
-        price = float(data['price'])
-        if price < 0:
-            return jsonify({'error': 'Price must be non-negative'}), 400
-    except (TypeError, ValueError):
-        return jsonify({'error': 'Price must be a valid number'}), 400
+    price = _parse_price(data['price'])
 
     try:
         product_id = create_product(
@@ -291,9 +282,7 @@ def edit_product(product_id):
     try:
         # Validate price if present
         if 'price' in data:
-            price = float(data['price'])
-            if price < 0:
-                return jsonify({'error': 'Price must be non-negative'}), 400
+            _parse_price(data['price'])
 
         update_product(db, product_id, **{
             k: v for k, v in data.items()
@@ -454,6 +443,19 @@ def set_product_tag_list(product_id):
     tag_ids = data.get('tags', [])
     set_product_tags(db, product_id, [int(t) for t in tag_ids])
     return jsonify({'message': 'Product tags updated'})
+
+
+def _parse_price(value):
+    """Parse a product price (finite, non-negative). Raises ValueError (→ 400)."""
+    try:
+        price = float(value)
+    except (TypeError, ValueError):
+        raise ValueError('Price must be a valid number')
+    if not math.isfinite(price):
+        raise ValueError('Price must be a valid number')
+    if price < 0:
+        raise ValueError('Price must be non-negative')
+    return price
 
 
 def _is_admin():

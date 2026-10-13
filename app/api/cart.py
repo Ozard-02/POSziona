@@ -9,6 +9,17 @@ from app.services.product_service import get_product_by_id
 cart_bp = Blueprint('cart', __name__)
 
 
+def _parse_quantity(raw):
+    """Parse a cart quantity. Raises ValueError (→ 400) when invalid."""
+    try:
+        quantity = int(raw)
+    except (TypeError, ValueError):
+        raise ValueError('Quantity must be a valid integer')
+    if quantity < 1:
+        raise ValueError('Quantity must be at least 1')
+    return quantity
+
+
 # ============================================================
 # CART OPERATIONS
 # ============================================================
@@ -28,13 +39,7 @@ def add_to_cart():
     if data is None:
         return jsonify({'error': 'Request body is required'}), 400
     product_id = data.get('product_id')
-    quantity_raw = data.get('quantity', 1)
-    try:
-        quantity = int(quantity_raw)
-    except (TypeError, ValueError):
-        return jsonify({'error': 'Quantity must be a valid integer'}), 400
-    if quantity < 1:
-        return jsonify({'error': 'Quantity must be at least 1'}), 400
+    quantity = _parse_quantity(data.get('quantity', 1))
 
     if not product_id:
         return jsonify({'error': 'product_id is required'}), 400
@@ -94,13 +99,7 @@ def update_quantity():
     if data is None:
         return jsonify({'error': 'Request body is required'}), 400
     product_id = data.get('product_id')
-    quantity_raw = data.get('quantity', 1)
-    try:
-        quantity = int(quantity_raw)
-    except (TypeError, ValueError):
-        return jsonify({'error': 'Quantity must be a valid integer'}), 400
-    if quantity < 1:
-        quantity = 1
+    quantity = _parse_quantity(data.get('quantity', 1))
 
     cart = session.get('cart', [])
     for item in cart:

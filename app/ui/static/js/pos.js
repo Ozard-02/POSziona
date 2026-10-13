@@ -1382,7 +1382,12 @@ document.addEventListener('DOMContentLoaded', function() {
         for (const pid of ids) {
             const cartItem = cart.find(i => i.product_id === pid);
             if (cartItem && newStock < cartItem.quantity) {
-                fetchJSON(`${API_BASE}/cart/update?db=${db}`, {
+                // Stock depleted: drop the item; otherwise shrink to newStock.
+                // (quantities < 1 are rejected by /cart/update.)
+                const url = newStock <= 0
+                    ? `${API_BASE}/cart/remove?db=${db}`
+                    : `${API_BASE}/cart/update?db=${db}`;
+                fetchJSON(url, {
                     method: 'POST',
                     body: JSON.stringify({ product_id: pid, quantity: newStock })
                 }).then(function(data) {
