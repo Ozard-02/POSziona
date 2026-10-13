@@ -37,9 +37,10 @@
   (decisions, findings, open issues), `STRUCTURE.md`/`ARCHITECTURE.md`
   (kept in sync with real code), `docs/` for deep dives. Next session must
   be able to resume from files alone.
-- Safety first while unsupervised: read-only investigation before action;
-  never kill user processes, never touch live `~/.posziona` data or occupied
-  ports (tests must skip when the port is busy); no `rm -rf`, no force-push,
+- Safety while unsupervised (decided 2026-10-13: free on test env, not
+  data): may start/stop own test servers, use live ports, rebuild `dist/`
+  binaries. NEVER touch live `~/.posziona` party data or user processes.
+  Tests must skip when a port is busy; no `rm -rf`, no force-push,
   no `ps | kill` pipelines (match own shell — use `[b]racket` patterns);
   one process per `DATA_DIR`; verify commands are non-destructive.
 
