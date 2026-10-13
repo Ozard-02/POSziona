@@ -1,8 +1,7 @@
 """
-Integration tests for API endpoints.
+Integration tests for API endpoints: the end-to-end workflow plus the few
+contract pins that live nowhere else (server tag, logged-out auth shape).
 """
-import json
-import pytest
 
 
 def test_server_name_setting_roundtrip(client, clean_db):
@@ -13,69 +12,11 @@ def test_server_name_setting_roundtrip(client, clean_db):
     assert data['server_name'] == 'CASSA-1'
 
 
-def test_login_page(client):
-    """Test login page loads."""
-    resp = client.get('/')
-    assert resp.status_code == 200
-
-
-def test_pos_page(client):
-    """Test POS page loads."""
-    resp = client.get('/pos')
-    assert resp.status_code == 200
-
-
-def test_admin_page(client):
-    """Test admin page loads."""
-    resp = client.get('/admin')
-    assert resp.status_code == 200
-
-
 def test_auth_status_not_logged_in(client):
-    """Test auth status when not logged in."""
+    """Logged-out auth status shape (only test pinning it; app.js relies on it)."""
     resp = client.get('/api/auth/status?db=default')
     assert resp.status_code == 200
-    data = resp.get_json()
-    assert data['logged_in'] == False
-
-
-def test_admin_login_and_auth(clean_db, client):
-    """Test admin login flow."""
-    db_name = clean_db
-    
-    # Login as admin
-    resp = client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
-    assert resp.status_code == 200
-    data = resp.get_json()
-    assert 'operator' in data
-    assert data['operator']['role'] == 'admin'
-    
-    # Check auth status
-    resp = client.get(f'/api/auth/status?db={db_name}')
-    assert resp.status_code == 200
-    data = resp.get_json()
-    assert data['logged_in'] == True
-    assert data['operator']['role'] == 'admin'
-
-
-def test_section_crud(clean_db, client):
-    """Test section creation and retrieval."""
-    db_name = clean_db
-    
-    # Login as admin first
-    client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
-    
-    # Create section
-    resp = client.post(f'/api/products/sections?db={db_name}', json={'name': 'Drinks'})
-    assert resp.status_code == 201
-    assert 'created' in resp.get_json()['message']
-    
-    # Get sections
-    resp = client.get(f'/api/products/?db={db_name}')
-    assert resp.status_code == 200
-    sections = resp.get_json()
-    assert len(sections) == 1
-    assert sections[0]['name'] == 'Drinks'
+    assert resp.get_json()['logged_in'] is False
 
 
 def test_full_pos_workflow(clean_db, client):
@@ -146,34 +87,6 @@ def test_full_pos_workflow(clean_db, client):
     assert items[0]['current_price'] == 2.50
     assert items[0]['stock_count'] is None  # unlimited
     assert items[0]['is_active'] == 1
-
-
-def test_dashboard_item_availability_update(clean_db, client):
-    """Test right-click context menu flow: toggle product availability from the items report."""
-    db_name = clean_db
-
-    # Setup: create product, checkout order so it appears in items report
-    client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
-    client.post(f'/api/products/sections?db={db_name}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db_name}', json={'section_id': 1, 'name': 'Coffee'})
-    client.post(f'/api/products/products?db={db_name}', json={
-        'name': 'Small Coffee', 'price': 2.50,
-        'section_id': 1, 'subsection_id': 1
-    })
-    client.post(f'/api/cart/add?db={db_name}', json={'product_id': 1, 'quantity': 2})
-    client.post(f'/api/orders/checkout?db={db_name}', json={'payment_method': 'cash'})
-
-    # Item should be available
-    resp = client.get(f'/api/orders/report/items?db={db_name}')
-    assert resp.get_json()[0]['is_active'] == 1
-
-    # Disable product via PUT (mirrors the right-click "Set Unavailable" action)
-    resp = client.put(f'/api/products/products/1?db={db_name}', json={'is_active': 0})
-    assert resp.status_code == 200
-
-    # Now item should be unavailable
-    resp = client.get(f'/api/orders/report/items?db={db_name}')
-    assert resp.get_json()[0]['is_active'] == 0
 
 
 def test_clear_cart(clean_db, client):
