@@ -32,18 +32,10 @@ def _local_ipv4s():
                 ips.add(ip)
     except socket.gaierror:
         pass
-    try:
-        # IP of the default-route interface (connect sends no packets).
-        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            probe.connect(('8.8.8.8', 80))
-            ip = probe.getsockname()[0]
-            if ip and not ip.startswith('127.'):
-                ips.add(ip)
-        finally:
-            probe.close()
-    except OSError:
-        pass
+    # IP of the default-route interface (_default_route_ip never raises).
+    route_ip = _default_route_ip()
+    if route_ip:
+        ips.add(route_ip)
     return ips
 
 
