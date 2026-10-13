@@ -9,18 +9,14 @@ from flask_cors import CORS
 from app.utils.logger import get_logger
 
 
-def create_app(config_class=None):
+def create_app():
     """Create and configure the Flask application."""
     app = Flask(__name__,
                 static_folder=os.path.join(os.path.dirname(__file__), 'ui', 'static'),
                 template_folder=os.path.join(os.path.dirname(__file__), 'ui', 'templates'))
 
-    if config_class:
-        app.config.from_object(config_class)
-    else:
-        from app.utils.config import get_secret_key
-        app.config['SECRET_KEY'] = get_secret_key()
-        app.config['DATABASE_DIR'] = 'data'
+    from app.utils.config import get_secret_key
+    app.config['SECRET_KEY'] = get_secret_key()
 
     # Configure session cookies for proper persistence
     # These ensure cookies are sent correctly in all contexts (including pywebview)

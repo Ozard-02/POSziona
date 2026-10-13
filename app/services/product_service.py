@@ -297,6 +297,7 @@ def bulk_update_products(db_name, product_ids, updates):
     if not product_ids:
         return 0
 
+    updates = dict(updates)  # don't mutate the caller's dict (pop below)
     with PartyDatabase(db_name) as conn:
         count = 0
         placeholders = ','.join('?' * len(product_ids))
@@ -563,6 +564,7 @@ def import_products_from_csv(db_name, csv_rows):
 
         conn.commit()
         logger.info(f"Imported {imported_count} products from CSV")
+        return imported_count
 
 
 # ============================================================

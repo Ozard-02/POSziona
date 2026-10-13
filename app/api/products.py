@@ -479,10 +479,7 @@ def import_csv_file():
         return jsonify({'error': 'No CSV rows provided'}), 400
 
     try:
-        imported = import_products_from_csv(db, csv_rows)
-        if isinstance(imported, dict):
-            return jsonify(imported), 201
-        count = len(csv_rows)
+        count = import_products_from_csv(db, csv_rows)
         return jsonify({'message': f'Imported {count} products', 'count': count}), 201
     except Exception as e:
         logger.error(f"CSV import error: {e}")

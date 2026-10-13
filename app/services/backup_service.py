@@ -259,11 +259,15 @@ def _interval_minutes(db_name):
 
 
 def _keep_count():
-    """How many snapshots to retain (bounded, low-end friendly)."""
+    """How many snapshots to retain (bounded, low-end friendly).
+
+    Device-global setting — retention applies to the whole box, not to
+    whatever the 'default' party happens to configure.
+    """
     try:
-        from app.services.party_service import get_party_settings
-        raw = get_party_settings('default').get('snapshot_keep_count',
-                                                 DEFAULT_KEEP_COUNT)
+        from app.services.settings_service import get_device_settings, DEFAULT_SETTINGS
+        raw = get_device_settings().get(
+            'snapshot_keep_count', DEFAULT_SETTINGS['snapshot_keep_count'])
         return max(1, int(float(raw)))
     except Exception:
         return DEFAULT_KEEP_COUNT
