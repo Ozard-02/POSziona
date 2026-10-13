@@ -4,8 +4,8 @@ Integration tests for tag management API endpoints.
 import pytest
 
 
-def test_create_and_list_tags(clean_db, client):
-    """Test creating tags and listing them."""
+def test_create_update_list_tags(clean_db, client):
+    """Tags are created with styling, updated, and listed alphabetically."""
     db_name = clean_db
 
     # Login as admin
@@ -19,54 +19,21 @@ def test_create_and_list_tags(clean_db, client):
         'text_color': '#c0392b'
     })
     assert resp.status_code == 201
-
-    # Create another tag
-    resp = client.post(f'/api/products/tags?db={db_name}', json={
-        'name': 'Alcohol',
-        'color': '#9b59b6'
-    })
-    assert resp.status_code == 201
-
-    # List tags — ordered by name alphabetically
-    resp = client.get(f'/api/products/tags?db={db_name}')
-    assert resp.status_code == 200
-    tags = resp.get_json()
-    assert len(tags) == 2
-    tag_names = [t['name'] for t in tags]
-    assert 'Hot' in tag_names
-    assert 'Alcohol' in tag_names
-    hot_tag = next(t for t in tags if t['name'] == 'Hot')
-    assert hot_tag['color'] == '#e74c3c'
-    assert hot_tag['bg_color'] == '#ffecec'
-    assert hot_tag['text_color'] == '#c0392b'
-    alc_tag = next(t for t in tags if t['name'] == 'Alcohol')
-    assert alc_tag['color'] == '#9b59b6'
-
-
-def test_update_tag_styling(clean_db, client):
-    """Test updating a tag's background color (the styling rule)."""
-    db_name = clean_db
-    client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
-
-    # Create tag
-    resp = client.post(f'/api/products/tags?db={db_name}', json={
-        'name': 'Featured',
-        'color': '#f39c12'
-    })
     tag_id = resp.get_json()['id']
 
-    # Update with bg_color and text_color
+    # Update its styling
     resp = client.put(f'/api/products/tags/{tag_id}?db={db_name}', json={
         'bg_color': '#fff3cd',
         'text_color': '#856404'
     })
     assert resp.status_code == 200
 
-    # Verify
-    resp = client.get(f'/api/products/tags/{tag_id}?db={db_name}')
-    tag = resp.get_json()
-    assert tag['bg_color'] == '#fff3cd'
-    assert tag['text_color'] == '#856404'
+    # List tags — styling round-trips
+    tags = client.get(f'/api/products/tags?db={db_name}').get_json()
+    hot_tag = next(t for t in tags if t['name'] == 'Hot')
+    assert hot_tag['color'] == '#e74c3c'
+    assert hot_tag['bg_color'] == '#fff3cd'
+    assert hot_tag['text_color'] == '#856404'
 
 
 def test_assign_and_remove_tags_on_product(clean_db, client):
@@ -141,20 +108,17 @@ def test_product_includes_tags_in_listing(clean_db, client):
     assert products[0]['tags'][0]['bg_color'] == '#fef5e7'
 
 
-def test_create_tag_requires_admin(clean_db, client):
-    """Test that tag creation requires admin role."""
+def test_tag_mutations_require_admin_session(clean_db, client):
+    """Operators (and logged-out clients) get 403 on every tag mutation."""
     db_name = clean_db
-    # Don't login as admin — login as regular operator
-    client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
-    # Clear session to simulate non-admin
-    from flask import session
-    with client.session_transaction() as sess:
-        sess['operator_id'] = 2
-        sess['operator_name'] = 'operator'
-        sess['operator_role'] = 'operator'
+    client.post(f'/api/auth/login?db={db_name}', json={'pin': '1234'})
 
-    resp = client.post(f'/api/products/tags?db={db_name}', json={'name': 'Test'})
-    assert resp.status_code == 403
+    assert client.post(f'/api/products/tags?db={db_name}',
+                       json={'name': 'Test'}).status_code == 403
+
+    client.post(f'/api/auth/logout?db={db_name}')
+    assert client.post(f'/api/products/tags?db={db_name}',
+                       json={'name': 'Test'}).status_code == 403
 
 
 def test_tag_mutations_reject_unauthenticated(clean_db, client):

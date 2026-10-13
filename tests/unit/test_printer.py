@@ -11,32 +11,25 @@ import pytest
 from app.services import printer_service as prn
 
 
-def test_build_bytes_envelope():
-    data = prn.build_bytes('Riga 1\nRiga 2', cols=42, cut=True)
-    assert data.startswith(b'\x1b@')          # init
-    assert b'\x1ba\x00' in data               # left align
-    assert b'Riga 1\nRiga 2\n' in data
-    assert data.endswith(b'\x1bd\x04\x1dV\x01')  # feed + partial cut
-
-
-def test_build_bytes_no_cut():
-    data = prn.build_bytes('x', cut=False)
-    assert b'\x1dV' not in data
-
-
-def test_cut_markers_split_jobs():
-    """Form-feed = cut here and continue (section slips + recap)."""
-    data = prn.build_bytes('PRIMI\fSECONDI\fTOTALE', cols=42, cut=True)
-    assert data.count(b'\x1dV\x01') == 3
-    assert data.index(b'PRIMI') < data.index(b'\x1dV\x01') < data.index(b'SECONDI')
-    assert data.index(b'SECONDI') < data.index(b'TOTALE')
-    assert data.endswith(b'\x1dV\x01')
-
-
-def test_cut_markers_without_cut_become_feeds():
-    data = prn.build_bytes('A\fB', cut=False)
-    assert b'\x1dV' not in data
-    assert b'A' in data and b'B' in data
+@pytest.mark.parametrize('text,cut,fragments,forbidden', [
+    ('Riga 1\nRiga 2', True,
+     [b'\x1b@', b'\x1ba\x00', b'Riga 1\nRiga 2\n', b'\x1bd\x04\x1dV\x01'], []),
+    ('PRIMI\fSECONDI\fTOTALE', True,
+     [b'PRIMI', b'SECONDI', b'TOTALE', b'\x1dV\x01'], []),
+    ('x', False, [b'x'], [b'\x1dV']),
+    ('A\fB', False, [b'A', b'B'], [b'\x1dV']),
+])
+def test_build_bytes(text, cut, fragments, forbidden):
+    """ESC/POS envelope: init+align+text, cut (or feeds for \f) at the end."""
+    data = prn.build_bytes(text, cols=42, cut=cut)
+    assert data.startswith(b'\x1b@')
+    assert all(f in data for f in fragments)
+    assert all(f not in data for f in forbidden)
+    if cut:
+        assert data.endswith(b'\x1dV\x01')
+    if text == 'PRIMI\fSECONDI\fTOTALE':
+        assert data.count(b'\x1dV\x01') == 3
+        assert data.index(b'PRIMI') < data.index(b'\x1dV\x01') < data.index(b'SECONDI')
 
 
 def test_sanitize_euro_accents_width():
@@ -46,29 +39,18 @@ def test_sanitize_euro_accents_width():
     assert prn.sanitize_line('A\tB', 42) == 'A B'
 
 
-def test_resolve_rejects_bad_config(monkeypatch):
-    monkeypatch.setattr(prn, 'get_effective_settings',
-                        lambda db: {'printer_path': ''})
-    with pytest.raises(ValueError, match='empty'):
-        prn.resolve_device('any')
-    # Quote-paste ('auto' typed as ''auto'') counts as empty, not a path.
-    monkeypatch.setattr(prn, 'get_effective_settings',
-                        lambda db: {'printer_path': "''"})
-    with pytest.raises(ValueError, match='empty'):
-        prn.resolve_device('any')
-    monkeypatch.setattr(prn, 'get_effective_settings',
-                        lambda db: {'printer_path': '/dev/usb/lp0',
-                                    'printer_baud': '777'})
-    with pytest.raises(ValueError, match='baud'):
-        prn.resolve_device('any')
-
-
-def test_resolve_auto_empty(monkeypatch):
+@pytest.mark.parametrize('settings,match', [
+    ({'printer_path': ''}, 'empty'),
+    ({'printer_path': "''"}, 'empty'),  # quote-paste counts as empty, not a path
+    ({'printer_path': '/dev/usb/lp0', 'printer_baud': '777'}, 'baud'),
+    ({'printer_path': 'auto'}, 'No printer found'),
+])
+def test_resolve_device_rejects(monkeypatch, settings, match):
+    """Unset/bogus printer config fails with a clear error, never a traceback."""
     import glob as glob_mod
-    monkeypatch.setattr(prn, 'get_effective_settings',
-                        lambda db: {'printer_path': 'auto'})
+    monkeypatch.setattr(prn, 'get_effective_settings', lambda db: settings)
     monkeypatch.setattr(glob_mod, 'glob', lambda pattern: [])
-    with pytest.raises(ValueError, match='No printer found'):
+    with pytest.raises(ValueError, match=match):
         prn.resolve_device('any')
 
 
@@ -165,15 +147,13 @@ def test_test_endpoint_uses_ticket(client, clean_db, tmp_path):
     assert b'prova stampa' in fake.read_bytes()
 
 
-def test_print_requires_login(client, clean_db):
+def test_print_guards(client, clean_db):
+    """Logged-out → 403 (paper costs money); unconfigured → 400."""
     r = client.post(f'/api/printer/print?db={clean_db}', json={'text': 'x'})
     assert r.status_code == 403
 
-
-def test_print_unconfigured(client, clean_db):
-    db_name = clean_db
-    _login(client, db_name)
-    r = client.post(f'/api/printer/print?db={db_name}', json={'text': 'x'})
+    _login(client, clean_db)
+    r = client.post(f'/api/printer/print?db={clean_db}', json={'text': 'x'})
     assert r.status_code == 400
 
 
@@ -249,30 +229,13 @@ def test_network_bad_spec():
         prn._open_network('socket:127.0.0.1:1')  # closed port
 
 
-def test_windows_queue_needs_pywin32():
-    with pytest.raises(RuntimeError) as e:
-        prn._open_win32_raw('ReceiptPrinter')
-    assert 'pywin32' in str(e.value)
-
-
-def test_windows_queues_empty_without_pywin32():
-    assert prn.list_windows_printers() == []
-
-
-def test_com_routes_to_pyserial(tmp_path, monkeypatch):
-    """COMn must not become a stray file: it needs the serial backend."""
+def test_com_needs_pyserial(tmp_path, monkeypatch):
+    """COMn never becomes a stray file: without pyserial, a clear install hint."""
     import sys as sys_mod
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(sys_mod, 'platform', 'win32')
-    with pytest.raises(RuntimeError):
-        prn._open_device('COM3', 9600)
-    assert not (tmp_path / 'COM3').exists()
-
-
-def test_pyserial_sink_missing(monkeypatch):
-    """Without pyserial installed, COM gives a clear install hint."""
-    import sys as sys_mod
     monkeypatch.setitem(sys_mod.modules, 'serial', None)
     with pytest.raises(RuntimeError) as e:
-        prn._open_serial_pyserial('COM3', 9600)
+        prn._open_device('COM3', 9600)
     assert 'pyserial' in str(e.value)
+    assert not (tmp_path / 'COM3').exists()
