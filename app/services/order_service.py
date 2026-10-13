@@ -4,6 +4,8 @@ Handles cart management, checkout, orders, and payments.
 """
 
 import sqlite3
+import csv
+import io
 
 from app.database.connection import PartyDatabase
 from app.utils.logger import get_logger
@@ -306,3 +308,61 @@ def delete_order_by_id(db_name, order_id):
         conn.commit()
         logger.info(f"Order deleted: id={order_id}")
         return True
+
+
+# ============================================================
+# RECAP CSV EXPORT (shared by /orders/report/export-csv and /parties/<db>/recap)
+# ============================================================
+def build_recap_csv(db_name, date_filter=None):
+    """Build the 3-section sales recap CSV text (summary / items / recent)."""
+    summary = get_sales_summary(db_name, date_filter)
+    items = get_items_sold_summary(db_name, date_filter)
+    recent = get_recent_orders(db_name, 50, date_filter)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Section 1: Sales Summary
+    writer.writerow(['=== Sales Summary ==='])
+    writer.writerow(['Metric', 'Value'])
+    writer.writerow(['Total Orders', summary.get('total_orders', 0)])
+    writer.writerow(['Total Revenue', summary.get('total_revenue', 0.0)])
+    writer.writerow(['Total Discounts', summary.get('total_discounts', 0.0)])
+    writer.writerow([])
+
+    # Section 2: Items Sold
+    writer.writerow(['=== Items Sold ==='])
+    writer.writerow([
+        'Product Name', 'SKU', 'Section', 'Subsection',
+        'Quantity Sold', 'Total Amount', 'Current Price',
+        'Current Stock', 'Active'
+    ])
+    for item in items:
+        stock = item.get('stock_count')
+        writer.writerow([
+            item.get('product_name', ''),
+            item.get('sku', '') or '',
+            item.get('section', ''),
+            item.get('subsection', ''),
+            item.get('total_quantity', 0),
+            item.get('total_amount', 0.0),
+            item.get('current_price', 0.0),
+            stock if stock is not None else 'Unlimited',
+            'Yes' if item.get('is_active') else 'No'
+        ])
+    writer.writerow([])
+
+    # Section 3: Recent Orders
+    writer.writerow(['=== Recent Orders ==='])
+    writer.writerow(['Order ID', 'Timestamp', 'Operator', 'Total', 'Discount', 'Payment Method'])
+    for order in recent:
+        writer.writerow([
+            order.get('id', ''),
+            order.get('timestamp', ''),
+            order.get('operator_name', '') or 'N/A',
+            order.get('total', 0.0),
+            order.get('discount_amount', 0.0),
+            order.get('payment_method', '')
+        ])
+
+    return output.getvalue()
