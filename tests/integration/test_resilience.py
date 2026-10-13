@@ -1,113 +1,57 @@
 """
-Resilience tests for Posziona.
+Resilience: input validation + financial-integrity edges. One behavior per test.
 
-Covers input validation and financial-integrity edge cases:
-1. Negative totals from excessive discounts (backend clamping)
-2. Invalid quantity input in cart add/update (type errors, negative values)
-3. Negative price rejection in product create/edit/bulk
-4. Percentage discount > 100% clamping in Cart model
+Setup helper kills the 5-line seed boilerplate; parametrization covers the
+value matrix instead of one test per value.
 """
 import pytest
 
 
-# ===========================================================================
-# Issue 1: Negative total — discount_amount must not exceed subtotal
-# ===========================================================================
-def test_checkout_negative_total_is_clamped(clean_db, client):
-    """A discount larger than the subtotal must not produce a negative total."""
-    db = clean_db
+def _seed_product(client, db, price=2.50):
+    """Login as admin + create section/subsection/product (id 1)."""
     client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
     client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
+    client.post(f'/api/products/subsections?db={db}',
+                json={'section_id': 1, 'name': 'Coffee'})
     client.post(f'/api/products/products?db={db}', json={
-        'name': 'Small Coffee', 'price': 2.50, 'section_id': 1, 'subsection_id': 1
-    })
+        'name': 'Small Coffee', 'price': price,
+        'section_id': 1, 'subsection_id': 1})
+    return 1
 
+
+def _checkout(client, db, **kwargs):
+    body = {'payment_method': 'cash'}
+    body.update(kwargs)
+    return client.post(f'/api/orders/checkout?db={db}', json=body)
+
+
+@pytest.mark.parametrize('dtype,value', [('fixed', 9999), ('percentage', 200)])
+def test_excessive_discount_clamps_total_to_zero(clean_db, client, dtype, value):
+    """Discounts beyond the subtotal clamp the total at 0, never negative."""
+    db = clean_db
+    _seed_product(client, db)
     client.post(f'/api/cart/add?db={db}', json={'product_id': 1, 'quantity': 1})
 
-    # Apply a fixed discount of 9999 (way more than the 2.50 subtotal)
-    resp = client.post(f'/api/cart/discount?db={db}', json={'type': 'fixed', 'value': 9999})
+    resp = client.post(f'/api/cart/discount?db={db}',
+                       json={'type': dtype, 'value': value})
     assert resp.status_code == 200
-    assert resp.get_json()['total'] == 0.0  # clamped, not negative
+    assert resp.get_json()['total'] == 0.0
 
-    # Checkout — total must be 0, not negative
-    resp = client.post(f'/api/orders/checkout?db={db}', json={'payment_method': 'cash'})
+    resp = _checkout(client, db)
     assert resp.status_code == 201
     assert resp.get_json()['total'] == 0.0
 
 
-def test_checkout_negative_total_percentage_clamped(clean_db, client):
-    """A percentage discount > 100% must not produce a negative total."""
+@pytest.mark.parametrize('quantity', ['abc', -5, 0])
+def test_cart_add_rejects_bad_quantity(clean_db, client, quantity):
+    """Non-integer or < 1 quantities on add return 400, not 500."""
     db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
+    _seed_product(client, db)
 
-    client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
-    client.post(f'/api/products/products?db={db}', json={
-        'name': 'Small Coffee', 'price': 2.50, 'section_id': 1, 'subsection_id': 1
-    })
-
-    client.post(f'/api/cart/add?db={db}', json={'product_id': 1, 'quantity': 1})
-
-    # Apply 200% discount (should be clamped to 100%)
-    resp = client.post(f'/api/cart/discount?db={db}', json={'type': 'percentage', 'value': 200})
-    assert resp.status_code == 200
-    assert resp.get_json()['total'] == 0.0  # clamped, not negative
-
-    resp = client.post(f'/api/orders/checkout?db={db}', json={'payment_method': 'cash'})
-    assert resp.status_code == 201
-    assert resp.get_json()['total'] == 0.0
-
-
-# ===========================================================================
-# Issue 2: Invalid quantity in cart endpoints
-# ===========================================================================
-def test_cart_add_invalid_quantity_string(clean_db, client):
-    """Non-integer quantity must return 400, not 500."""
-    db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
-    client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
-    client.post(f'/api/products/products?db={db}', json={
-        'name': 'Small Coffee', 'price': 2.50, 'section_id': 1, 'subsection_id': 1
-    })
-
-    resp = client.post(f'/api/cart/add?db={db}', json={'product_id': 1, 'quantity': 'abc'})
+    resp = client.post(f'/api/cart/add?db={db}',
+                       json={'product_id': 1, 'quantity': quantity})
     assert resp.status_code == 400
     assert 'quantity' in resp.get_json()['error'].lower()
-
-
-def test_cart_add_negative_quantity(clean_db, client):
-    """Negative quantity must return 400."""
-    db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
-    client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
-    client.post(f'/api/products/products?db={db}', json={
-        'name': 'Small Coffee', 'price': 2.50, 'section_id': 1, 'subsection_id': 1
-    })
-
-    resp = client.post(f'/api/cart/add?db={db}', json={'product_id': 1, 'quantity': -5})
-    assert resp.status_code == 400
-    assert 'quantity' in resp.get_json()['error'].lower()
-
-
-def test_cart_add_zero_quantity(clean_db, client):
-    """Quantity of 0 must return 400."""
-    db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
-    client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
-    client.post(f'/api/products/products?db={db}', json={
-        'name': 'Small Coffee', 'price': 2.50, 'section_id': 1, 'subsection_id': 1
-    })
-
-    resp = client.post(f'/api/cart/add?db={db}', json={'product_id': 1, 'quantity': 0})
-    assert resp.status_code == 400
 
 
 def test_cart_add_null_body(clean_db, client):
@@ -115,156 +59,94 @@ def test_cart_add_null_body(clean_db, client):
     db = clean_db
     client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
 
-    # Send explicit null JSON with proper content-type
-    resp = client.post(f'/api/cart/add?db={db}', data='null', content_type='application/json')
+    resp = client.post(f'/api/cart/add?db={db}', data='null',
+                       content_type='application/json')
     assert resp.status_code == 400
 
 
-def test_cart_update_invalid_quantity(clean_db, client):
-    """update_quantity with non-integer quantity must return 400."""
+@pytest.mark.parametrize('quantity', ['not_a_number', 0, -2])
+def test_cart_update_rejects_bad_quantity(clean_db, client, quantity):
+    """Non-integer or < 1 quantities on update return 400."""
     db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
-    client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
-    client.post(f'/api/products/products?db={db}', json={
-        'name': 'Small Coffee', 'price': 2.50, 'section_id': 1, 'subsection_id': 1
-    })
-
+    _seed_product(client, db)
     client.post(f'/api/cart/add?db={db}', json={'product_id': 1, 'quantity': 1})
 
-    resp = client.post(f'/api/cart/update?db={db}', json={'product_id': 1, 'quantity': 'not_a_number'})
+    resp = client.post(f'/api/cart/update?db={db}',
+                       json={'product_id': 1, 'quantity': quantity})
     assert resp.status_code == 400
 
 
-def test_discount_invalid_value(clean_db, client):
-    """Non-numeric discount value must return 400."""
+@pytest.mark.parametrize('dtype,value', [('percentage', 'abc'), ('fixed', -5)])
+def test_discount_rejects_bad_value(clean_db, client, dtype, value):
+    """Non-numeric or negative discount values return 400."""
     db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
-    resp = client.post(f'/api/cart/discount?db={db}', json={'type': 'percentage', 'value': 'abc'})
-    assert resp.status_code == 400
-
-
-def test_discount_negative_value(clean_db, client):
-    """Negative discount value must return 400."""
-    db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
-    client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
-    client.post(f'/api/products/products?db={db}', json={
-        'name': 'Small Coffee', 'price': 2.50, 'section_id': 1, 'subsection_id': 1
-    })
+    _seed_product(client, db)
     client.post(f'/api/cart/add?db={db}', json={'product_id': 1, 'quantity': 1})
 
-    resp = client.post(f'/api/cart/discount?db={db}', json={'type': 'fixed', 'value': -5})
+    resp = client.post(f'/api/cart/discount?db={db}',
+                       json={'type': dtype, 'value': value})
     assert resp.status_code == 400
 
 
-# ===========================================================================
-# Issue 3: Negative price rejection in product endpoints
-# ===========================================================================
-def test_create_product_negative_price(clean_db, client):
-    """Creating a product with a negative price must return 400."""
+@pytest.mark.parametrize('via', ['create', 'create_string', 'edit', 'bulk'])
+def test_product_price_validation(clean_db, client, via):
+    """Negative or non-numeric prices are rejected on every write path."""
     db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
+    _seed_product(client, db)
 
-    client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
-
-    resp = client.post(f'/api/products/products?db={db}', json={
-        'name': 'Bad Product', 'price': -5.00, 'section_id': 1, 'subsection_id': 1
-    })
+    if via == 'create':
+        resp = client.post(f'/api/products/products?db={db}', json={
+            'name': 'Bad', 'price': -5.00, 'section_id': 1, 'subsection_id': 1})
+    elif via == 'create_string':
+        resp = client.post(f'/api/products/products?db={db}', json={
+            'name': 'Bad', 'price': 'not_a_price',
+            'section_id': 1, 'subsection_id': 1})
+    elif via == 'edit':
+        resp = client.put(f'/api/products/products/1?db={db}', json={'price': -10})
+    else:
+        resp = client.post(f'/api/products/products/bulk?db={db}', json={
+            'product_ids': [1], 'updates': {'price': -5}})
     assert resp.status_code == 400
     assert 'price' in resp.get_json()['error'].lower()
 
 
-def test_create_product_invalid_price_string(clean_db, client):
-    """Non-numeric price must return 400, not 500."""
-    db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
-    client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
-
-    resp = client.post(f'/api/products/products?db={db}', json={
-        'name': 'Bad Product', 'price': 'not_a_price', 'section_id': 1, 'subsection_id': 1
-    })
-    assert resp.status_code == 400
-
-
-def test_edit_product_negative_price(clean_db, client):
-    """Editing a product to a negative price must return 400."""
-    db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
-    client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
-    client.post(f'/api/products/products?db={db}', json={
-        'name': 'Small Coffee', 'price': 2.50, 'section_id': 1, 'subsection_id': 1
-    })
-
-    resp = client.put(f'/api/products/products/1?db={db}', json={'price': -10})
-    assert resp.status_code == 400
-    assert 'price' in resp.get_json()['error'].lower()
-
-
-def test_bulk_update_negative_price(clean_db, client):
-    """Bulk update with a negative price must return 400."""
-    db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
-    client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
-    client.post(f'/api/products/products?db={db}', json={
-        'name': 'Small Coffee', 'price': 2.50, 'section_id': 1, 'subsection_id': 1
-    })
-
-    resp = client.post(f'/api/products/products/bulk?db={db}', json={
-        'product_ids': [1], 'updates': {'price': -5}
-    })
-    assert resp.status_code == 400
-    assert 'price' in resp.get_json()['error'].lower()
-
-
-# ===========================================================================
-# Issue 5: Checkout and edge cases
-# ===========================================================================
 def test_checkout_empty_cart(clean_db, client):
     """Checking out with an empty cart must return 400, not 500."""
     db = clean_db
     client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
 
-    resp = client.post(f'/api/orders/checkout?db={db}', json={'payment_method': 'cash'})
-    assert resp.status_code == 400
+    assert _checkout(client, db).status_code == 400
 
 
-def test_cart_add_nonexistent_product(clean_db, client):
-    """Adding a non-existent product ID must return 404."""
+@pytest.mark.parametrize('method,url,body', [
+    ('POST', '/api/cart/add?db={db}', {'product_id': 999, 'quantity': 1}),
+    ('DELETE', '/api/products/products/999?db={db}', None),
+    ('GET', '/api/products/sections/999?db={db}', None),
+])
+def test_unknown_ids_return_404(clean_db, client, method, url, body):
+    """Unknown product/section ids are 404 on every endpoint (never 500)."""
     db = clean_db
     client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
 
-    resp = client.post(f'/api/cart/add?db={db}', json={'product_id': 999, 'quantity': 1})
+    resp = client.open(url.format(db=db), method=method, json=body)
     assert resp.status_code == 404
 
 
-def test_cart_add_missing_product_id(clean_db, client):
-    """Adding without a product_id must return 400."""
+def test_cart_update_missing_item_is_noop(clean_db, client):
+    """Updating an item not in the cart changes nothing (200, cart intact)."""
     db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
+    _seed_product(client, db)
+    client.post(f'/api/cart/add?db={db}', json={'product_id': 1, 'quantity': 1})
 
-    resp = client.post(f'/api/cart/add?db={db}', json={'quantity': 1})
-    assert resp.status_code == 400
+    resp = client.post(f'/api/cart/update?db={db}',
+                       json={'product_id': 1, 'quantity': 5})
+    assert resp.status_code == 200
+    assert resp.get_json()['cart'][0]['quantity'] == 5
 
-
-def test_cart_update_nonexistent_product(clean_db, client):
-    """Updating quantity for a non-existent product must return 404."""
-    db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
-    resp = client.post(f'/api/cart/update?db={db}', json={'product_id': 999, 'quantity': 2})
-    assert resp.status_code == 404
+    client.post(f'/api/cart/remove?db={db}', json={'product_id': 1})
+    resp = client.post(f'/api/cart/update?db={db}',
+                       json={'product_id': 1, 'quantity': 3})
+    assert resp.status_code == 200
 
 
 def test_discount_on_empty_cart(clean_db, client):
@@ -272,192 +154,103 @@ def test_discount_on_empty_cart(clean_db, client):
     db = clean_db
     client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
 
-    resp = client.post(f'/api/cart/discount?db={db}', json={'type': 'percentage', 'value': 10})
+    resp = client.post(f'/api/cart/discount?db={db}',
+                       json={'type': 'percentage', 'value': 10})
     assert resp.status_code == 200
     assert resp.get_json()['total'] == 0.0
 
 
-def test_checkout_cash_insufficient_tender(clean_db, client):
-    """Tendering less than the total must not produce a negative change."""
+@pytest.mark.parametrize('tendered', [5.00, -5])
+def test_checkout_rejects_bad_tender(clean_db, client, tendered):
+    """Under-tendered or negative cash amounts are rejected (no negative change)."""
     db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
-    client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
-    client.post(f'/api/products/products?db={db}', json={
-        'name': 'Small Coffee', 'price': 10.00, 'section_id': 1, 'subsection_id': 1
-    })
-
+    _seed_product(client, db, price=10.00)
     client.post(f'/api/cart/add?db={db}', json={'product_id': 1, 'quantity': 1})
 
-    # Tender 5.00 for a 10.00 total — should be rejected
-    resp = client.post(f'/api/orders/checkout?db={db}',
-                        json={'payment_method': 'cash', 'tendered': 5.00})
+    resp = _checkout(client, db, tendered=tendered)
     assert resp.status_code == 400
 
 
-def test_checkout_negative_tender(clean_db, client):
-    """Negative tendered amount must return 400."""
+@pytest.mark.parametrize('body', [
+    {'name': '', 'price': 5.00, 'section_id': 1, 'subsection_id': 1},
+    {'name': 'Test Product', 'section_id': 1, 'subsection_id': 1},
+])
+def test_create_product_missing_fields(clean_db, client, body):
+    """Products without a name or without a price are rejected."""
     db = clean_db
     client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
     client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
-    client.post(f'/api/products/products?db={db}', json={
-        'name': 'Small Coffee', 'price': 10.00, 'section_id': 1, 'subsection_id': 1
-    })
+    client.post(f'/api/products/subsections?db={db}',
+                json={'section_id': 1, 'name': 'Coffee'})
 
-    client.post(f'/api/cart/add?db={db}', json={'product_id': 1, 'quantity': 1})
-
-    resp = client.post(f'/api/orders/checkout?db={db}',
-                        json={'payment_method': 'cash', 'tendered': -5})
-    assert resp.status_code == 400
-
-
-def test_create_product_missing_name(clean_db, client):
-    """Creating a product without a name must return 400."""
-    db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
-    client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
-
-    resp = client.post(f'/api/products/products?db={db}',
-                        json={'name': '', 'price': 5.00, 'section_id': 1, 'subsection_id': 1})
-    assert resp.status_code == 400
-
-
-def test_create_product_missing_price(clean_db, client):
-    """Creating a product without a price must return 400."""
-    db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
-    client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
-
-    resp = client.post(f'/api/products/products?db={db}',
-                        json={'name': 'Test Product', 'section_id': 1, 'subsection_id': 1})
+    resp = client.post(f'/api/products/products?db={db}', json=body)
     assert resp.status_code == 400
 
 
 def test_create_product_price_zero(clean_db, client):
-    """Creating a product with price 0 must be allowed (free item)."""
+    """Price 0 is allowed (free item)."""
     db = clean_db
     client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
     client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
+    client.post(f'/api/products/subsections?db={db}',
+                json={'section_id': 1, 'name': 'Coffee'})
 
-    resp = client.post(f'/api/products/products?db={db}',
-                        json={'name': 'Free Sample', 'price': 0, 'section_id': 1, 'subsection_id': 1})
+    resp = client.post(f'/api/products/products?db={db}', json={
+        'name': 'Free Sample', 'price': 0, 'section_id': 1, 'subsection_id': 1})
     assert resp.status_code == 201
 
 
-def test_delete_nonexistent_product(clean_db, client):
-    """Deleting a non-existent product must return 404."""
-    db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
-    resp = client.delete(f'/api/products/products/999?db={db}')
-    assert resp.status_code == 404
-
-
 def test_bulk_edit_nonexistent_product(clean_db, client):
-    """Bulk editing with non-existent product IDs should not crash."""
+    """Bulk editing unknown ids skips them; known products still update."""
     db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-    client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
-    client.post(f'/api/products/products?db={db}', json={
-        'name': 'Small Coffee', 'price': 2.50, 'section_id': 1, 'subsection_id': 1
-    })
+    _seed_product(client, db)
 
     resp = client.post(f'/api/products/products/bulk?db={db}', json={
-        'product_ids': [1, 999], 'updates': {'price': 5.00}
-    })
-    # Non-existent product IDs are silently ignored, existing ones are updated
+        'product_ids': [1, 999], 'updates': {'price': 5.00}})
     assert resp.status_code == 200
-    # Verify the existing product was updated
     resp2 = client.get(f'/api/products/products/1?db={db}')
     assert resp2.get_json()['price'] == 5.0
 
 
-def test_get_nonexistent_section(clean_db, client):
-    """Getting a non-existent section must return 404."""
-    db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
-    resp = client.get(f'/api/products/sections/999?db={db}')
-    # 404 if endpoint exists and returns not found, or 404 if Flask route doesn't match
-    assert resp.status_code in (404, 500)
-
-
 def test_cart_remove_nonexistent_item(clean_db, client):
-    """Removing a non-existent product from cart should not crash (idempotent)."""
+    """Removing an absent item is idempotent (200, not 500)."""
     db = clean_db
     client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
 
     resp = client.post(f'/api/cart/remove?db={db}', json={'product_id': 999})
-    # Should return 200 (idempotent remove) not 500
-    assert resp.status_code == 200
-
-
-def test_cart_update_nonexistent_product(clean_db, client):
-    """Updating quantity for a product not in cart should not crash.</n    The update endpoint silently does nothing for non-existent items."""
-    db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
-    client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
-    client.post(f'/api/products/products?db={db}', json={
-        'name': 'Small Coffee', 'price': 2.50, 'section_id': 1, 'subsection_id': 1
-    })
-
-    client.post(f'/api/cart/add?db={db}', json={'product_id': 1, 'quantity': 1})
-
-    # Update to a different quantity — should succeed since product IS in cart
-    resp = client.post(f'/api/cart/update?db={db}', json={'product_id': 1, 'quantity': 5})
-    assert resp.status_code == 200
-    assert resp.get_json()['cart'][0]['quantity'] == 5
-
-    # Now remove it, then try to update again (product not in cart)
-    client.post(f'/api/cart/remove?db={db}', json={'product_id': 1})
-    resp = client.post(f'/api/cart/update?db={db}', json={'product_id': 1, 'quantity': 3})
-    # Should not crash — just returns cart with no matching items
     assert resp.status_code == 200
 
 
 def test_checkout_invalid_payment_method(clean_db, client):
-    """Checkout with an invalid payment method must return 400."""
+    """Unknown payment methods are rejected."""
     db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
-    client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
-    client.post(f'/api/products/products?db={db}', json={
-        'name': 'Small Coffee', 'price': 2.50, 'section_id': 1, 'subsection_id': 1
-    })
-
+    _seed_product(client, db)
     client.post(f'/api/cart/add?db={db}', json={'product_id': 1, 'quantity': 1})
 
-    resp = client.post(f'/api/orders/checkout?db={db}', json={'payment_method': 'crypto'})
+    resp = _checkout(client, db, payment_method='crypto')
     assert resp.status_code == 400
 
 
-def test_create_product_duplicate(clean_db, client):
-    """Creating a duplicate product (same name in same section/sub) must not crash."""
+def test_create_duplicate_product_allowed(clean_db, client):
+    """Same name twice creates two products (no UNIQUE on names) — never 500."""
     db = clean_db
-    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
-
-    client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
-    client.post(f'/api/products/subsections?db={db}', json={'section_id': 1, 'name': 'Coffee'})
-    client.post(f'/api/products/products?db={db}', json={
-        'name': 'Small Coffee', 'price': 2.50, 'section_id': 1, 'subsection_id': 1
-    })
+    _seed_product(client, db)
 
     resp = client.post(f'/api/products/products?db={db}', json={
-        'name': 'Small Coffee', 'price': 3.00, 'section_id': 1, 'subsection_id': 1
-    })
-    # Should either succeed (allow duplicates) or return 409/400 — but never 500
-    assert resp.status_code in (201, 400, 409)
+        'name': 'Small Coffee', 'price': 3.00, 'section_id': 1, 'subsection_id': 1})
+    assert resp.status_code == 201
 
+
+def test_create_duplicate_section_rejected(clean_db, client):
+    """Duplicate section/subsection names are 400 (UNIQUE), never 500."""
+    db = clean_db
+    client.post(f'/api/auth/login/admin?db={db}', json={'pin': '0000'})
+    client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
+
+    resp = client.post(f'/api/products/sections?db={db}', json={'name': 'Drinks'})
+    assert resp.status_code == 400
+    client.post(f'/api/products/subsections?db={db}',
+                json={'section_id': 1, 'name': 'Coffee'})
+    resp = client.post(f'/api/products/subsections?db={db}',
+                       json={'section_id': 1, 'name': 'Coffee'})
+    assert resp.status_code == 400

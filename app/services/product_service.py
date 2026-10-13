@@ -5,6 +5,7 @@ Handles product catalog, sections, subsections, and stock management.
 
 from app.database.connection import PartyDatabase
 from app.utils.logger import get_logger
+import sqlite3
 
 logger = get_logger('services.products')
 
@@ -50,15 +51,18 @@ def get_all_sections_with_subsections(db_name):
 
 
 def create_section(db_name, name):
-    """Create a new section."""
+    """Create a new section (duplicate names are rejected with ValueError)."""
     with PartyDatabase(db_name) as conn:
         # Get the max sort_order to append at the end
         max_order = conn.execute("SELECT MAX(sort_order) FROM sections").fetchone()[0]
         sort_order = (max_order or 0) + 1
-        conn.execute(
-            "INSERT INTO sections (name, sort_order) VALUES (?, ?)",
-            (name, sort_order)
-        )
+        try:
+            conn.execute(
+                "INSERT INTO sections (name, sort_order) VALUES (?, ?)",
+                (name, sort_order)
+            )
+        except sqlite3.IntegrityError:
+            raise ValueError(f"Section '{name}' already exists")
         conn.commit()
         logger.info(f"Created section '{name}'")
 
@@ -80,12 +84,15 @@ def reorder_sections(db_name, section_ids):
 
 
 def create_subsection(db_name, section_id, name):
-    """Create a new subsection under a section."""
+    """Create a new subsection under a section (duplicates rejected)."""
     with PartyDatabase(db_name) as conn:
-        conn.execute(
-            "INSERT INTO subsections (name, section_id) VALUES (?, ?)",
-            (name, section_id)
-        )
+        try:
+            conn.execute(
+                "INSERT INTO subsections (name, section_id) VALUES (?, ?)",
+                (name, section_id)
+            )
+        except sqlite3.IntegrityError:
+            raise ValueError(f"Subsection '{name}' already exists in this section")
         conn.commit()
 
 
