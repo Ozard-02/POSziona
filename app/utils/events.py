@@ -110,6 +110,12 @@ def _event_stream(listener):
         _remove_listener(listener)
 
 
+def listener_count():
+    """Number of currently subscribed SSE screens (split-brain alarm input)."""
+    with _listeners_lock:
+        return len(_listeners)
+
+
 def sse_response():
     """Flask response that streams events to the connected client.
 

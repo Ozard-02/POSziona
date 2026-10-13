@@ -28,6 +28,7 @@ def test_status_reports_db_health(client):
     assert data['disk_free_mb'] >= 0
     assert data['version'] == '0.1.6'
     assert data['server_name']  # tag for the client picker (hostname fallback)
+    assert data['connected_screens'] == 0  # no SSE subscribers in tests
 
 
 def test_discount_and_void_are_audited(clean_db, client):

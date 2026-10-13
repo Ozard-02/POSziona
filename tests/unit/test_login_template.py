@@ -29,6 +29,7 @@ def test_login_shell_markers(client):
     # Connect probes before hopping (no dead pages), errors inline (no alert).
     assert 'probeThenGo' in html
     assert "'/api/status'" in html or '"/api/status"' in html
+    assert 'connected_screens' in html
     assert 'id="remote-error"' in html
     assert 'id="login-error"' in html
     assert 'alert(' not in html

@@ -153,11 +153,15 @@ document.addEventListener('DOMContentLoaded', function() {
             saveRecent(list);
             renderRecent();
             // Identity line: with 2 machines running, staff must see WHICH
-            // box this page comes from before logging in.
+            // box this page comes from before logging in — plus how many
+            // screens are already connected (a missing till is the
+            // cheapest split-brain alarm).
             var ident = document.getElementById('server-identity');
             if (ident) {
                 var ver = (st && st.version) ? ' (v' + st.version + ')' : '';
-                ident.textContent = t('this_server') + ': ' + name + ver;
+                var screens = (st && st.connected_screens) || 0;
+                ident.textContent = t('this_server') + ': ' + name + ver +
+                    ' · ' + screens + ' ' + t('screens_connected');
                 ident.classList.remove('hidden');
             }
         }).catch(function() { renderRecent(); });

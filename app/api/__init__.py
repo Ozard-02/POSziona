@@ -64,10 +64,12 @@ def status():
     degraded = not db_writable
     from app.utils.config import APP_VERSION
     from app.utils.discovery import get_server_name
+    from app.utils.events import listener_count
     return jsonify({
         'status': 'degraded' if degraded else 'ok',
         'version': APP_VERSION,
         'server_name': get_server_name(),
         'db_writable': db_writable,
         'disk_free_mb': disk_free_mb,
+        'connected_screens': listener_count(),
     })
