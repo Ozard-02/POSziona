@@ -27,6 +27,7 @@
                     <input type="date" id="report-date">
                 </div>
                 <button id="generate-report" class="btn-primary btn-sm btn-block" data-i18n="generate_report">Generate Report</button>
+                <button id="cash-close-btn" class="btn-secondary btn-sm btn-block" data-i18n="cash_close">Close Till</button>
             </div>
         </div>
     </div>
@@ -36,6 +37,16 @@
         <div id="report-content">
             <div id="report-summary"></div>
             <div id="report-tables"></div>
+            <h3 data-i18n="till_history" style="margin-top:24px">Till counts</h3>
+            <table class="data-table" id="till-table">
+                <thead><tr>
+                    <th data-i18n="report_date_label">Date</th>
+                    <th data-i18n="expected_cash">Expected</th>
+                    <th data-i18n="counted_cash">Counted cash</th>
+                    <th data-i18n="difference">Difference</th>
+                </tr></thead>
+                <tbody></tbody>
+            </table>
         </div>
     </div>
 

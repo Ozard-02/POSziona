@@ -8,6 +8,9 @@ from app.api.guard import require_admin
 from app.services.order_service import (
     build_recap_csv,
     checkout_order,
+    expected_cash_total,
+    list_cash_counts,
+    record_cash_count,
     get_recent_orders,
     get_order_details,
     get_sales_summary,
@@ -206,6 +209,48 @@ def log_receipt():
     receipt_text = data.get('receipt', '')
     logger.info(f"Recovery receipt saved — order_id={order_id}\n{receipt_text}")
     return jsonify({'message': 'Receipt logged'}), 200
+
+
+# ============================================================
+# CASH COUNTS (till reconciliation, any logged-in operator)
+# ============================================================
+@orders_bp.route('/cash-counts', methods=['GET'])
+def get_cash_counts():
+    """Past till counts, newest first."""
+    db = request.args.get('db', 'default')
+    if not session.get('operator_id'):
+        return jsonify({'error': 'Operator not logged in'}), 403
+    return jsonify(list_cash_counts(db))
+
+
+@orders_bp.route('/cash-counts/expected', methods=['GET'])
+def get_expected_cash():
+    """Cash sales total awaiting count. Optional ?date=YYYY-MM-DD."""
+    db = request.args.get('db', 'default')
+    if not session.get('operator_id'):
+        return jsonify({'error': 'Operator not logged in'}), 403
+    return jsonify({'expected_cash': expected_cash_total(db, request.args.get('date'))})
+
+
+@orders_bp.route('/cash-counts', methods=['POST'])
+def add_cash_count():
+    """Close the till: body {"counted": <drawer cash>, "note"?, "date"?}."""
+    db = request.args.get('db', 'default')
+    operator_id = session.get('operator_id')
+    if not operator_id:
+        return jsonify({'error': 'Operator not logged in'}), 403
+    data = request.get_json() or {}
+    if 'counted' not in data:
+        return jsonify({'error': 'counted is required'}), 400
+    try:
+        row = record_cash_count(db, data['counted'], operator_id,
+                                data.get('note'), data.get('date'))
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    log_audit_event(db, 'cash_count',
+                    f"Till counted: expected {row['expected_cash']}, "
+                    f"counted {row['counted_cash']}", operator_id)
+    return jsonify(row), 201
 
 
 # ============================================================

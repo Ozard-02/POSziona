@@ -366,3 +366,61 @@ def build_recap_csv(db_name, date_filter=None):
         ])
 
     return output.getvalue()
+
+
+# ============================================================
+# CASH COUNTS (till reconciliation)
+# ============================================================
+def expected_cash_total(db_name, date_filter=None):
+    """Cash sales total: SUM of cash payments (change already excluded —
+    payments store the sale amount, tendered/change separately)."""
+    with PartyDatabase(db_name) as conn:
+        where = "AND DATE(timestamp) = ?" if date_filter else ""
+        params = [date_filter] if date_filter else []
+        row = conn.execute(
+            f"""SELECT COALESCE(SUM(amount), 0) FROM payments
+                WHERE method = 'cash' {where}""",
+            params
+        ).fetchone()
+        return row[0] if row else 0.0
+
+
+def record_cash_count(db_name, counted_cash, operator_id, note=None,
+                      date_filter=None):
+    """Record a till count. Returns the row (expected/counted/difference)."""
+    try:
+        counted = float(counted_cash)
+    except (TypeError, ValueError):
+        raise ValueError('Counted cash must be a valid number')
+    if counted < 0:
+        raise ValueError('Counted cash must be non-negative')
+    expected = expected_cash_total(db_name, date_filter)
+    difference = counted - expected
+    with PartyDatabase(db_name) as conn:
+        cur = conn.execute(
+            """INSERT INTO cash_counts
+               (expected_cash, counted_cash, difference, operator_id, note)
+               VALUES (?, ?, ?, ?, ?)""",
+            (expected, counted, difference, operator_id, note)
+        )
+        conn.commit()
+        row = conn.execute(
+            """SELECT cc.*, o.name AS operator_name FROM cash_counts cc
+               LEFT JOIN operators o ON o.id = cc.operator_id
+               WHERE cc.id = ?""",
+            (cur.lastrowid,)
+        ).fetchone()
+        logger.info(f"Cash count: expected={expected}, counted={counted}")
+        return dict(row)
+
+
+def list_cash_counts(db_name, limit=50):
+    """Past till counts, newest first."""
+    with PartyDatabase(db_name) as conn:
+        rows = conn.execute(
+            """SELECT cc.*, o.name AS operator_name FROM cash_counts cc
+               LEFT JOIN operators o ON o.id = cc.operator_id
+               ORDER BY cc.id DESC LIMIT ?""",
+            (limit,)
+        ).fetchall()
+        return [dict(row) for row in rows]

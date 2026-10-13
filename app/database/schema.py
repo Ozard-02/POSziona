@@ -135,6 +135,23 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 
 -- ----------------------------------------------------------
+-- Cash counts (end-of-day till reconciliation)
+-- One row per count: expected = cash sales at count time, counted =
+-- cash in the drawer, difference = counted - expected.
+-- ----------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS cash_counts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expected_cash REAL NOT NULL,
+    counted_cash REAL NOT NULL,
+    difference REAL NOT NULL,
+    operator_id INTEGER,
+    note TEXT,
+    FOREIGN KEY (operator_id) REFERENCES operators(id)
+);
+
+-- ----------------------------------------------------------
 -- Idempotency keys (retry-safe checkout)
 -- One row per checkout attempt key; lets clients safely retry
 -- a sale after a network/server failure without duplicating

@@ -17,6 +17,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const discountsEl = document.getElementById('report-discounts');
     const reportSummary = document.getElementById('report-summary');
     const reportTables = document.getElementById('report-tables');
+    const cashCloseBtn = document.getElementById('cash-close-btn');
+    const tillBody = document.querySelector('#till-table tbody');
 
     // Set default date to today
     const today = new Date();
@@ -54,6 +56,51 @@ document.addEventListener('DOMContentLoaded', function() {
     if (generateBtn) {
         generateBtn.addEventListener('click', function() {
             generateReport();
+        });
+    }
+
+    // === Till counts (cash close) ===
+    async function loadTillHistory() {
+        if (!tillBody) return;
+        try {
+            const rows = await fetchJSON(`${API_BASE}/orders/cash-counts?db=${db}`);
+            tillBody.innerHTML = '';
+            rows.forEach(function(r) {
+                const tr = document.createElement('tr');
+                const diff = Number(r.difference) || 0;
+                tr.innerHTML = `<td></td><td></td><td></td><td></td>`;
+                tr.children[0].textContent = (r.timestamp || '').slice(0, 16).replace('T', ' ');
+                tr.children[1].textContent = formatCurrency(r.expected_cash);
+                tr.children[2].textContent = formatCurrency(r.counted_cash);
+                tr.children[3].textContent = (diff > 0 ? '+' : '') + formatCurrency(diff);
+                if (diff !== 0) tr.children[3].style.color = '#c0392b';
+                tillBody.appendChild(tr);
+            });
+        } catch (e) {
+            console.error('Till history load failed:', e);
+        }
+    }
+
+    if (cashCloseBtn) {
+        cashCloseBtn.addEventListener('click', async function() {
+            try {
+                const st = await fetchJSON(`${API_BASE}/orders/cash-counts/expected?db=${db}`);
+                const expected = Number(st.expected_cash) || 0;
+                const raw = prompt(
+                    t('counted_cash') + ' (' + t('expected_cash') + ' ' +
+                    formatCurrency(expected) + '):', String(expected));
+                if (raw === null) return;
+                const row = await fetchJSON(`${API_BASE}/orders/cash-counts?db=${db}`, {
+                    method: 'POST',
+                    body: JSON.stringify({ counted: raw })
+                });
+                const diff = Number(row.difference) || 0;
+                showSuccess(t('difference') + ': ' +
+                    (diff > 0 ? '+' : '') + formatCurrency(diff));
+                loadTillHistory();
+            } catch (e) {
+                showError(e.message || e);
+            }
         });
     }
 
@@ -186,4 +233,5 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- Init ---
     loadSettings();
     generateReport();
+    loadTillHistory();
 });
