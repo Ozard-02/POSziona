@@ -157,20 +157,30 @@ def test_create_tag_requires_admin(clean_db, client):
     assert resp.status_code == 403
 
 
-def test_create_tag_without_auth(clean_db, client):
-    """Test that tag creation without admin session with require_admin=0 works."""
+def test_tag_mutations_reject_unauthenticated(clean_db, client):
+    """Tag mutations require an admin session — no query-param bypass."""
     db_name = clean_db
+    client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
+    client.post(f'/api/products/sections?db={db_name}', json={'name': 'Drinks'})
+    client.post(f'/api/products/subsections?db={db_name}', json={'section_id': 1, 'name': 'Hot'})
+    client.post(f'/api/products/products?db={db_name}', json={
+        'name': 'Coffee', 'price': 2.00, 'section_id': 1, 'subsection_id': 1})
+    tag_id = client.post(
+        f'/api/products/tags?db={db_name}', json={'name': 'Strong'}).get_json()['id']
+    client.post(f'/api/auth/logout?db={db_name}')
 
-    resp = client.post(
+    # None of these may succeed without an admin session, even with require_admin=0.
+    assert client.post(
         f'/api/products/tags?db={db_name}&require_admin=0',
-        json={'name': 'NoAuth'}
-    )
-    assert resp.status_code == 201
-
-    resp = client.get(f'/api/products/tags?db={db_name}')
-    tags = resp.get_json()
-    assert len(tags) == 1
-    assert tags[0]['name'] == 'NoAuth'
+        json={'name': 'NoAuth'}).status_code == 403
+    assert client.post(
+        f'/api/products/1/tags?db={db_name}&require_admin=0',
+        json={'tag_id': tag_id}).status_code == 403
+    assert client.delete(
+        f'/api/products/1/tags/{tag_id}?db={db_name}&require_admin=0').status_code == 403
+    assert client.put(
+        f'/api/products/1/tags?db={db_name}&require_admin=0',
+        json={'tags': []}).status_code == 403
 
 
 def test_delete_tag_removes_from_products(clean_db, client):

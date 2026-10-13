@@ -520,26 +520,41 @@ def main(mode=None, server_url=None):
         run_server_and_client()
 
 
-if __name__ == '__main__':
-    mode = None
-    server_url = None
-    args = sys.argv[1:]
-    if '--mode' in args:
-        idx = args.index('--mode')
-        if idx + 1 < len(args):
-            mode = args[idx + 1]
-            if mode not in ('all', 'server', 'client'):
-                print(f"Unknown mode '{mode}'. Use: all, server, or client.")
-                sys.exit(1)
-    if '--server-url' in args:
-        idx = args.index('--server-url')
-        if idx + 1 < len(args):
-            server_url = args[idx + 1]
-    elif '--help' in args or '-h' in args:
-        print(__doc__)
-        print("\nOptions:")
-        print("  --mode {all|server|client}  Startup mode (default: all)")
-        print("  --server-url URL            Server URL for client mode (e.g., http://192.168.1.10:5000/)")
-        sys.exit(0)
+def parse_args(argv=None):
+    """Parse CLI flags. Returns (mode, server_url).
 
-    main(mode=mode, server_url=server_url)
+    Single implementation shared by scripts/run_pos.py (source) and
+    scripts/entry_point.py (frozen) — they differ only in path bootstrap.
+    """
+    import argparse
+    parser = argparse.ArgumentParser(
+        description='Run Posziona in one of three modes:',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+  all       Start Flask server + open pywebview window (default)
+  server    Start Flask server only (no window)
+  client    Open pywebview window only (connects to running server)
+
+If --mode is omitted, an interactive prompt is shown.
+
+Options:
+  --mode {all|server|client}   Startup mode (default: all)
+  --server-url URL             Server URL for client mode
+                               (e.g., http://192.168.1.10:5000/)
+""",
+    )
+    parser.add_argument(
+        '--mode', choices=['all', 'server', 'client'],
+        help='Startup mode (omit for interactive prompt)'
+    )
+    parser.add_argument(
+        '--server-url',
+        help='Server URL for client mode (e.g., http://192.168.1.10:5000/)'
+    )
+    args = parser.parse_args(argv)
+    return args.mode, args.server_url
+
+
+if __name__ == '__main__':
+    _mode, _server_url = parse_args()
+    main(mode=_mode, server_url=_server_url)

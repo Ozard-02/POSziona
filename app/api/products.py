@@ -356,7 +356,7 @@ def list_tags():
 def add_tag():
     """Create a new tag (admin only)."""
     db = request.args.get('db', 'default')
-    if request.args.get('require_admin', '1') == '1' and not _is_admin():
+    if not _is_admin():
         return jsonify({'error': 'Admin access required'}), 403
     data = request.get_json()
     name = data.get('name', '').strip()
@@ -424,7 +424,7 @@ def get_product_tag_list(product_id):
 def assign_product_tag(product_id):
     """Assign a tag to a product (admin only)."""
     db = request.args.get('db', 'default')
-    if request.args.get('require_admin', '1') == '1' and not _is_admin():
+    if not _is_admin():
         return jsonify({'error': 'Admin access required'}), 403
     data = request.get_json()
     tag_id = data.get('tag_id')
@@ -438,7 +438,7 @@ def assign_product_tag(product_id):
 def unassign_product_tag(product_id, tag_id):
     """Remove a tag from a product (admin only)."""
     db = request.args.get('db', 'default')
-    if request.args.get('require_admin', '1') == '1' and not _is_admin():
+    if not _is_admin():
         return jsonify({'error': 'Admin access required'}), 403
     remove_tag_from_product(db, product_id, tag_id)
     return jsonify({'message': 'Tag removed from product'})
@@ -448,7 +448,7 @@ def unassign_product_tag(product_id, tag_id):
 def set_product_tag_list(product_id):
     """Replace all tags on a product (admin only)."""
     db = request.args.get('db', 'default')
-    if request.args.get('require_admin', '1') == '1' and not _is_admin():
+    if not _is_admin():
         return jsonify({'error': 'Admin access required'}), 403
     data = request.get_json()
     tag_ids = data.get('tags', [])

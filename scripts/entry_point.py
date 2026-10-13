@@ -9,7 +9,6 @@ the template/static paths so Flask can find them.
 """
 import os
 import sys
-import argparse
 
 # --- Handle frozen (PyInstaller) bundles ---
 if getattr(sys, 'frozen', False):
@@ -27,26 +26,8 @@ else:
     _bundle_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path.insert(0, _bundle_dir)
 
-from app.main import main
+from app.main import main, parse_args
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
-        description='Run Posziona in one of three modes:',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""\
-  all       Start Flask server + open pywebview window (default)
-  server    Start Flask server only (no window)
-  client    Open pywebview window only (connects to running server)
-
-If --mode is omitted, an interactive prompt is shown.""",
-    )
-    parser.add_argument(
-        '--mode', choices=['all', 'server', 'client'],
-        help='Startup mode (omit for interactive prompt)'
-    )
-    parser.add_argument(
-        '--server-url',
-        help='Server URL for client mode (e.g., http://192.168.1.10:5000/)'
-    )
-    args = parser.parse_args()
-    main(mode=args.mode, server_url=args.server_url)
+    mode, server_url = parse_args()
+    main(mode=mode, server_url=server_url)

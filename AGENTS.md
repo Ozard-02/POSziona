@@ -64,6 +64,9 @@ Order is binding: R first, then C, then S.
   Exactly ONE server ever (split-brain = split sales); enforce/guide this.
 - Polish login + server-pick + persistent data until a non-technical
   operator can't get lost (identity line, one-tap reconnect, no dead pages).
+  UX BAR (decided 2026-10-13): usable by non-IT staff; at most an IT guy
+  does first setup. Every prompt/message must be actionable plain language,
+  no IPs/ports jargon unless a single copy-paste line.
 - Study how comparable software solves discovery/reconnect/offline
   (other FOSS POS, Odoo/UniCenta lessons in docs/requirements.md) and adopt
   proven patterns instead of inventing.
