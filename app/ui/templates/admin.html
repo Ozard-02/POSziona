@@ -17,6 +17,7 @@
             <li><a href="#" data-section="settings" data-i18n="settings">Settings</a></li>
             <li><a href="#" data-section="tags" data-i18n="tags">Tags</a></li>
             <li><a href="#" data-section="sections" data-i18n="sections">Sections</a></li>
+            <li><a href="#" data-section="backups" data-i18n="backups">Backups</a></li>
             <li><button id="logout-admin" class="btn-secondary btn-sm" data-i18n="logout">Logout</button></li>
         </ul>
     </div>
@@ -313,6 +314,21 @@
             <div id="sections-list" class="sections-list">
                 <!-- Sections will be populated here -->
             </div>
+        </div>
+
+        <!-- Backups -->
+        <div id="admin-backups" class="admin-section">
+            <div class="section-header">
+                <h3 data-i18n="backups">Backups</h3>
+                <div class="section-actions">
+                    <button id="snapshot-now-btn" class="btn-primary btn-sm" data-i18n="snapshot_now">Snapshot now</button>
+                </div>
+            </div>
+            <p class="section-help-text" data-i18n="no_snapshots" id="no-snapshots-hint" style="display:none">No snapshots yet — take one before the party starts.</p>
+            <table class="data-table" id="backups-table">
+                <thead><tr><th data-i18n="name_col">Name</th><th data-i18n="size_col">Size</th><th data-i18n="actions_col">Actions</th></tr></thead>
+                <tbody></tbody>
+            </table>
         </div>
     </div>
 </div>

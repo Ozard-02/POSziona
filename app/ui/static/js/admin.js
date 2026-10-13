@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 case 'settings': loadSettings(); break;
                 case 'tags': loadTags(); break;
                 case 'sections': loadSections(); break;
+                case 'backups': loadBackups(); break;
             }
         });
     });
@@ -1797,6 +1798,66 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (e) {
             console.error('Sections load failed:', e);
         }
+    }
+
+    // === Backups: snapshot list + snapshot-now + restore active party ===
+    function fmtSize(bytes) {
+        if (!bytes) return '—';
+        if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    async function loadBackups() {
+        const tbody = document.querySelector('#backups-table tbody');
+        const hint = document.getElementById('no-snapshots-hint');
+        try {
+            const snaps = await fetchJSON(`${API_BASE}/parties/backups`);
+            tbody.innerHTML = '';
+            if (hint) hint.style.display = snaps.length ? 'none' : '';
+            snaps.forEach(function(s) {
+                const tr = document.createElement('tr');
+                const files = (s.files || []).length;
+                tr.innerHTML = `<td>${s.name}</td><td>${fmtSize(s.size)} · ${files} files</td><td></td>`;
+                const btn = document.createElement('button');
+                btn.className = 'btn-danger btn-sm';
+                btn.textContent = t('restore');
+                btn.addEventListener('click', function() { restoreBackup(s.name); });
+                tr.lastChild.appendChild(btn);
+                tbody.appendChild(tr);
+            });
+        } catch (e) {
+            showError(e.message || e);
+        }
+    }
+
+    async function restoreBackup(snapshot) {
+        if (!confirm(t('restore_confirm'))) return;
+        try {
+            const result = await fetchJSON(
+                `${API_BASE}/parties/${encodeURIComponent(db)}/restore`, {
+                    method: 'POST',
+                    body: JSON.stringify({ snapshot: snapshot })
+                });
+            showSuccess(result.message);
+            loadBackups();
+        } catch (e) {
+            showError(e.message || e);
+        }
+    }
+
+    const snapshotNowBtn = document.getElementById('snapshot-now-btn');
+    if (snapshotNowBtn) {
+        snapshotNowBtn.addEventListener('click', async function() {
+            try {
+                const result = await fetchJSON(`${API_BASE}/parties/backups`, {
+                    method: 'POST'
+                });
+                showSuccess(result.message);
+                loadBackups();
+            } catch (e) {
+                showError(e.message || e);
+            }
+        });
     }
 
     function setupDragAndDrop() {

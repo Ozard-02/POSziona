@@ -72,6 +72,17 @@ def test_backup_api_list_and_trigger(clean_db, client, isolated_backups):
     assert len(r.get_json()) == 1
 
 
+def test_backup_restore_requires_admin(clean_db, client, isolated_backups):
+    """Logged-out restores are rejected (disaster recovery is admin-only)."""
+    db_name = clean_db
+    _setup_sale(client, db_name)
+    name = client.post('/api/parties/backups').get_json()['snapshot']
+
+    client.post(f'/api/auth/logout?db={db_name}')
+    r = client.post(f'/api/parties/{db_name}/restore', json={'snapshot': name})
+    assert r.status_code == 403
+
+
 def test_restore_round_trip(clean_db, client, isolated_backups):
     """Snapshot with 1 order → sell more → restore → back to 1 order."""
     db_name = clean_db
