@@ -68,3 +68,46 @@ Target: verify on 2 real devices from the GitHub release assets.
 - `app/ui/static/js/translations.js` — en/it labels
 - `tests/unit/test_discovery.py`, `tests/unit/test_login_template.py`,
   `tests/unit/test_settings_scope.py` or new `test_server_tag.py`
+
+---
+
+## Phase C design (C0, 2026-10-13) — topologies vs UX bar
+
+UX bar: a non-IT operator must go from "powered on" to "selling" with no
+network knowledge; at most an IT guy does first setup. Exactly ONE server.
+
+### Scenario matrix (what exists today)
+
+| # | Topology | Today journey | Friction for non-IT |
+|---|---|---|---|
+| S1 | Same box: `all` (server+window) | Double-click/run → prompt → window | Mode prompt (1/2/3) is jargon; blank/EOF→`all` OK |
+| S2 | Same box: server + 2nd client | Terminal A `server`, terminal B `client` → localhost auto-detected | Must open 2 terminals + type flags; hint exists |
+| S3 | LAN Wi-Fi: 1 server, N clients | Server prints `Other devices: http://<ip>:5000/`; client `client` mode → UDP discovery menu, or type IP | Discovery unproven on real LAN; typing an IP from one screen to another is the #1 failure (transcription); browser path has no probe → dead page |
+| S4 | Hotspot (phone, portable router) | Same as S3, manual IP more likely (AP isolation kills UDP; iPhone hotspots isolate clients entirely) | Typing IPs; no guidance in UI where the address is shown |
+| S5 | Remote network (VPN/tunnel) | Manual URL only; terminal probes, browser navigates blind | No documented IT recipe; TLS/cert story undefined |
+
+### Gaps found auditing the flows (2026-10-13, code evidence)
+
+1. **Browser Connect never probes.** Terminal `_discover_or_ask_server`
+   TCP-probes + re-prompts; `login.html` Connect just navigates
+   (`window.location.href`). Wrong IP = dead page. Fixable: `fetch`
+   `<origin>/api/status` first (CORS is open) with timeout, then navigate.
+2. **Login fetch has no failure path.** `attemptLogin` has no `.catch` —
+   dead server after Connect = silent nothing. Needs an error line.
+3. **`alert()` on the login screen** (IP empty/invalid, PIN short/login
+   error). Needs the toast treatment (R4b) at the latest here.
+4. **No "where do I find the address" guidance.** The server terminal
+   prints the URL; nothing tells the operator to read it off that screen
+   (or shows it as a QR / `.local` name). Copy-pasteable single line max.
+5. **Browser can't discover** (no UDP). Recents cover return visits.
+   First contact needs: typed IP (today), or QR/mDNS pairing (C1 research).
+6. **Two servers = silent split-brain.** Instance lock protects one DATA_DIR
+   only; two boxes each run a server happily. Login identity line helps
+   spot it; nothing warns. (C3)
+7. **Cart/login survival reviewed OK** (permanent session, 24 h) but
+   mid-sale disconnect UX (server dies, client keeps selling?) is
+   un-designed. (C4)
+
+### Decision log
+- C0: analysis above. C1 research (background): adopt proven pairing +
+  reconnect patterns instead of inventing.
