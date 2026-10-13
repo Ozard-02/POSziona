@@ -25,12 +25,13 @@
                 </button>
                 <button id="mode-remote" class="btn-secondary mode-btn">
                     <span class="mode-label">Connect to Remote</span>
-                    <span class="mode-desc">Enter a server IP address</span>
+                    <span class="mode-desc">Ask at the main till — type the address shown on its screen</span>
                 </button>
             </div>
 
             <div id="remote-connect" class="remote-connect hidden">
                 <input type="text" id="server-input" placeholder="192.168.1.10:5000" autocomplete="off">
+                <p id="remote-error" class="error hidden"></p>
                 <button id="connect-btn" class="btn-primary">Connect</button>
                 <button id="back-to-modes" class="btn-secondary">Back</button>
             </div>
@@ -42,6 +43,7 @@
         <div class="login-form">
             <select id="party-select" aria-label="Party"></select>
             <input type="password" id="pin-input" placeholder="PIN" maxlength="4" autocomplete="off">
+            <p id="login-error" class="error hidden"></p>
             <button id="login-btn" class="btn-primary">Login</button>
             <button id="admin-login-btn" class="btn-secondary">Admin Login</button>
         </div>
@@ -195,11 +197,51 @@ document.addEventListener('DOMContentLoaded', function() {
         modeOptions.classList.remove('hidden');
     });
 
+    // Inline errors (no alert popups on a kiosk screen).
+    var remoteError = document.getElementById('remote-error');
+    var loginError = document.getElementById('login-error');
+    function showRemoteError(msg) {
+        if (!remoteError) return;
+        remoteError.textContent = msg;
+        remoteError.classList.remove('hidden');
+    }
+    function showLoginError(msg) {
+        if (!loginError) return;
+        loginError.textContent = msg;
+        loginError.classList.remove('hidden');
+    }
+
+    // Probe before navigating: a wrong address shows a friendly error
+    // instead of a dead page. Plain fetch (CORS is open server-side).
+    function probeThenGo(origin) {
+        if (remoteError) remoteError.classList.add('hidden');
+        var done = false;
+        function fail() {
+            if (done) return;
+            done = true;
+            showRemoteError(t('remote_unreachable'));
+            serverInput.focus();
+        }
+        var timer = setTimeout(fail, 5000);
+        fetch(origin + '/api/status').then(function(r) {
+            if (!r.ok) throw new Error('status ' + r.status);
+            return r.json();
+        }).then(function() {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            window.location.href = origin + '/?mode=local';
+        }).catch(function() {
+            clearTimeout(timer);
+            fail();
+        });
+    }
+
     // Connect to remote server
     connectBtn.addEventListener('click', function() {
         var input = serverInput.value.trim();
         if (!input) {
-            alert('Please enter a server IP address');
+            showRemoteError(t('remote_empty'));
             serverInput.focus();
             return;
         }
@@ -212,7 +254,7 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             target = new URL(input);
         } catch (e) {
-            alert('Invalid address: ' + input);
+            showRemoteError(t('remote_invalid') + ' ' + input);
             serverInput.focus();
             return;
         }
@@ -222,9 +264,8 @@ document.addEventListener('DOMContentLoaded', function() {
             showLoginForm();
             return;
         }
-        // Navigate to the remote server and skip ITS mode screen:
-        // ?mode=local opens the login form directly there.
-        window.location.href = target.origin + '/?mode=local';
+        // Probe first: only hop when the server actually answers.
+        probeThenGo(target.origin);
     });
 
     // Allow Enter key on server input
@@ -233,9 +274,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function attemptLogin(isAdmin) {
+        if (loginError) loginError.classList.add('hidden');
         var pin = pinInput.value.trim();
         if (!pin || pin.length < 4) {
-            alert('Please enter a 4-digit PIN');
+            showLoginError(t('pin_short'));
             pinInput.focus();
             return;
         }
@@ -249,7 +291,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(r => r.json())
         .then(data => {
             if (data.error) {
-                alert(data.error);
+                showLoginError(data.error);
                 pinInput.value = '';
                 pinInput.focus();
             } else if (data.must_change_pin) {
@@ -262,6 +304,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 setActiveDb(party);
                 window.location.href = '/pos';
             }
+        })
+        .catch(function() {
+            // Server died mid-login (or never was one): say so, stay put.
+            showLoginError(t('server_unreachable'));
+            pinInput.focus();
         });
     }
 

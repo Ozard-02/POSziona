@@ -58,3 +58,41 @@ def test_login_identity_markers(client):
     html = client.get('/').get_data(as_text=True)
     assert 'id="server-identity"' in html
     assert "t('this_server')" in html
+
+
+def test_server_start_warns_about_live_network_server(monkeypatch, capsys):
+    """Second box starting up warns (split-brain) instead of silently forking sales."""
+    import time as _time
+    monkeypatch.setattr('app.utils.discovery.discover', lambda *a, **k: [
+        {'name': 'CASSA-1', 'host': '192.168.1.10', 'port': 5000,
+         'url': 'http://192.168.1.10:5000/', 'version': '0.1.6'}])
+    monkeypatch.setattr(_time, 'sleep', lambda *a: None)
+
+    main_mod._warn_if_other_server_live()
+
+    out = capsys.readouterr().out
+    assert 'another POSziona server' in out
+    assert 'CASSA-1' in out and 'http://192.168.1.10:5000/' in out
+    assert 'two different places' in out
+
+
+def test_server_start_quiet_when_alone(monkeypatch, capsys):
+    """No beacons → no warning, no delay."""
+    import time as _time
+    calls = []
+    monkeypatch.setattr('app.utils.discovery.discover',
+                        lambda *a, **k: [])
+    monkeypatch.setattr(_time, 'sleep', lambda s: calls.append(s))
+
+    main_mod._warn_if_other_server_live()
+
+    assert capsys.readouterr().out == ''
+    assert calls == []
+
+
+def test_server_check_opt_out(monkeypatch):
+    """POSZIONA_NO_SERVER_CHECK=1 skips the listen (scripts, tests)."""
+    monkeypatch.setenv('POSZIONA_NO_SERVER_CHECK', '1')
+    monkeypatch.setattr('app.utils.discovery.discover',
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError))
+    main_mod._warn_if_other_server_live()  # must not raise

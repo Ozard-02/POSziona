@@ -111,3 +111,29 @@ network knowledge; at most an IT guy does first setup. Exactly ONE server.
 ### Decision log
 - C0: analysis above. C1 research (background): adopt proven pairing +
   reconnect patterns instead of inventing.
+
+### C1 — what comparable systems do (research 2026-10-13)
+
+Discovery (no typing IPs): UDP beacons (stdlib, dies on AP isolation),
+mDNS/DNS-SD tap-to-connect (needs daemon/lib, same isolation failure),
+**QR pairing** (server shows URL+secret, client scans — survives isolation,
+only needs client→server unicast), cloud short-codes (plex.tv/link style —
+works anywhere but needs vendor cloud + internet; anti-local-first).
+Rule: never multicast-only; ship beacon-list + QR/manual together.
+Reconnect: offline outbox (client UUID per sale, retry w/ backoff, server
+dedupes) + plain-language banner ("keep selling, N saved, will send").
+Thick-client FOSS (UniCenta/Chromis/Floreant) blocks on DB loss — do NOT
+copy that. Single-server: no consensus anywhere; guards are claim+warn
+(refuse 2nd init when a same-site beacon is live), picker listing ALL
+servers, visible terminal count.
+
+### Adopted for POSziona (no new deps, offline-first)
+
+- C2 (now): browser Connect probes `/api/status` via fetch+timeout before
+  navigating (CORS is open); login failures get an error line, not silence;
+  plain-language address guidance; login `alert()`→inline errors.
+- C3 (now): server startup listens briefly for existing beacons and
+  prints a plain-language "another server is already on this network"
+  warning (refuse nothing — lock still guards one DATA_DIR).
+- Later (needs dep/UX design): QR pairing display (qrcode lib), mDNS
+  `.local` advertisement, offline outbox + terminal-count header.

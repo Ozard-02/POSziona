@@ -234,8 +234,42 @@ def select_mode():
         print("  Invalid choice. Please enter 1, 2, or 3.")
 
 
+def _warn_if_other_server_live():
+    """Best-effort split-brain guard: warn when another server is already
+    beacons-live on this network. Two servers = sales in two places.
+
+    Warn-only (never refuse): the instance lock already guards one data
+    dir; this catches the *other* failure — a second box serving the same
+    party. Skipped with POSZIONA_NO_SERVER_CHECK=1 (scripts, tests).
+    """
+    if os.environ.get('POSZIONA_NO_SERVER_CHECK'):
+        return
+    from app.utils.discovery import discover
+    try:
+        found = discover(timeout=1.5)
+    except Exception:
+        return
+    if not found:
+        return
+    print("", flush=True)
+    print("  NOTICE: another POSziona server is already on this network:",
+          flush=True)
+    for srv in found:
+        tag = f"  (v{srv['version']})" if srv.get('version') else ''
+        print(f"    - {srv['name']} — {srv['url']}{tag}", flush=True)
+    print("  Sales on two servers end up in two different places.", flush=True)
+    print("  If that is your main till, stop this one (Ctrl-C) and use it.",
+          flush=True)
+    print("  Starting anyway in 3 seconds...", flush=True)
+    try:
+        time.sleep(3)
+    except KeyboardInterrupt:
+        sys.exit(1)
+
+
 def run_server_only():
     """Mode 2: Start Flask server only, no pywebview window."""
+    _warn_if_other_server_live()
     _install_shutdown_handler()
     server_thread = threading.Thread(target=start_server, daemon=True)
     server_thread.start()
@@ -449,6 +483,7 @@ def run_client_only(server_url=None):
 
 def run_server_and_client():
     """Mode 1 (default): Start Flask server, then open pywebview window."""
+    _warn_if_other_server_live()
     _install_shutdown_handler()
     server_thread = threading.Thread(target=start_server, daemon=True)
     server_thread.start()

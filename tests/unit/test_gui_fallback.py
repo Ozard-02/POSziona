@@ -21,6 +21,7 @@ def _no_gui(monkeypatch):
     monkeypatch.setattr(main_mod, 'start_server', lambda: stop.wait(30))
     monkeypatch.setattr(main_mod, 'check_server_ready', lambda *a, **k: True)
     monkeypatch.setattr(main_mod.webview, 'create_window', lambda **kw: object())
+    monkeypatch.setattr('app.utils.discovery.discover', lambda *a, **k: [])
     main_mod._server_serving.set()
     monkeypatch.setattr('webbrowser.open', lambda *a, **k: False)
 
