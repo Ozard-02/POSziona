@@ -128,7 +128,6 @@ copy that. Single-server: no consensus anywhere; guards are claim+warn
 servers, visible terminal count.
 
 ### Adopted for POSziona (no new deps, offline-first)
-
 - C2 (now): browser Connect probes `/api/status` via fetch+timeout before
   navigating (CORS is open); login failures get an error line, not silence;
   plain-language address guidance; login `alert()`→inline errors.
@@ -137,3 +136,49 @@ servers, visible terminal count.
   warning (refuse nothing — lock still guards one DATA_DIR).
 - Later (needs dep/UX design): QR pairing display (qrcode lib), mDNS
   `.local` advertisement, offline outbox + terminal-count header.
+
+---
+
+## C4 — disconnect review (2026-10-13, code evidence)
+
+- Login + cart survive browser restarts (permanent 24 h session cookie).
+- Failed checkout keeps the cart and the SAME idempotency key, so retry
+  replays instead of double-charging; the double-submit guard now releases
+  on failure (was: stuck until reload — fixed with C4).
+- SSE uses native `EventSource` → auto-reconnects when the server returns.
+- Worst case (server dead mid-sale): red toast, cart intact, operator
+  retries or waits. No silent data loss by design. Full offline outbox
+  (sell with zero connectivity, sync later) is future work, not needed
+  for one-room parties.
+
+## C5 — remote-network recipe (for the IT guy, once per venue)
+
+Goal: a client somewhere else reaches the till. Pick ONE:
+
+1. **VPN (recommended): Tailscale / ZeroTier on both boxes.** Same flat
+   network afterwards — server URL is `http://<vpn-ip>:5000/`, and LAN
+   discovery usually works too. No firewall surgery.
+2. **SSH tunnel:** from the client box,
+   `ssh -L 5000:localhost:5000 user@<server>` then open
+   `http://127.0.0.1:5000/`. Nothing to install on the server.
+3. **Port forward** `5000/tcp` on the venue router to the server box
+   (needs router access + ideally a static LAN IP for the server).
+
+Then: on the client, type the URL ONCE in Connect → it becomes a
+one-tap Recent button. Notes: plain HTTP (trusted networks only);
+ beacons/UDP discovery do not cross subnets — that path is manual URL.
+
+## C6 — 2-device live checklist (for the user, needs real LAN)
+
+1. Server box: latest release, `--mode server`, Admin → System → server
+   name (e.g. `CASSA-1`); note the `Other devices on this network` URL.
+2. Start a SECOND server on another box on the same Wi-Fi → expect the
+   "another POSziona server is already on this network" NOTICE naming
+   box 1. Stop the second one.
+3. Client box: `client` mode → server appears by tag → select. Also try
+   typing the URL once (bare IP, no port) → connects.
+4. Browser-only: open `http://<server>:5000/` → login direct; revisit →
+   Recent button. Try a WRONG address → friendly error, no dead page.
+5. Kill the server mid-sale on a client → red toast, cart intact, retry
+   after restart sells exactly once.
+6. Report back: discovery found? probe errors clear? warning seen?

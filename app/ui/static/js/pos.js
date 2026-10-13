@@ -852,6 +852,10 @@ document.addEventListener('DOMContentLoaded', function() {
             cashTenderModal.classList.add('hidden');
             showReceipt(data);
         } catch (e) {
+            // Retry stays possible: release the double-submit guard so the
+            // operator can press Complete again (same idempotency key —
+            // the server replays instead of double-charging).
+            window._completeCashSaleInProgress = false;
             showError(e.message || t('checkout_failed'));
         }
     };
