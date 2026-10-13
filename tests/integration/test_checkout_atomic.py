@@ -7,7 +7,6 @@ Retry-safe atomic checkout tests.
 - SSE broadcast failures never fail the sale.
 """
 import pytest
-import pytest
 
 
 def _setup_product(client, db_name, stock=10):
