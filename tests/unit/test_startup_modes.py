@@ -8,21 +8,16 @@ import pytest
 import app.main as main_mod
 
 
-def test_select_mode_choices(monkeypatch):
-    import app.main as m
-    monkeypatch.setattr(builtins, 'input', lambda *a: '2')
-    assert m.select_mode() == 'server'
-    monkeypatch.setattr(builtins, 'input', lambda *a: '')
-    assert m.select_mode() == 'all'
-
-
-def test_select_mode_eof_defaults_all(monkeypatch):
-    import app.main as m
-
-    def boom(*a):
-        raise EOFError
-    monkeypatch.setattr(builtins, 'input', boom)
-    assert m.select_mode() == 'all'
+@pytest.mark.parametrize('answer,expected', [('2', 'server'), ('', 'all'), ('EOF', 'all')])
+def test_select_mode(monkeypatch, answer, expected):
+    """Choices map to modes; blank and EOF fall back to 'all'."""
+    if answer == 'EOF':
+        def boom(*a):
+            raise EOFError
+        monkeypatch.setattr(builtins, 'input', boom)
+    else:
+        monkeypatch.setattr(builtins, 'input', lambda *a: answer)
+    assert main_mod.select_mode() == expected
 
 
 def test_main_no_mode_non_tty_defaults_all(monkeypatch, capsys):
@@ -45,17 +40,6 @@ def test_main_no_mode_tty_prompts(monkeypatch):
     monkeypatch.setattr(builtins, 'input', lambda *a: '2')
     main_mod.main(mode=None)
     assert called == [True]
-
-
-def test_blank_manual_entry_reprompts_no_hybrid(monkeypatch, capsys):
-    """Blank must NOT start a silent local server (split-brain guard)."""
-    monkeypatch.setattr('app.utils.discovery.discover', lambda *a, **k: [])
-    answers = iter(['', '192.168.1.5'])
-    monkeypatch.setattr(builtins, 'input', lambda *a: next(answers))
-    monkeypatch.setattr(main_mod, '_server_reachable', lambda *a, **k: True)
-
-    assert main_mod._discover_or_ask_server() == 'http://192.168.1.5:5000/'
-    assert 'Ctrl-C' in capsys.readouterr().out
 
 
 def test_client_auto_localhost_names_override(monkeypatch, capsys):

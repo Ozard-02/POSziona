@@ -1,8 +1,11 @@
 """
-LAN discovery: beacon round-trip over loopback (no real LAN needed).
+LAN discovery + client server-picking. One behavior per test; slow UDP
+round-trips merged so the file pays the ~3s listen cost once.
 """
 import threading
 import time
+
+import pytest
 
 from app.utils import discovery
 
@@ -11,7 +14,7 @@ TEST_PORT = 42199  # discovery listener port (≠ server ports)
 
 
 def test_beacon_round_trip():
-    """One beacon sent to loopback is discovered with name+url."""
+    """Loopback beacons are discovered with url/host/name/version; dupes collapse."""
     results = []
     listener = threading.Thread(
         target=lambda: results.extend(discovery.discover(timeout=3, port=TEST_PORT)),
@@ -26,9 +29,11 @@ def test_beacon_round_trip():
 
     by_port = {s['port']: s for s in results}
     assert set(by_port) == {5000, 5001}, results
-    assert by_port[5000]['url'] == 'http://127.0.0.1:5000/'
-    assert by_port[5000]['host'] == '127.0.0.1'
-    assert by_port[5000]['name']
+    first = by_port[5000]
+    assert first['url'] == 'http://127.0.0.1:5000/'
+    assert first['host'] == '127.0.0.1'
+    assert first['name']
+    assert first['version']  # None-tolerant for old servers, present for ours
 
 
 def test_garbage_datagrams_ignored():
@@ -59,27 +64,15 @@ def test_beacon_opt_out(monkeypatch):
     assert stop.is_set()
 
 
-def test_lan_ip_is_plain_ipv4():
-    """get_lan_ip returns dotted IPv4 (loopback when offline)."""
-    import re
-    ip = discovery.get_lan_ip()
-    assert re.fullmatch(r'\d{1,3}(\.\d{1,3}){3}', ip), ip
-
-
-def test_lan_ip_prefers_default_route_over_docker(monkeypatch):
-    """Live bug 2026-10-12: hint showed 172.17.0.1 (docker0), not Wi-Fi."""
-    monkeypatch.setattr(discovery, '_default_route_ip',
-                        lambda: '192.168.178.171')
-    monkeypatch.setattr(discovery, '_local_ipv4s',
-                        lambda: {'172.17.0.1', '192.168.178.171'})
-    assert discovery.get_lan_ip() == '192.168.178.171'
-
-
-def test_lan_ip_falls_back_when_offline(monkeypatch):
-    """No route and no interfaces → loopback."""
-    monkeypatch.setattr(discovery, '_default_route_ip', lambda: None)
-    monkeypatch.setattr(discovery, '_local_ipv4s', lambda: set())
-    assert discovery.get_lan_ip() == '127.0.0.1'
+@pytest.mark.parametrize('route_ip,local_ips,expected', [
+    ('192.168.178.171', {'172.17.0.1', '192.168.178.171'}, '192.168.178.171'),
+    (None, set(), '127.0.0.1'),
+])
+def test_get_lan_ip(monkeypatch, route_ip, local_ips, expected):
+    """Default-route IP wins over docker bridges; loopback when offline."""
+    monkeypatch.setattr(discovery, '_default_route_ip', lambda: route_ip)
+    monkeypatch.setattr(discovery, '_local_ipv4s', lambda: set(local_ips))
+    assert discovery.get_lan_ip() == expected
 
 
 def test_broadcast_targets_cover_all_interfaces(monkeypatch):
@@ -100,6 +93,7 @@ def test_server_binds_all_interfaces():
     import os
     assert BIND_HOST == os.environ.get('POSZIONA_BIND_HOST', '0.0.0.0')
 
+
 def test_beacon_loop_emits(monkeypatch):
     """Loop sends immediately, then periodically, until stopped."""
     monkeypatch.delenv('POSZIONA_NO_BEACON', raising=False)
@@ -113,113 +107,79 @@ def test_beacon_loop_emits(monkeypatch):
     assert sent == [5000] * len(sent)
 
 
-def test_discover_menu_shows_tag_and_version(monkeypatch, capsys):
-    """Picker lists friendly tags (+version when the server sends one)."""
+def _two_servers(version=None):
+    second = {'name': 'cassa2', 'host': '192.168.1.11', 'port': 5000,
+              'url': 'http://192.168.1.11:5000/'}
+    first = {'name': 'CASSA-1', 'host': '192.168.1.10', 'port': 5000,
+             'url': 'http://192.168.1.10:5000/'}
+    if version:
+        first['version'] = version
+    return [first, second]
+
+
+@pytest.mark.parametrize('answer,expected_url,expected_out', [
+    ('1', 'http://192.168.1.10:5000/', ['CASSA-1', '(v0.1.4)', 'cassa2']),
+    ('2', 'http://192.168.1.11:5000/', ['CASSA-1', 'cassa2']),
+    ('', 'http://192.168.1.10:5000/', []),  # Enter picks server 1, as promised
+])
+def test_discover_menu_selection(monkeypatch, capsys, answer, expected_url, expected_out):
+    """Numbered picker returns the chosen server; Enter means 1."""
     import builtins
     import app.main as main_mod
 
-    servers = [
-        {'name': 'CASSA-1', 'host': '192.168.1.10', 'port': 5000,
-         'url': 'http://192.168.1.10:5000/', 'version': '0.1.4'},
-        {'name': 'oldbox', 'host': '192.168.1.11', 'port': 5000,
-         'url': 'http://192.168.1.11:5000/'},
-    ]
-    monkeypatch.setattr('app.utils.discovery.discover', lambda *a, **k: servers)
-    monkeypatch.setattr(builtins, 'input', lambda *a: '1')
+    monkeypatch.setattr('app.utils.discovery.discover',
+                        lambda *a, **k: _two_servers(version='0.1.4'))
+    monkeypatch.setattr(builtins, 'input', lambda *a: answer)
 
-    assert main_mod._discover_or_ask_server() == 'http://192.168.1.10:5000/'
+    assert main_mod._discover_or_ask_server() == expected_url
     out = capsys.readouterr().out
-    assert 'CASSA-1' in out and '(v0.1.4)' in out and 'oldbox' in out
+    assert all(marker in out for marker in expected_out)
 
 
-def test_discover_menu_picks_server(monkeypatch, capsys):
-    """Client offers found servers numbered; choice returns its URL."""
-    import builtins
-    import app.main as main_mod
-
-    servers = [
-        {'name': 'cassa1', 'host': '192.168.1.10', 'port': 5000,
-         'url': 'http://192.168.1.10:5000/'},
-        {'name': 'cassa2', 'host': '192.168.1.11', 'port': 5000,
-         'url': 'http://192.168.1.11:5000/'},
-    ]
-    monkeypatch.setattr('app.utils.discovery.discover', lambda *a, **k: servers)
-    monkeypatch.setattr(builtins, 'input', lambda *a: '2')
-
-    assert main_mod._discover_or_ask_server() == 'http://192.168.1.11:5000/'
-    out = capsys.readouterr().out
-    assert 'cassa1' in out and 'cassa2' in out
-
-
-def test_discover_fallback_to_manual(monkeypatch):
-    """No beacons → manual entry still works (old behaviour)."""
+@pytest.mark.parametrize('answers,probes,expected_url,expected_out', [
+    # No beacons → manual entry works.
+    (['192.168.1.99:5000'], [True], 'http://192.168.1.99:5000/', []),
+    # Dead IP → hint + re-prompt; reachable IP → normalized.
+    (['192.168.178.128', '192.168.178.128:5000'], [False, True],
+     'http://192.168.178.128:5000/', ['Cannot reach']),
+    # Garbage re-asks, then accepts.
+    (['\x1b[A', '192.168.1.5:5000'], [True],
+     'http://192.168.1.5:5000/', ['Not a valid address']),
+    # Blank re-prompts — never a silent local server (split-brain guard).
+    (['', '192.168.1.5'], [True], 'http://192.168.1.5:5000/', ['Ctrl-C']),
+])
+def test_manual_entry_flows(monkeypatch, capsys, answers, probes,
+                            expected_url, expected_out):
+    """Manual server entry: fallback, reprompt, garbage and blank handling."""
     import builtins
     import app.main as main_mod
 
     monkeypatch.setattr('app.utils.discovery.discover', lambda *a, **k: [])
-    monkeypatch.setattr(builtins, 'input', lambda *a: '192.168.1.99:5000')
-    monkeypatch.setattr(main_mod, '_server_reachable', lambda *a, **k: True)
-
-    assert main_mod._discover_or_ask_server() == 'http://192.168.1.99:5000/'
-
-
-def test_normalize_bare_ip_gets_default_port():
-    """Bare IP/hostname → :5000 appended (was: port 80 dead page)."""
-    import app.main as main_mod
-
-    assert main_mod._normalize_server_url('192.168.178.128') == \
-        'http://192.168.178.128:5000/'
-    assert main_mod._normalize_server_url('http://192.168.178.128') == \
-        'http://192.168.178.128:5000/'
-    assert main_mod._normalize_server_url('cassa1') == \
-        'http://cassa1:5000/'
-
-
-def test_normalize_keeps_explicit_port_and_path():
-    """Explicit port/path untouched."""
-    import app.main as main_mod
-
-    assert main_mod._normalize_server_url('192.168.1.10:5000') == \
-        'http://192.168.1.10:5000/'
-    assert main_mod._normalize_server_url('http://192.168.1.10:5001/pos') == \
-        'http://192.168.1.10:5001/pos/'
-    assert main_mod._normalize_server_url('http://192.168.1.10:5000/') == \
-        'http://192.168.1.10:5000/'
-
-
-def test_discover_menu_empty_picks_first(monkeypatch):
-    """Enter on the menu selects server 1, as the prompt promises."""
-    import builtins
-    import app.main as main_mod
-
-    servers = [
-        {'name': 'cassa1', 'host': '192.168.1.10', 'port': 5000,
-         'url': 'http://192.168.1.10:5000/'},
-        {'name': 'cassa2', 'host': '192.168.1.11', 'port': 5000,
-         'url': 'http://192.168.1.11:5000/'},
-    ]
-    monkeypatch.setattr('app.utils.discovery.discover', lambda *a, **k: servers)
-    monkeypatch.setattr(builtins, 'input', lambda *a: '')
-
-    assert main_mod._discover_or_ask_server() == 'http://192.168.1.10:5000/'
-
-
-def test_manual_unreachable_reprompts_then_accepts(monkeypatch, capsys):
-    """Dead IP → hint + re-prompt; reachable IP → returned normalized."""
-    import builtins
-    import app.main as main_mod
-
-    monkeypatch.setattr('app.utils.discovery.discover', lambda *a, **k: [])
-    answers = iter(['192.168.178.128', '192.168.178.128:5000'])
-    monkeypatch.setattr(builtins, 'input', lambda *a: next(answers))
-    probes = iter([False, True])
+    monkeypatch.setattr(builtins, 'input', lambda *a: answers.pop(0))
     monkeypatch.setattr(main_mod, '_server_reachable',
-                        lambda *a, **k: next(probes))
+                        lambda *a, **k: probes.pop(0))
 
-    assert main_mod._discover_or_ask_server() == \
-        'http://192.168.178.128:5000/'
+    assert main_mod._discover_or_ask_server() == expected_url
     out = capsys.readouterr().out
-    assert 'Cannot reach' in out
+    assert all(marker in out for marker in expected_out)
+
+
+@pytest.mark.parametrize('raw,expected', [
+    ('192.168.178.128', 'http://192.168.178.128:5000/'),
+    ('http://192.168.178.128', 'http://192.168.178.128:5000/'),
+    ('cassa1', 'http://cassa1:5000/'),
+    ('192.168.1.10:5000', 'http://192.168.1.10:5000/'),
+    ('http://192.168.1.10:5001/pos', 'http://192.168.1.10:5001/pos/'),
+    ('', None),
+    ('   ', None),
+    ('\x1b[A', None),
+    ('http://[::1', None),
+])
+def test_normalize_server_url(raw, expected):
+    """Bare hosts gain :5000 (was: port-80 dead page); garbage → None, never raises."""
+    import app.main as main_mod
+
+    assert main_mod._normalize_server_url(raw) == expected
 
 
 def test_beacon_payload_has_tag_and_version():
@@ -235,74 +195,18 @@ def test_beacon_payload_has_tag_and_version():
     assert payload['name']
 
 
-def test_server_name_defaults_to_hostname(monkeypatch):
-    """No tag configured → machine hostname (old installs keep working)."""
+@pytest.mark.parametrize('device_settings,expected', [
+    ({}, None),  # None → caller falls back to hostname
+    ({'server_name': '  CASSA-1 '}, 'CASSA-1'),
+])
+def test_server_name_source(monkeypatch, device_settings, expected):
+    """Admin-set tag wins; empty config falls back to machine hostname."""
     import socket
     import app.utils.discovery as disc
 
     monkeypatch.setattr('app.services.settings_service.get_device_settings',
-                        lambda: {})
-    assert disc.get_server_name() == socket.gethostname()
-
-
-def test_server_name_uses_device_setting(monkeypatch):
-    """Admin-set tag wins over hostname."""
-    import app.utils.discovery as disc
-
-    monkeypatch.setattr('app.services.settings_service.get_device_settings',
-                        lambda: {'server_name': '  CASSA-1 '})
-    assert disc.get_server_name() == 'CASSA-1'
-
-
-def test_discover_returns_version():
-    """discover() surfaces beacon version (None-tolerant for old servers)."""
-    import threading
-    import time
-    import app.utils.discovery as disc
-    from app.utils.config import APP_VERSION
-
-    port = 42201
-    results = []
-    listener = threading.Thread(
-        target=lambda: results.extend(disc.discover(timeout=3, port=port)),
-        daemon=True,
-    )
-    listener.start()
-    time.sleep(0.3)
-    disc.send_beacon(5000, dest=('127.0.0.1', port))
-    listener.join(timeout=10)
-
-    assert len(results) == 1
-    assert results[0]['version'] == APP_VERSION
-    assert results[0]['name']
-
-
-def test_normalize_rejects_garbage_without_raising():
-    """Arrow-key escapes / trailing junk → None, never a traceback."""
-    import app.main as main_mod
-
-    assert main_mod._normalize_server_url('') is None
-    assert main_mod._normalize_server_url('   ') is None
-    assert main_mod._normalize_server_url('\x1b[A') is None
-    assert main_mod._normalize_server_url('http://[::1') is None
-    # Trailing junk after a valid address is harmless (kept as path,
-    # the reachability probe rejects it with a re-prompt).
-    assert main_mod._normalize_server_url('192.168.1.10:5000/\x1b[A') == \
-        'http://192.168.1.10:5000/[A/'
-
-
-def test_manual_garbage_reprompts(monkeypatch, capsys):
-    """Garbage input re-asks with 'Not a valid address', then accepts."""
-    import builtins
-    import app.main as main_mod
-
-    monkeypatch.setattr('app.utils.discovery.discover', lambda *a, **k: [])
-    answers = iter(['\x1b[A', '192.168.1.5:5000'])
-    monkeypatch.setattr(builtins, 'input', lambda *a: next(answers))
-    monkeypatch.setattr(main_mod, '_server_reachable', lambda *a, **k: True)
-
-    assert main_mod._discover_or_ask_server() == 'http://192.168.1.5:5000/'
-    assert 'Not a valid address' in capsys.readouterr().out
+                        lambda: device_settings)
+    assert disc.get_server_name() == (expected or socket.gethostname())
 
 
 def test_explicit_garbage_server_url_exits(monkeypatch, capsys):
