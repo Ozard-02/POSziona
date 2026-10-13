@@ -23,14 +23,19 @@ logger = get_logger('services.parties')
 # PARTY CRUD
 # ============================================================
 
-def _remove_db_files(db_path):
-    """Remove a DB file and its WAL/SHM sidecars if present."""
+def _remove_sidecars(db_path, exts=('-wal', '-shm', '-journal')):
+    """Remove a DB's sidecar files if present (keeps the main file)."""
+    for ext in exts:
+        ext_path = db_path + ext
+        if os.path.exists(ext_path):
+            os.remove(ext_path)
+
+
+def _remove_db_files(db_path, exts=('-wal', '-shm', '-journal')):
+    """Remove a DB file and its sidecars if present."""
     if os.path.exists(db_path):
         os.remove(db_path)
-        for ext in ['-wal', '-shm']:
-            ext_path = db_path + ext
-            if os.path.exists(ext_path):
-                os.remove(ext_path)
+        _remove_sidecars(db_path, exts)
 
 
 def _sanitize_party_name(party_name):
@@ -222,14 +227,8 @@ def delete_party(db_name):
                 'close POS clients using it, then retry')
         mark_deleting(db_path, True)
         try:
-            if os.path.exists(db_path):
-                os.remove(db_path)
-                # Remove WAL and SHM files if they exist
-                for ext in ['-wal', '-shm']:
-                    path = db_path + ext
-                    if os.path.exists(path):
-                        os.remove(path)
-                logger.info(f"Deleted party '{db_name}'")
+            _remove_db_files(db_path)
+            logger.info(f"Deleted party '{db_name}'")
         finally:
             mark_deleting(db_path, False)
 

@@ -225,10 +225,8 @@ def restore_party_db(db_name, snapshot):
                 conn.close()
 
         shutil.copyfile(src, dst)
-        for ext in ['-wal', '-shm', '-journal']:
-            p = dst + ext
-            if os.path.exists(p):
-                os.remove(p)
+        from app.services.party_service import _remove_sidecars
+        _remove_sidecars(dst)
 
     # Force a fresh integrity verification on next open
     from app.database import connection as _conn_mod
