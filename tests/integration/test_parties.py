@@ -101,8 +101,8 @@ def test_duplicate_party_excludes_sales_history(clean_db, client):
     })
 
     # Create an order directly via the service layer (sales history)
-    from app.services.order_service import create_order
-    order_id = create_order(
+    from app.services.order_service import checkout_order
+    order_id, _, _, _ = checkout_order(
         db_name,
         [{'product_id': 1, 'quantity': 2, 'unit_price': 2.50}],
         'cash', 1, 0.0, None

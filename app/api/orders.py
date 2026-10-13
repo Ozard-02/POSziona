@@ -198,15 +198,6 @@ def items_report():
     return jsonify(get_items_sold_summary(db, date_filter))
 
 
-@orders_bp.route('/report/recent', methods=['GET'])
-def recent_orders_report():
-    """Get recent orders for the report view. Optional ?date=YYYY-MM-DD."""
-    db = request.args.get('db', 'default')
-    date_filter = request.args.get('date')
-    limit = _parse_limit(request.args.get('limit'))
-    return jsonify(get_recent_orders(db, limit, date_filter))
-
-
 @orders_bp.route('/log-receipt', methods=['POST'])
 def log_receipt():
     """Log a recovery receipt to server logs (always saved, regardless of

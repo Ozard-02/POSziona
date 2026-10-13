@@ -15,7 +15,6 @@ from app.services.product_service import (
     import_products_from_csv,
     create_section,
     create_subsection,
-    get_sections,
     get_all_products,
     get_all_tags,
     get_tag_by_id,
@@ -49,13 +48,6 @@ def list_sections():
     db = request.args.get('db', 'default')
     sections = get_all_sections_with_subsections(db)
     return jsonify(sections)
-
-
-@products_bp.route('/sections', methods=['GET'])
-def get_all_sections():
-    """Get all sections (flat list)."""
-    db = request.args.get('db', 'default')
-    return jsonify(get_sections(db))
 
 
 @products_bp.route('/sections', methods=['POST'])

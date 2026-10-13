@@ -144,38 +144,6 @@ def checkout_order(db_name, cart_items, payment_method, operator_id,
         return order_id, total, updated_stocks, False
 
 
-def create_order(db_name, cart_items, payment_method, operator_id,
-                 discount_amount=0.0, discount_type=None):
-    """
-    Finalize a cart into a completed order (no payment recorded).
-    Kept for backwards compatibility — new code should use checkout_order().
-    Returns (order_id, updated_stocks).
-    """
-    order_id, _total, updated_stocks, _replayed = checkout_order(
-        db_name, cart_items, payment_method, operator_id,
-        discount_amount, discount_type
-    )
-    return order_id, updated_stocks
-
-
-def record_payment(db_name, order_id, method, amount, tendered=None):
-    """Record a payment for an order."""
-    change_due = None
-    if tendered is not None and method == 'cash':
-        if tendered < amount:
-            raise ValueError('Tendered amount must be at least the total due')
-        change_due = tendered - amount
-
-    with PartyDatabase(db_name) as conn:
-        conn.execute(
-            """INSERT INTO payments (order_id, method, amount, tendered, change_due)
-               VALUES (?, ?, ?, ?, ?)""",
-            (order_id, method, amount, tendered, change_due)
-        )
-        conn.commit()
-        logger.info(f"Payment recorded: order={order_id}, method={method}, amount={amount}")
-
-
 # ============================================================
 # REPORTING QUERIES
 # ============================================================

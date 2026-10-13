@@ -7,7 +7,7 @@ only convert + send. Operator login required (paper costs money).
 from flask import Blueprint, request, jsonify, session
 
 from app.services.printer_service import (
-    build_test_ticket, detect_serial, list_windows_printers, print_text,
+    build_test_ticket, detect_serial, print_text,
     resolve_device, DEFAULT_COLS,
 )
 
@@ -81,19 +81,3 @@ def detect_printer():
         return jsonify({'error': f'No printer answers on {path}'}), 400
     return jsonify({'baud': baud, 'path': path})
 
-
-@printer_bp.route('/status', methods=['GET'])
-def printer_status():
-    """Configured device (path resolution only, no I/O)."""
-    denied = _require_operator()
-    if denied:
-        return denied
-    db = request.args.get('db', 'default')
-    try:
-        path, baud, cols, cut = resolve_device(db)
-        return jsonify({'configured': True, 'device': path,
-                        'baud': baud, 'cols': cols, 'cut': cut,
-                        'win_queues': list_windows_printers()})
-    except ValueError as e:
-        return jsonify({'configured': False, 'error': str(e),
-                        'win_queues': list_windows_printers()})

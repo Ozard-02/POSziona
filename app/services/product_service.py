@@ -17,23 +17,6 @@ _UNSET = object()
 # SECTION OPERATIONS
 # ============================================================
 
-def get_sections(db_name):
-    """Get all sections."""
-    with PartyDatabase(db_name) as conn:
-        rows = conn.execute("SELECT * FROM sections ORDER BY sort_order, name").fetchall()
-        return [dict(row) for row in rows]
-
-
-def get_subsections(db_name, section_id):
-    """Get all subsections for a given section."""
-    with PartyDatabase(db_name) as conn:
-        rows = conn.execute(
-            "SELECT * FROM subsections WHERE section_id = ? ORDER BY name",
-            (section_id,)
-        ).fetchall()
-        return [dict(row) for row in rows]
-
-
 def get_all_sections_with_subsections(db_name):
     """Get all sections with their subsections (2-level tree)."""
     with PartyDatabase(db_name) as conn:
@@ -458,18 +441,6 @@ def update_product(db_name, product_id, name=None, price=None, sku=None,
         conn.execute(
             f"UPDATE products SET {', '.join(updates)} WHERE id = ?",
             params
-        )
-        conn.commit()
-
-
-def decrement_stock(db_name, product_id):
-    """Decrement a product's stock by 1."""
-    with PartyDatabase(db_name) as conn:
-        conn.execute(
-            """UPDATE products
-               SET stock_count = stock_count - 1
-               WHERE id = ? AND stock_count > 0""",
-            (product_id,)
         )
         conn.commit()
 

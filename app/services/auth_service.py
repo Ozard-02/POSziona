@@ -131,15 +131,6 @@ def get_all_operators(db_name):
         return [dict(row) for row in rows]
 
 
-def get_operator_by_id(db_name, operator_id):
-    """Get an operator by ID."""
-    with PartyDatabase(db_name) as conn:
-        row = conn.execute(
-            "SELECT * FROM operators WHERE id = ?", (operator_id,)
-        ).fetchone()
-        return dict(row) if row else None
-
-
 def create_operator(db_name, name, pin, role='operator'):
     """Create a new operator."""
     with PartyDatabase(db_name) as conn:
