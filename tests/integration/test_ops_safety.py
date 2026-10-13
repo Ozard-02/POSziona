@@ -26,7 +26,7 @@ def test_status_reports_db_health(client):
     assert data['status'] == 'ok'
     assert data['db_writable'] is True
     assert data['disk_free_mb'] >= 0
-    assert data['version'] == '0.1.6'
+    assert data['version'] == '0.2.0'
     assert data['server_name']  # tag for the client picker (hostname fallback)
     assert data['connected_screens'] == 0  # no SSE subscribers in tests
 
