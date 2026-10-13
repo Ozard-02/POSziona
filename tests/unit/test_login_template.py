@@ -19,7 +19,7 @@ def test_login_shell_markers(client):
     # Connect: same-origin shows login, hop carries ?mode=local (no mode loop).
     assert "?mode=local" in html
     assert "params.get('mode') === 'local'" in html
-    assert "target.origin === window.location.origin" in html
+    assert "origin === window.location.origin" in html  # own IP retyped: no hop
     assert "origin + '/?mode=local'" in html  # probe-then-hop, no blind navigate
     # One-tap reconnect: localStorage recent list.
     assert 'id="recent-servers"' in html
@@ -28,6 +28,7 @@ def test_login_shell_markers(client):
     assert 'recent-title' in html  # label text comes from translations.js
     # Connect probes before hopping (no dead pages), errors inline (no alert).
     assert 'probeThenGo' in html
+    assert 'normalizeServerInput' in html  # bare host gains :5000, like terminal
     assert "'/api/status'" in html or '"/api/status"' in html
     assert 'connected_screens' in html
     assert 'id="remote-error"' in html

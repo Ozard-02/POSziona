@@ -30,7 +30,7 @@
             </div>
 
             <div id="remote-connect" class="remote-connect hidden">
-                <input type="text" id="server-input" placeholder="192.168.1.10:5000" autocomplete="off">
+                <input type="text" id="server-input" placeholder="192.168.1.10" autocomplete="off">
                 <p id="remote-error" class="error hidden"></p>
                 <button id="connect-btn" class="btn-primary">Connect</button>
                 <button id="back-to-modes" class="btn-secondary">Back</button>
@@ -241,6 +241,20 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Normalize like the terminal client (app/main.py::_normalize_server_url):
+    // default port is 5000, kept only when explicitly given.
+    function normalizeServerInput(input) {
+        var withScheme = input;
+        if (!withScheme.startsWith('http://') && !withScheme.startsWith('https://')) {
+            withScheme = 'http://' + withScheme;
+        }
+        var url = new URL(withScheme.replace(/\/+$/, '') + '/');
+        if (!url.port) {
+            url.port = '5000';
+        }
+        return url.origin;
+    }
+
     // Connect to remote server
     connectBtn.addEventListener('click', function() {
         var input = serverInput.value.trim();
@@ -249,27 +263,22 @@ document.addEventListener('DOMContentLoaded', function() {
             serverInput.focus();
             return;
         }
-        // Normalize: prepend http:// if missing
-        if (!input.startsWith('http://') && !input.startsWith('https://')) {
-            input = 'http://' + input;
-        }
-        input = input.replace(/\/+$/, '') + '/';
-        var target;
+        var origin;
         try {
-            target = new URL(input);
+            origin = normalizeServerInput(input);
         } catch (e) {
             showRemoteError(t('remote_invalid') + ' ' + input);
             serverInput.focus();
             return;
         }
-        if (target.origin === window.location.origin) {
+        if (origin === window.location.origin) {
             // Already on that server (e.g. retyped its own IP) — just
             // show the login instead of reloading the mode screen.
             showLoginForm();
             return;
         }
         // Probe first: only hop when the server actually answers.
-        probeThenGo(target.origin);
+        probeThenGo(origin);
     });
 
     // Allow Enter key on server input
