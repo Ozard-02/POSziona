@@ -32,6 +32,12 @@ def _remove_db_files(db_path):
             if os.path.exists(ext_path):
                 os.remove(ext_path)
 
+
+def _sanitize_party_name(party_name):
+    """Derive a safe DB name from a party name (validated, never empty)."""
+    safe_name = "".join(c for c in (party_name or "") if c.isalnum() or c in (' ', '-', '_'))
+    return validate_db_name(safe_name)
+
 def create_party_from_template(party_name, template_id, start_date=None, end_date=None):
     """
     Create a new party database from a template.
@@ -48,8 +54,7 @@ def create_party_from_template(party_name, template_id, start_date=None, end_dat
     template_tags = templates_db.get_template_tags(template_id)
     template_product_tag_names = templates_db.get_template_product_tag_names(template_id)
     # Determine DB filename from party name
-    safe_name = "".join(c for c in party_name if c.isalnum() or c in (' ', '-', '_'))
-    db_name = f"{safe_name}"
+    db_name = _sanitize_party_name(party_name)
 
     # Create party DB using schema
     db_path = os.path.join(PARTY_DB_DIR, f"{db_name}.db")
@@ -234,8 +239,7 @@ def create_empty_party(party_name, start_date=None, end_date=None):
     Create a new empty party database (no template required).
     Returns the party DB name.
     """
-    safe_name = "".join(c for c in party_name if c.isalnum() or c in (' ', '-', '_'))
-    db_name = f"{safe_name}"
+    db_name = _sanitize_party_name(party_name)
 
     db_path = os.path.join(PARTY_DB_DIR, f"{db_name}.db")
 
@@ -332,8 +336,7 @@ def duplicate_party(original_name, new_name, start_date=None, end_date=None):
         raise FileNotFoundError(f"Party '{original_name}' not found")
 
     # Sanitize new_name to determine the destination DB name
-    safe_name = "".join(c for c in new_name if c.isalnum() or c in (' ', '-', '_'))
-    validate_db_name(safe_name)
+    safe_name = _sanitize_party_name(new_name)
     dst_path = os.path.join(PARTY_DB_DIR, f"{safe_name}.db")
 
     with _lifecycle_lock:
