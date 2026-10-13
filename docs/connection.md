@@ -170,7 +170,9 @@ one-tap Recent button. Notes: plain HTTP (trusted networks only);
 
 ## C6 — 2-device live checklist (for the user, needs real LAN)
 
-1. Server box: latest release, `--mode server`, Admin → System → server
+Use the v0.2.0 release assets (GitHub Releases: `posziona` + `posziona.exe`).
+
+1. Server box: `--mode server`, Admin → System → server
    name (e.g. `CASSA-1`); note the `Other devices on this network` URL.
 2. Start a SECOND server on another box on the same Wi-Fi → expect the
    "another POSziona server is already on this network" NOTICE naming
