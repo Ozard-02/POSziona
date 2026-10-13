@@ -2,6 +2,7 @@
 Backups, restore, ?db= sanitization, and corruption-recovery tests.
 """
 import os
+import shutil
 import sqlite3
 
 import pytest
@@ -143,3 +144,21 @@ def test_corrupt_db_quarantined_and_recreated(client):
                     os.remove(p)
     with conn_mod._checked_paths_lock:
         conn_mod._checked_paths.discard(path)
+
+
+def test_snapshot_is_atomic_and_tmp_invisible(isolated_backups):
+    """run_snapshots publishes complete dirs only; .tmp never listed."""
+    from app.services.backup_service import (
+        list_snapshots, prune_snapshots, run_snapshots,
+    )
+
+    os.makedirs(os.path.join(isolated_backups, '20990101-000000.tmp'))
+    try:
+        name = run_snapshots()
+        assert os.path.isdir(os.path.join(isolated_backups, name))
+        leftovers = [n for n in os.listdir(isolated_backups) if n.endswith('.tmp')]
+        assert leftovers == [], leftovers
+        assert all(not s['name'].endswith('.tmp') for s in list_snapshots())
+    finally:
+        shutil.rmtree(os.path.join(isolated_backups, name), ignore_errors=True)
+        prune_snapshots()

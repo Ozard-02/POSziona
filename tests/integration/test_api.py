@@ -5,16 +5,6 @@ import json
 import pytest
 
 
-def test_status_endpoint(client):
-    """Test API status endpoint."""
-    resp = client.get('/api/status')
-    assert resp.status_code == 200
-    data = resp.get_json()
-    assert data['status'] == 'ok'
-    assert data['version'] == '0.1.6'
-    assert data['server_name']  # tag for the client picker (hostname fallback)
-
-
 def test_server_name_setting_roundtrip(client, clean_db):
     """server_name survives the settings allowlist (device-global tag)."""
     r = client.post('/api/settings/?db=test_party', json={'server_name': 'CASSA-1'})

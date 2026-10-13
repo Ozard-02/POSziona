@@ -4,11 +4,8 @@ Crash-safety: accidental closures lose nothing and break nothing.
 - Login cookie survives browser restarts (permanent session), so the
   operator and the unsent cart are still there after a client close.
 - SIGTERM checkpoints WALs and exits 0 (systemd/docker/kill).
-- Snapshots are atomic: kill mid-snapshot leaves .tmp debris that is
-  never listed for restore and gets pruned.
 """
 import os
-import shutil
 import signal
 import socket
 import sqlite3
@@ -88,24 +85,6 @@ def test_checkpoint_all_truncates_wal():
                 os.remove(path + ext)
 
 
-def test_snapshot_is_atomic_and_tmp_invisible(client, clean_db):
-    """run_snapshots publishes complete dirs only; .tmp never listed."""
-    from app.services.backup_service import (
-        BACKUP_DIR, list_snapshots, prune_snapshots, run_snapshots,
-    )
-
-    os.makedirs(os.path.join(BACKUP_DIR, '20990101-000000.tmp'))
-    try:
-        name = run_snapshots()
-        assert os.path.isdir(os.path.join(BACKUP_DIR, name))
-        leftovers = [n for n in os.listdir(BACKUP_DIR) if n.endswith('.tmp')]
-        assert leftovers == [], leftovers
-        assert all(not s['name'].endswith('.tmp') for s in list_snapshots())
-    finally:
-        shutil.rmtree(os.path.join(BACKUP_DIR, name), ignore_errors=True)
-        prune_snapshots()
-
-
 def _wait_port(port, timeout=15):
     start = time.time()
     while time.time() - start < timeout:
@@ -143,3 +122,74 @@ def test_sigterm_checkpoints_and_exits_zero(tmp_path):
             proc.wait()
     assert proc.returncode == 0, out
     assert 'Checkpoint' in out, out
+
+
+# ===========================================================================
+# SIGKILL mid-checkout (moved from test_crash_kill9.py — single crash file)
+# ===========================================================================
+WORKER_KILL9 = """
+import sys, time
+sys.path.insert(0, '.')
+from app.database.connection import PartyDatabase
+from app.services.order_service import checkout_order
+
+# Seed one product (unlimited stock keeps the math exact)
+with PartyDatabase('kill9_test') as conn:
+    conn.execute("INSERT OR IGNORE INTO sections (id, name) VALUES (1, 'S')")
+    conn.execute("INSERT OR IGNORE INTO subsections (id, name, section_id) VALUES (1, 'SS', 1)")
+    conn.execute("INSERT OR IGNORE INTO products (id, name, price, section_id, subsection_id) VALUES (1, 'P', 2.5, 1, 1)")
+    conn.execute("INSERT OR IGNORE INTO operators (id, name, pin_hash, role, is_active) VALUES (1, 'op', 'x', 'operator', 1)")
+    conn.commit()
+
+i = 0
+while True:
+    checkout_order(
+        'kill9_test',
+        [{'product_id': 1, 'quantity': 1, 'unit_price': 2.50}],
+        'cash', 1, tendered=2.50, idempotency_key=f'kill9-{i}')
+    i += 1
+"""
+
+
+def test_kill9_mid_checkout_recovers_cleanly():
+    """SIGKILL a checkout loop: WAL recovery, zero partial orders."""
+    from app.database.connection import _get_party_db_path
+
+    path = _get_party_db_path('kill9_test')
+    for ext in ('', '-wal', '-shm', '-journal'):
+        if os.path.exists(path + ext):
+            os.remove(path + ext)
+
+    proc = subprocess.Popen(
+        [sys.executable, '-c', WORKER_KILL9],
+        cwd=REPO_ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    try:
+        time.sleep(2.0)  # let it complete many checkouts (likely mid-one at kill)
+        proc.send_signal(signal.SIGKILL)
+        proc.wait(timeout=30)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+
+    # WAL recovery on next open + integrity must pass
+    conn = sqlite3.connect(path)
+    try:
+        assert conn.execute("PRAGMA integrity_check").fetchone()[0] == 'ok'
+
+        orders = conn.execute("SELECT id, total FROM orders").fetchall()
+        assert len(orders) > 0, "worker should have completed sales before the kill"
+        for oid, total in orders:
+            items = conn.execute(
+                "SELECT COUNT(*), COALESCE(SUM(quantity * unit_price), 0)"
+                " FROM order_items WHERE order_id = ?", (oid,)).fetchone()
+            assert items[0] >= 1, f"order {oid} has no items (partial order!)"
+            pay = conn.execute(
+                "SELECT amount FROM payments WHERE order_id = ?", (oid,)).fetchall()
+            assert len(pay) == 1, f"order {oid} has {len(pay)} payments"
+            assert pay[0][0] == total, f"order {oid} payment mismatch"
+    finally:
+        conn.close()
+        for ext in ('', '-wal', '-shm', '-journal'):
+            if os.path.exists(path + ext):
+                os.remove(path + ext)
