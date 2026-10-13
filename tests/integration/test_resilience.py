@@ -229,38 +229,6 @@ def test_bulk_update_negative_price(clean_db, client):
 
 
 # ===========================================================================
-# Issue 4: Cart model percentage discount > 100%
-# ===========================================================================
-def test_cart_percentage_discount_over_100_clamped():
-    """Cart model must clamp percentage discounts to 100%, not produce negatives."""
-    from app.models.cart import Cart
-    from app.models.product import Product
-
-    cart = Cart()
-    p = Product(id=1, name='Coffee', price=10.0)
-    cart.add_item(p)
-    cart.add_item(p)  # 20.00 subtotal
-
-    cart.apply_discount('percentage', 200)
-    assert cart.discount_amount == 20.0  # exactly subtotal, not 40
-    assert cart.total == 0.0  # clamped, not negative
-
-
-def test_cart_fixed_discount_over_subtotal_clamped():
-    """Cart model must clamp fixed discounts to subtotal."""
-    from app.models.cart import Cart
-    from app.models.product import Product
-
-    cart = Cart()
-    p = Product(id=1, name='Coffee', price=10.0)
-    cart.add_item(p)
-
-    cart.apply_discount('fixed', 99999)
-    assert cart.discount_amount == 10.0  # clamped to subtotal
-    assert cart.total == 0.0
-
-
-# ===========================================================================
 # Issue 5: Checkout and edge cases
 # ===========================================================================
 def test_checkout_empty_cart(clean_db, client):

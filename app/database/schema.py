@@ -243,17 +243,3 @@ CREATE INDEX IF NOT EXISTS idx_template_product_tags_product ON template_product
 
 CREATE INDEX IF NOT EXISTS idx_template_products_template ON template_products(template_id);
 """
-
-
-# ============================================================
-# EXPORT FUNCTIONS
-# ============================================================
-
-def get_party_schema():
-    """Return the party database schema SQL."""
-    return PARTY_SCHEMA
-
-
-def get_templates_schema():
-    """Return the templates database schema SQL."""
-    return TEMPLATES_SCHEMA

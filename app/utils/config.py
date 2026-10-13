@@ -29,7 +29,6 @@ TEMPLATES_DB = os.path.join(DATA_DIR, 'templates.db')
 # Server settings
 HOST = '127.0.0.1'
 PORT = 5000
-DEBUG = False
 
 # Single source of truth for the release version (used by /api/status and
 # LAN beacons; the JS bundle and packaging files carry their own copies —
@@ -41,9 +40,6 @@ APP_VERSION = '0.1.6'
 # discovery). Local URLs/checks keep using HOST (loopback).
 # Override for locked-down boxes: POSZIONA_BIND_HOST=127.0.0.1.
 BIND_HOST = os.environ.get('POSZIONA_BIND_HOST', '0.0.0.0')
-
-# App settings
-DEFAULT_CURRENCY = '€'
 
 # Session signing key: unique per install, persisted in the data dir
 # (gitignored). POSZIONA_SECRET_KEY env var wins when set (containers).

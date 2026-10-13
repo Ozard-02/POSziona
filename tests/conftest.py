@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app
 from app.database.connection import PartyDatabase, TEMPLATES_DB, PARTY_DB_DIR, _init_default_operators
-from app.database.schema import get_party_schema, get_templates_schema
+from app.database.schema import PARTY_SCHEMA, TEMPLATES_SCHEMA
 
 
 TEST_PARTY_NAME = 'test_party'
@@ -47,7 +47,7 @@ def clean_db():
     _cleanup_test_templates()
     
     # Create test DB with schema
-    schema = get_party_schema()
+    schema = PARTY_SCHEMA
     db_full_path = os.path.join(PARTY_DB_DIR, f"{TEST_PARTY_NAME}.db")
     os.makedirs(PARTY_DB_DIR, exist_ok=True)
     
@@ -87,7 +87,7 @@ def _cleanup_test_templates():
         conn = sqlite3.connect(TEMPLATES_DB)
         try:
             # Ensure all template tables exist (in case DB was created before schema update)
-            conn.executescript(get_templates_schema())
+            conn.executescript(TEMPLATES_SCHEMA)
             conn.execute('DELETE FROM templates')
             conn.execute('DELETE FROM template_sections')
             conn.execute('DELETE FROM template_subsections')

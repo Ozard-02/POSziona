@@ -9,7 +9,7 @@ import time
 
 from app.utils.config import PARTY_DB_DIR, TEMPLATES_DB
 from app.utils.logger import get_logger
-from app.database.schema import get_party_schema, get_templates_schema
+from app.database.schema import PARTY_SCHEMA, TEMPLATES_SCHEMA
 
 logger = get_logger('database')
 
@@ -90,7 +90,7 @@ def _ensure_party_db_exists(db_name):
     if not os.path.exists(db_path):
         logger.info(f"Creating new party database: {db_path}")
         conn = sqlite3.connect(db_path)
-        conn.executescript(get_party_schema())
+        conn.executescript(PARTY_SCHEMA)
         conn.commit()
         conn.close()
         _enable_wal(db_path)
@@ -224,7 +224,7 @@ def _ensure_schema_columns(conn):
     added = []
     ref = sqlite3.connect(':memory:')
     try:
-        ref.executescript(get_party_schema())
+        ref.executescript(PARTY_SCHEMA)
         tables = [r[0] for r in ref.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
         for table in tables:
@@ -261,7 +261,7 @@ def _run_migrations(db_path):
     """
     conn = sqlite3.connect(db_path)
     try:
-        conn.executescript(get_party_schema())
+        conn.executescript(PARTY_SCHEMA)
         conn.commit()
         added = _ensure_schema_columns(conn)
 
@@ -468,7 +468,7 @@ class TemplatesDatabase:
         if not os.path.exists(self.db_path):
             logger.info(f"Creating templates database: {self.db_path}")
             conn = sqlite3.connect(self.db_path)
-            conn.executescript(get_templates_schema())
+            conn.executescript(TEMPLATES_SCHEMA)
             conn.commit()
             conn.close()
             _enable_wal(self.db_path)

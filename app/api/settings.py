@@ -6,9 +6,6 @@ Handles party-level settings like default payment method, currency, tax rate, et
 from flask import Blueprint, request, jsonify
 from app.services.settings_service import get_effective_settings, get_setting, update_setting
 from app.utils.events import broadcast
-from app.utils.logger import get_logger
-
-logger = get_logger('api.settings')
 
 settings_bp = Blueprint('settings', __name__)
 

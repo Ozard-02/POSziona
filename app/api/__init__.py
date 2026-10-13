@@ -8,7 +8,7 @@ from flask import Blueprint, jsonify
 api_bp = Blueprint('api', __name__)
 
 # SSE (Server-Sent Events) for live updates
-from app.utils.events import sse_response, broadcast  # noqa: E402
+from app.utils.events import sse_response  # noqa: E402
 
 # Import and register sub-blueprints
 from app.api.products import products_bp

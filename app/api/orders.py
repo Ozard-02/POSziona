@@ -202,7 +202,6 @@ def items_report():
 def log_receipt():
     """Log a recovery receipt to server logs (always saved, regardless of
     whether it is displayed to the user)."""
-    db = request.args.get('db', 'default')
     data = request.get_json() or {}
     order_id = data.get('order_id')
     receipt_text = data.get('receipt', '')

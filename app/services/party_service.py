@@ -12,7 +12,7 @@ from app.database.connection import (
     validate_db_name, _lifecycle_lock,
 )
 from app.database import templates_db
-from app.database.schema import get_party_schema
+from app.database.schema import PARTY_SCHEMA
 from app.utils.config import PARTY_DB_DIR
 from app.utils.logger import get_logger
 
@@ -60,7 +60,7 @@ def create_party_from_template(party_name, template_id, start_date=None, end_dat
 
         with sqlite3.connect(db_path) as conn:
             # Apply schema
-            conn.executescript(get_party_schema())
+            conn.executescript(PARTY_SCHEMA)
             conn.execute('PRAGMA journal_mode=WAL')
 
             # Copy sections and subsections
@@ -244,7 +244,7 @@ def create_empty_party(party_name, start_date=None, end_date=None):
         _remove_db_files(db_path)
 
         with sqlite3.connect(db_path) as conn:
-            conn.executescript(get_party_schema())
+            conn.executescript(PARTY_SCHEMA)
             conn.execute('PRAGMA journal_mode=WAL')
             conn.commit()
 
@@ -292,7 +292,7 @@ def _duplicate_party_files(src_path, dst_path):
 
     # Create new DB with schema, then copy catalog data from source
     with sqlite3.connect(dst_path) as dst_conn:
-        dst_conn.executescript(get_party_schema())
+        dst_conn.executescript(PARTY_SCHEMA)
         dst_conn.execute('PRAGMA journal_mode=WAL')
 
         src_conn = sqlite3.connect(f"file:{src_path}?mode=ro", uri=True)

@@ -48,11 +48,11 @@ def test_checkpoint_all_truncates_wal():
         "import sys, time; sys.path.insert(0, '.');"
         "import sqlite3;"
         "from app.database.connection import _get_party_db_path;"
-        "from app.database.schema import get_party_schema;"
+        "from app.database.schema import PARTY_SCHEMA;"
         "p = _get_party_db_path('ckpt_test');"
         "c = sqlite3.connect(p);"
         "c.execute('PRAGMA journal_mode=WAL');"
-        "c.executescript(get_party_schema());"
+        "c.executescript(PARTY_SCHEMA);"
         "c.execute(\"INSERT INTO sections (name) VALUES ('CkptSurvivor')\");"
         "c.commit();"  # committed, connection kept open -> -wal lingers
         "time.sleep(30)"

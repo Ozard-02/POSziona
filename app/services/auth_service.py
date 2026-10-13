@@ -34,14 +34,10 @@ def hash_pin(pin):
     return f'pbkdf2${_PBKDF2_ITERATIONS}${salt.hex()}${digest.hex()}'
 
 
-def _is_legacy_hash(stored_hash):
-    """Legacy format was a bare unsalted SHA-256 hex digest."""
-    return isinstance(stored_hash, str) and '$' not in stored_hash and len(stored_hash) == 64
-
-
 def needs_upgrade(stored_hash):
-    """True when a stored hash uses the legacy unsalted format."""
-    return _is_legacy_hash(stored_hash)
+    """True when a stored hash uses the legacy unsalted format
+    (bare SHA-256 hex digest)."""
+    return isinstance(stored_hash, str) and '$' not in stored_hash and len(stored_hash) == 64
 
 
 def verify_pin(provided_pin, stored_hash):
@@ -53,7 +49,7 @@ def verify_pin(provided_pin, stored_hash):
     if not provided_pin or not stored_hash:
         return False
     try:
-        if _is_legacy_hash(stored_hash):
+        if needs_upgrade(stored_hash):
             computed = hashlib.sha256(provided_pin.encode('utf-8')).hexdigest()
             return hmac.compare_digest(computed, stored_hash)
         parts = stored_hash.split('$')

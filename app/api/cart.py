@@ -5,9 +5,6 @@ Manages the in-progress cart (session-based, not persisted to DB until checkout)
 
 from flask import Blueprint, request, jsonify, session
 from app.services.product_service import get_product_by_id
-from app.utils.logger import get_logger
-
-logger = get_logger('api.cart')
 
 cart_bp = Blueprint('cart', __name__)
 
@@ -93,7 +90,6 @@ def remove_from_cart():
 @cart_bp.route('/update', methods=['POST'])
 def update_quantity():
     """Update quantity of an item in the cart."""
-    db = request.args.get('db', 'default')
     data = request.get_json()
     if data is None:
         return jsonify({'error': 'Request body is required'}), 400

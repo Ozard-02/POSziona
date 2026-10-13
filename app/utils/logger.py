@@ -28,9 +28,6 @@ logging.basicConfig(
     ]
 )
 
-logger = logging.getLogger('pos')
-
-
 def get_logger(name):
     """Get a logger instance with the given name."""
     return logging.getLogger(f'pos.{name}')
