@@ -37,9 +37,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function translatePage() {
-        if (backBtn) backBtn.textContent = t('back');
-        if (generateBtn) generateBtn.textContent = t('generate_report');
-        if (printBtn) printBtn.textContent = t('print');
+        // Generic: every static [data-i18n] label (buttons, headers, options).
+        document.querySelectorAll('[data-i18n]').forEach(function(el) {
+            el.textContent = t(el.dataset.i18n);
+        });
     }
 
     // === Back to POS ===

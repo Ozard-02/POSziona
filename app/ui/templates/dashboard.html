@@ -7,26 +7,26 @@
     <!-- Left Sidebar -->
     <div class="sidebar-left">
         <div class="party-header">
-            <h2>Reports</h2>
+            <h2 data-i18n="reports">Reports</h2>
             <div class="header-actions">
-                <button id="back-to-pos" class="btn-sm btn-secondary">← Back</button>
-                <button id="print-receipt-btn" class="btn-sm btn-secondary">Print</button>
+                <button id="back-to-pos" class="btn-sm btn-secondary" data-i18n="back_to_pos">← Back</button>
+                <button id="print-receipt-btn" class="btn-sm btn-secondary" data-i18n="print">Print</button>
             </div>
         </div>
         <div class="sections-tree">
             <div class="report-filters">
                 <div class="form-group">
-                    <label for="report-type">Report Type:</label>
+                    <label for="report-type" data-i18n="report_type">Report Type:</label>
                     <select id="report-type">
-                        <option value="day">Today</option>
-                        <option value="party">Whole Party</option>
+                        <option value="day" data-i18n="today">Today</option>
+                        <option value="party" data-i18n="whole_party">Whole Party</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="report-date">Date (for Today):</label>
+                    <label for="report-date" data-i18n="report_date_label">Date (for Today):</label>
                     <input type="date" id="report-date">
                 </div>
-                <button id="generate-report" class="btn-primary btn-sm btn-block">Generate Report</button>
+                <button id="generate-report" class="btn-primary btn-sm btn-block" data-i18n="generate_report">Generate Report</button>
             </div>
         </div>
     </div>
@@ -42,18 +42,18 @@
     <!-- Right Sidebar: Summary stats -->
     <div class="sidebar-right">
         <div class="order-summary">
-            <h3>Report Summary</h3>
+            <h3 data-i18n="report_summary">Report Summary</h3>
             <div class="cart-totals" id="report-totals">
                 <div class="total-row">
-                    <span>Total Revenue:</span>
+                    <span data-i18n="revenue">Total Revenue:</span>
                     <span id="report-revenue">€0.00</span>
                 </div>
                 <div class="total-row">
-                    <span>Total Orders:</span>
+                    <span data-i18n="orders">Total Orders:</span>
                     <span id="report-orders">0</span>
                 </div>
                 <div class="total-row">
-                    <span>Total Discounts:</span>
+                    <span data-i18n="discounts">Total Discounts:</span>
                     <span id="report-discounts">€0.00</span>
                 </div>
             </div>
@@ -64,11 +64,11 @@
 <!-- Receipt Print Modal -->
 <div id="print-receipt-modal" class="modal hidden">
     <div class="modal-content">
-        <h3>Print Summary Report</h3>
+        <h3 data-i18n="print_summary">Print Summary Report</h3>
         <pre id="print-receipt-content" class="receipt"></pre>
         <div class="modal-buttons">
-            <button id="print-now-btn" class="btn-primary">Print</button>
-            <button id="close-print-modal" class="btn-secondary">Close</button>
+            <button id="print-now-btn" class="btn-primary" data-i18n="print">Print</button>
+            <button id="close-print-modal" class="btn-secondary" data-i18n="close">Close</button>
         </div>
     </div>
 </div>
