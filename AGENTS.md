@@ -50,14 +50,16 @@ Order is binding: R first, then C, then S.
 ### Phase R — Refactor to production quality (do first)
 - KISS: remove overengineering, apply best practices, simplify where the
   real code diverged from STRUCTURE.md/ARCHITECTURE.md notes.
-- Tests: prune useless/redundant ones, keep only thoughtful tests (one
-  behavior per test, no false-positive mocks). Suite must stay fast and green.
+- Tests: PRUNE HARD (decided 2026-10-13): delete redundant/overlapping
+  tests aggressively, keep one thoughtful test per behavior, no
+  false-positive mocks. Suite must stay fast and green.
 - No new features during R unless needed to unblock the refactor.
 
 ### Phase C — Connection / discovery / login completion (do second)
 - Reason explicitly about topologies with 2 machines on one party: same-box
   (server + client sharing DATA_DIR), LAN Wi-Fi (one server, N clients),
-  hotspot (incl. client-isolating ones), server on a different network.
+  hotspot (incl. client-isolating ones), AND server on a different network
+  (decided 2026-10-13: remote-network/VPN/relay is IN scope for Phase C).
   Exactly ONE server ever (split-brain = split sales); enforce/guide this.
 - Polish login + server-pick + persistent data until a non-technical
   operator can't get lost (identity line, one-tap reconnect, no dead pages).
