@@ -5,6 +5,7 @@ Manages the in-progress cart (session-based, not persisted to DB until checkout)
 
 from flask import Blueprint, request, jsonify, session
 from app.services.product_service import get_product_by_id
+from app.utils.session_lock import session_write_lock
 
 cart_bp = Blueprint('cart', __name__)
 
@@ -32,6 +33,7 @@ def get_cart():
 
 
 @cart_bp.route('/add', methods=['POST'])
+@session_write_lock
 def add_to_cart():
     """Add a product to the cart."""
     db = request.args.get('db', 'default')
@@ -77,6 +79,7 @@ def add_to_cart():
 
 
 @cart_bp.route('/remove', methods=['POST'])
+@session_write_lock
 def remove_from_cart():
     """Remove a product from the cart."""
     data = request.get_json()
@@ -93,6 +96,7 @@ def remove_from_cart():
 
 
 @cart_bp.route('/update', methods=['POST'])
+@session_write_lock
 def update_quantity():
     """Update quantity of an item in the cart."""
     data = request.get_json()
@@ -113,6 +117,7 @@ def update_quantity():
 
 
 @cart_bp.route('/clear', methods=['POST'])
+@session_write_lock
 def clear_cart():
     """Clear the entire cart."""
     session['cart'] = []
@@ -120,6 +125,7 @@ def clear_cart():
 
 
 @cart_bp.route('/discount', methods=['POST'])
+@session_write_lock
 def apply_discount():
     """Apply a discount to the cart."""
     data = request.get_json()
@@ -169,6 +175,7 @@ def apply_discount():
 
 
 @cart_bp.route('/remove-discount', methods=['POST'])
+@session_write_lock
 def remove_discount():
     """Remove any applied discount."""
     session.pop('cart_discount', None)

@@ -120,3 +120,13 @@ def _cleanup_test_templates():
             _ss._device_cache['at'] = 0.0
     except Exception:
         pass
+    # Same for the per-(party, operator) cart truth of the session locks:
+    # a previous test's in-flight cart would re-center into this one.
+    try:
+        from app.utils import session_lock as _sl
+        with _sl._truth_guard:
+            _sl._cart_truth.clear()
+        with _sl._locks_guard:
+            _sl._locks.clear()
+    except Exception:
+        pass

@@ -21,6 +21,7 @@ from app.services.product_service import get_product_by_id
 from app.services.settings_service import get_default_payment_method
 from app.services.auth_service import log_audit_event
 from app.utils.events import broadcast
+from app.utils.session_lock import session_write_lock
 from app.utils.logger import get_logger
 
 logger = get_logger('api.orders')
@@ -44,6 +45,7 @@ def _parse_limit(raw, default=50, maximum=500):
 # ============================================================
 
 @orders_bp.route('/checkout', methods=['POST'])
+@session_write_lock
 def checkout():
     """
     Finalize the cart into an order.

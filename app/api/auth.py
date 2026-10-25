@@ -15,6 +15,7 @@ from app.services.auth_service import (
     update_operator_pin as _update_operator_pin,
 )
 from app.utils.rate_limit import check as _rate_check
+from app.utils.session_lock import forget_session
 from app.utils.logger import get_logger
 
 logger = get_logger('api.auth')
@@ -140,6 +141,8 @@ def logout():
 
     if operator_id:
         log_audit_event(db, 'operator_logout', 'Operator logged out', operator_id)
+        # No server-side cart truth should outlive the login it belonged to
+        forget_session((db, operator_id))
 
     session.clear()
     return jsonify({'message': 'Logged out'})

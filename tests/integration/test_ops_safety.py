@@ -131,3 +131,61 @@ def test_concurrent_first_opens_seed_once(clean_db):
         _migrated_paths.discard(path)
 
     assert products == 13  # one default seed run (9 drinks + 4 snacks), never doubled
+
+
+def test_same_session_parallel_adds_all_land(clean_db, client, app):
+    """Parallel adds from ONE logged-in session must all be counted (R8).
+
+    The cart lives in the signed cookie: every parallel request carries the
+    same stale cookie, and plain last-writer-wins would drop updates (the
+    operator charges one coffee instead of two). The per-operator session
+    lock re-centers each request onto the latest committed cart, so all
+    N adds land.
+    """
+    import threading
+
+    db_name = clean_db
+    r = client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
+    assert r.status_code == 200
+    cookie = client.get_cookie('session').value
+
+    # clean_db has no seed products: create one (first product → id 1)
+    client.post(f'/api/products/sections?db={db_name}', json={'name': 'Drinks'})
+    client.post(f'/api/products/subsections?db={db_name}',
+                json={'section_id': 1, 'name': 'Coffee'})
+    client.post(f'/api/products/products?db={db_name}', json={
+        'name': 'Coffee', 'price': 2.0, 'section_id': 1, 'subsection_id': 1})
+
+    n = 12
+    barrier = threading.Barrier(n)
+    codes = []
+    cookies = []
+    lock = threading.Lock()
+
+    def _add():
+        c = app.test_client()
+        c.set_cookie('session', cookie)  # every thread replays the SAME cookie
+        barrier.wait(timeout=5)
+        resp = c.post(f'/api/cart/add?db={db_name}',
+                      json={'product_id': 1, 'quantity': 1})
+        with lock:
+            codes.append(resp.status_code)
+            if resp.status_code == 200:
+                cookies.append(c.get_cookie('session').value)
+
+    threads = [threading.Thread(target=_add) for _ in range(n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=15)
+
+    assert codes == [200] * n, 'all parallel adds must succeed'
+
+    # A fresh screen replaying a thread's (possibly stale) cookie must be
+    # re-centered onto the SERVER-truth cart: all N adds are there.
+    c = app.test_client()
+    c.set_cookie('session', cookies[0])
+    resp = c.post(f'/api/cart/add?db={db_name}', json={'product_id': 1, 'quantity': 1})
+    assert resp.status_code == 200, resp.get_json()
+    quantities = {item['product_id']: item['quantity'] for item in resp.get_json()['cart']}
+    assert quantities.get(1) == n + 1, quantities
