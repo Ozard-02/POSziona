@@ -163,15 +163,60 @@ def test_snapshot_is_atomic_and_tmp_invisible(isolated_backups):
         list_snapshots, prune_snapshots, run_snapshots,
     )
 
-    os.makedirs(os.path.join(isolated_backups, '20990101-000000.tmp'))
+    # Old debris (past the freshness window) is removed by prune...
+    stale_tmp = os.path.join(isolated_backups, '20990101-000000.tmp')
+    os.makedirs(stale_tmp)
+    old = 1_000_000
+    os.utime(stale_tmp, (old, old))
+    # ...but a FRESH .tmp may be a live snapshot and must survive (R11)
+    fresh_tmp = os.path.join(isolated_backups, '20990101-000001.tmp')
+    os.makedirs(fresh_tmp)
     try:
         name = run_snapshots()
         assert os.path.isdir(os.path.join(isolated_backups, name))
-        leftovers = [n for n in os.listdir(isolated_backups) if n.endswith('.tmp')]
-        assert leftovers == [], leftovers
+        assert not os.path.exists(stale_tmp), 'old debris pruned'
+        assert os.path.isdir(fresh_tmp), 'fresh .tmp is never yanked'
         assert all(not s['name'].endswith('.tmp') for s in list_snapshots())
     finally:
         shutil.rmtree(os.path.join(isolated_backups, name), ignore_errors=True)
+        shutil.rmtree(fresh_tmp, ignore_errors=True)
+        prune_snapshots()
+
+
+def test_concurrent_snapshots_do_not_collide(isolated_backups):
+    """Manual + scheduled snapshot at the same instant never collide (R11)."""
+    import threading
+    from app.services.backup_service import (
+        list_snapshots, prune_snapshots, run_snapshots,
+    )
+
+    names = []
+    errors = []
+    barrier = threading.Barrier(2)
+
+    def _run():
+        try:
+            barrier.wait(timeout=5)
+            names.append(run_snapshots(keep=10))
+        except Exception as e:  # noqa: BLE001 — collected, asserted below
+            errors.append(e)
+
+    threads = [threading.Thread(target=_run) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=20)
+    try:
+        assert errors == []
+        assert len(names) == 2 and names[0] != names[1]
+        listed = {s['name'] for s in list_snapshots()}
+        assert set(names) <= listed
+        for name in names:
+            assert os.path.isdir(os.path.join(isolated_backups, name))
+    finally:
+        for name in names:
+            shutil.rmtree(os.path.join(isolated_backups, name),
+                          ignore_errors=True)
         prune_snapshots()
 
 

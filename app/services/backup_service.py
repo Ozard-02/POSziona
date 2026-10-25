@@ -25,6 +25,15 @@ logger = get_logger('services.backups')
 BACKUP_DIR = os.path.join(DATA_DIR, 'backups')
 DEFAULT_KEEP_COUNT = 12
 
+# One snapshot writer at a time per process: manual requests and the
+# scheduler share .tmp naming, prune and the final rename. RLock because
+# run_snapshots() prunes its own debris while still holding it (R11).
+_snapshot_lock = threading.RLock()
+# Prune never touches .tmp dirs younger than this: they may be a snapshot
+# that is still being written (defense in depth — same-process runs are
+# already serialized by _snapshot_lock).
+_TMP_STALE_SECONDS = 300
+
 
 def _snapshot_name():
     """Snapshot directory name (filesystem-safe UTC timestamp)."""
@@ -94,36 +103,49 @@ def run_snapshots(keep=DEFAULT_KEEP_COUNT):
 
     Crash-safe: files land in `<name>.tmp` and the directory is renamed
     into place only when complete — a kill mid-snapshot never leaves a
-    half-filled snapshot that restore could pick up.
+    half-filled snapshot that restore could pick up. Runs are serialized
+    (_snapshot_lock): two overlapping snapshots would share .tmp names,
+    prune each other's work and race the final rename (R11).
     """
-    os.makedirs(PARTY_DB_DIR, exist_ok=True)
-    os.makedirs(BACKUP_DIR, exist_ok=True)
-    name = _snapshot_name()
-    dest_dir = os.path.join(BACKUP_DIR, name)
-    tmp_dir = dest_dir + '.tmp'
+    with _snapshot_lock:
+        os.makedirs(PARTY_DB_DIR, exist_ok=True)
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+        name = _snapshot_name()
+        # Manual + scheduled runs can start inside the same second; the
+        # timestamp name must stay strict (\d{8}-\d{6} for validation),
+        # so wait for the next second instead of suffixing.
+        deadline = time.time() + 1.5
+        while os.path.exists(os.path.join(BACKUP_DIR, name)):
+            if time.time() > deadline:
+                raise RuntimeError(
+                    'Snapshot name collision — retry in a second')
+            time.sleep(0.05)
+            name = _snapshot_name()
+        dest_dir = os.path.join(BACKUP_DIR, name)
+        tmp_dir = dest_dir + '.tmp'
 
-    if os.path.isdir(tmp_dir):
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        if os.path.isdir(tmp_dir):
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    copied = []
-    if os.path.exists(TEMPLATES_DB):
-        _vacuum_into(TEMPLATES_DB, os.path.join(tmp_dir, 'templates.db'))
-        copied.append('templates.db')
+        copied = []
+        if os.path.exists(TEMPLATES_DB):
+            _vacuum_into(TEMPLATES_DB, os.path.join(tmp_dir, 'templates.db'))
+            copied.append('templates.db')
 
-    for filename in sorted(os.listdir(PARTY_DB_DIR)):
-        if not filename.endswith('.db'):
-            continue
-        src = os.path.join(PARTY_DB_DIR, filename)
-        if not os.path.isfile(src):
-            continue
-        _vacuum_into(src, os.path.join(tmp_dir, filename))
-        copied.append(filename)
+        for filename in sorted(os.listdir(PARTY_DB_DIR)):
+            if not filename.endswith('.db'):
+                continue
+            src = os.path.join(PARTY_DB_DIR, filename)
+            if not os.path.isfile(src):
+                continue
+            _vacuum_into(src, os.path.join(tmp_dir, filename))
+            copied.append(filename)
 
-    os.rename(tmp_dir, dest_dir)
+        os.rename(tmp_dir, dest_dir)
 
-    prune_snapshots(keep)
-    logger.info(f"Snapshot {name}: backed up {len(copied)} database(s)")
-    return name
+        prune_snapshots(keep)
+        logger.info(f"Snapshot {name}: backed up {len(copied)} database(s)")
+        return name
 
 
 def _is_tmp_snapshot(name):
@@ -134,18 +156,28 @@ def prune_snapshots(keep=DEFAULT_KEEP_COUNT):
     """Delete oldest snapshots, keeping the newest `keep`."""
     if not os.path.isdir(BACKUP_DIR):
         return
-    for name in os.listdir(BACKUP_DIR):
-        # Stale debris from a kill mid-snapshot: never a restore candidate.
-        if _is_tmp_snapshot(name):
-            shutil.rmtree(os.path.join(BACKUP_DIR, name), ignore_errors=True)
-            logger.info(f"Removed incomplete snapshot: {name}")
-    names = sorted(
-        n for n in os.listdir(BACKUP_DIR)
-        if os.path.isdir(os.path.join(BACKUP_DIR, n))
-    )
-    for stale in names[:max(0, len(names) - keep)]:
-        shutil.rmtree(os.path.join(BACKUP_DIR, stale), ignore_errors=True)
-        logger.info(f"Pruned old snapshot: {stale}")
+    with _snapshot_lock:
+        for name in os.listdir(BACKUP_DIR):
+            # Debris from a kill mid-snapshot: never a restore candidate.
+            # Fresh .tmp dirs are left alone — they may still be written.
+            if _is_tmp_snapshot(name):
+                path = os.path.join(BACKUP_DIR, name)
+                try:
+                    age = time.time() - os.path.getmtime(path)
+                except OSError:
+                    continue
+                if age < _TMP_STALE_SECONDS:
+                    continue
+                shutil.rmtree(path, ignore_errors=True)
+                logger.info(f"Removed incomplete snapshot: {name}")
+        names = sorted(
+            n for n in os.listdir(BACKUP_DIR)
+            if os.path.isdir(os.path.join(BACKUP_DIR, n))
+            and not _is_tmp_snapshot(n)
+        )
+        for stale in names[:max(0, len(names) - keep)]:
+            shutil.rmtree(os.path.join(BACKUP_DIR, stale), ignore_errors=True)
+            logger.info(f"Pruned old snapshot: {stale}")
 
 
 def _prune_idempotency_keys():
