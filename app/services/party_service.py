@@ -9,7 +9,7 @@ from datetime import datetime
 
 from app.database.connection import (
     PartyDatabase, _init_default_operators, _init_default_products,
-    validate_db_name, _lifecycle_lock,
+    validate_db_name, _lifecycle_lock, open_count, mark_deleting,
 )
 from app.database import templates_db
 from app.database.schema import PARTY_SCHEMA
@@ -43,6 +43,20 @@ def _sanitize_party_name(party_name):
     safe_name = "".join(c for c in (party_name or "") if c.isalnum() or c in (' ', '-', '_'))
     return validate_db_name(safe_name)
 
+
+def _refuse_if_in_use(db_name, db_path, action):
+    """Shared refusal for lifecycle ops that remove or replace a live DB file.
+
+    Removing/overwriting the file under open connections would strand those
+    writers on a vanishing inode — commits land nowhere and sales silently
+    disappear. delete/restore/create/duplicate all funnel through here.
+    """
+    live = open_count(db_path)
+    if live > 0:
+        raise RuntimeError(
+            f'Party "{db_name}" is in use ({live} open connections) — '
+            f'close POS screens on this party, then retry the {action}')
+
 def create_party_from_template(party_name, template_id, start_date=None, end_date=None):
     """
     Create a new party database from a template.
@@ -65,6 +79,11 @@ def create_party_from_template(party_name, template_id, start_date=None, end_dat
     db_path = os.path.join(PARTY_DB_DIR, f"{db_name}.db")
 
     with _lifecycle_lock:
+        # Creation REPLACES any same-named DB (sanitized names collide:
+        # "Rolle!" and "rolle" are one file). Never pull a file out from
+        # under live connections the way delete_party refuses to.
+        _refuse_if_in_use(db_name, db_path, 'creation')
+
         # Remove existing DB if it exists (fresh creation from template)
         _remove_db_files(db_path)
 
@@ -216,15 +235,11 @@ def delete_party(db_name):
     Refuses (with a clear error) when the DB has live connections —
     deleting the file mid-party would break running checkouts.
     """
-    from app.database.connection import _get_party_db_path, open_count, mark_deleting
+    from app.database.connection import _get_party_db_path, mark_deleting
     validate_db_name(db_name)
     with _lifecycle_lock:
         db_path = _get_party_db_path(db_name)
-        live = open_count(db_path)
-        if live > 0:
-            raise RuntimeError(
-                f'Party "{db_name}" is in use (' + str(live) + ' open connections) — '
-                'close POS clients using it, then retry')
+        _refuse_if_in_use(db_name, db_path, 'delete')
         mark_deleting(db_path, True)
         try:
             _remove_db_files(db_path)
@@ -243,6 +258,10 @@ def create_empty_party(party_name, start_date=None, end_date=None):
     db_path = os.path.join(PARTY_DB_DIR, f"{db_name}.db")
 
     with _lifecycle_lock:
+        # Same in-use refusal as create-from-template: the name collision
+        # case must not strand live writers on an unlinked file.
+        _refuse_if_in_use(db_name, db_path, 'creation')
+
         # Remove existing DB if it exists
         _remove_db_files(db_path)
 
@@ -338,7 +357,17 @@ def duplicate_party(original_name, new_name, start_date=None, end_date=None):
     safe_name = _sanitize_party_name(new_name)
     dst_path = os.path.join(PARTY_DB_DIR, f"{safe_name}.db")
 
+    if safe_name == src_db_name:
+        # Duplicating onto itself would _remove_db_files(dst) and then
+        # copy from the now-missing src — the live party is destroyed.
+        raise ValueError('Cannot duplicate a party onto itself — '
+                         'choose a different name')
+
     with _lifecycle_lock:
+        # The destination may collide with a live party (sanitized names);
+        # refuse before _duplicate_party_files removes its files.
+        _refuse_if_in_use(safe_name, dst_path, 'duplicate')
+
         _duplicate_party_files(src_path, dst_path)
 
     # Override party name and optionally dates in settings

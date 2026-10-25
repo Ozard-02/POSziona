@@ -1,7 +1,11 @@
 """
 Tests for party creation from templates.
 """
+import os
+
 import pytest
+
+from app.utils.config import PARTY_DB_DIR
 from app.database import templates_db
 
 
@@ -99,3 +103,56 @@ def test_duplicate_party_excludes_sales_history(clean_db, client):
     # Verify NO orders were copied (sales history excluded)
     duplicate_orders = get_recent_orders(new_db, 50)
     assert len(duplicate_orders) == 0, "Sales history should NOT be copied during duplication"
+
+
+def test_create_empty_refuses_live_party(clean_db, client):
+    """Creating a same-named party while it is LIVE is refused, not overwritten."""
+    from app.database.connection import PartyDatabase
+
+    db_name = clean_db
+    held = PartyDatabase(db_name)
+    held.__enter__()  # deliberately unbalanced: connection stays open
+    try:
+        resp = client.post('/api/parties/create-empty', json={'name': db_name})
+    finally:
+        held.__exit__(None, None, None)
+
+    assert resp.status_code == 400
+    assert 'in use' in resp.get_json()['error']
+
+    # Once released, the same creation goes through normally
+    resp = client.post('/api/parties/create-empty', json={'name': db_name})
+    assert resp.status_code == 201
+
+
+def test_duplicate_is_safe_on_name_edge_cases(clean_db, client):
+    """Duplicate refuses self-duplication and live-destination collisions."""
+    from app.database.connection import PartyDatabase
+
+    db_name = clean_db
+    # Self-duplication would delete the files and re-copy from a dead path
+    resp = client.post(f'/api/parties/{db_name}/duplicate', json={'name': db_name})
+    assert resp.status_code == 400
+    assert 'onto itself' in resp.get_json()['error']
+    assert client.get(f'/api/products/?db={db_name}').status_code == 200
+
+    # Two names that sanitize to the same file: 'Rollo!' / 'Rollo?'
+    resp = client.post('/api/parties/create-empty', json={'name': 'Rollo!'})
+    assert resp.status_code == 201
+    dst = resp.get_json()['db_name']
+    assert dst == 'Rollo'
+
+    held = PartyDatabase(dst)
+    held.__enter__()  # deliberately unbalanced: connection stays open
+    try:
+        resp = client.post(f'/api/parties/{db_name}/duplicate',
+                           json={'name': 'Rollo?'})
+    finally:
+        held.__exit__(None, None, None)
+    assert resp.status_code == 400
+    assert 'in use' in resp.get_json()['error']
+
+    # Tidy: conftest only cleans test_party (this file leaks 'Weekend_Party'
+    # by convention too) — remove the second party's files
+    from app.services.party_service import _remove_db_files
+    _remove_db_files(os.path.join(PARTY_DB_DIR, f'{dst}.db'))
