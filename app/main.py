@@ -200,6 +200,58 @@ def _gui_missing_message(exc, server_url):
     print("    syswin/bin/python scripts/run_pos.py", flush=True)
 
 
+def _qt_backend_available():
+    """True when pywebview's Qt backend has its Python glue installed."""
+    import importlib.util
+    for name in ('qtpy', 'PyQt5', 'PyQt6', 'PySide2', 'PySide6'):
+        try:
+            if importlib.util.find_spec(name):
+                return True
+        except (ImportError, ValueError):
+            continue
+    return False
+
+
+def _start_window(view):
+    """Run the window event loop, retrying once on the Qt backend (G2).
+
+    Some distros ship a broken GTK/WebKit2GTK but a working Qt (or the
+    other way around); pywebview picks its backend at start(). When the
+    default attempt fails and Qt is installed, retry once with
+    PYWEBVIEW_GUI=qt — otherwise nothing to try. An explicit
+    PYWEBVIEW_GUI in the environment is always respected (no retry).
+
+    Returns (ok, last_exception): ok=True means the event loop ran
+    (window closed normally), NOT that a specific backend was used.
+    """
+    original = os.environ.get('PYWEBVIEW_GUI')
+    try:
+        backends = [original] if original else [None]
+        if not original and _qt_backend_available():
+            backends.append('qt')
+        last_exc = None
+        for backend in backends:
+            if backend is None:
+                os.environ.pop('PYWEBVIEW_GUI', None)
+            else:
+                os.environ['PYWEBVIEW_GUI'] = backend
+            try:
+                # debug=False: no inspector; private_mode=True: keep cookies
+                view.start(debug=False, private_mode=True)
+                return True, None
+            except Exception as exc:
+                last_exc = exc
+                if len(backends) > 1:
+                    print(f"  Window backend '{backend or 'default'}' failed: "
+                          f"{exc}", flush=True)
+        return False, last_exc
+    finally:
+        if original is None:
+            os.environ.pop('PYWEBVIEW_GUI', None)
+        else:
+            os.environ['PYWEBVIEW_GUI'] = original
+
+
 def _open_browser(server_url):
     """Auto-open the system browser (stdlib only, zero host deps).
 
@@ -493,9 +545,8 @@ def run_client_only(server_url=None):
         fullscreen=False,
         resizable=True,
     )
-    try:
-        view.start(debug=False, private_mode=True)
-    except Exception as exc:
+    ok, exc = _start_window(view)
+    if not ok:
         # No usable GUI backend (missing GTK/Qt system libs, no display...).
         # A client window is the whole point of this mode, so exit with a
         # clear message instead of a traceback.
@@ -549,12 +600,10 @@ def run_server_and_client():
         resizable=True,
     )
 
-    # Start the pywebview event loop
-    # debug=False: prevents inspector from opening
-    # private_mode=True: preserves cookies/sessions
-    try:
-        view.start(debug=False, private_mode=True)
-    except Exception as exc:
+    # Start the pywebview event loop (retries once on Qt if the default
+    # backend is broken — G2).
+    ok, exc = _start_window(view)
+    if not ok:
         # No usable GUI backend (missing GTK/Qt system libs, no display...).
         # The server is already up, so degrade to server-only mode instead
         # of dying with a traceback.

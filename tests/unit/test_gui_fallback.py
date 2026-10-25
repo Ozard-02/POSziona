@@ -4,6 +4,7 @@ GUI fallback: missing GTK/Qt must not kill the server.
 Regression test for the v0.1.1 Linux binary dying with a pywebview
 traceback on machines without GUI system libraries.
 """
+import os
 import threading
 
 import pytest
@@ -213,3 +214,62 @@ def test_gui_install_hint_per_distro(tmp_path):
     assert 'pacman' in main_mod._gui_install_hint(str(arch))
 
     assert 'distro' in main_mod._gui_install_hint(str(tmp_path / 'nope')).lower()
+
+
+def test_start_window_retries_qt_when_default_fails(monkeypatch, capsys):
+    """Broken default backend → exactly one retry with PYWEBVIEW_GUI=qt (G2)."""
+    attempts = []
+
+    class View:
+        def start(self, debug=False, private_mode=False):
+            attempts.append(os.environ.get('PYWEBVIEW_GUI'))
+            if len(attempts) == 1:
+                raise Exception('GTK backend exploded')
+
+    monkeypatch.delenv('PYWEBVIEW_GUI', raising=False)
+    monkeypatch.setattr(main_mod, '_qt_backend_available', lambda: True)
+
+    ok, exc = main_mod._start_window(View())
+
+    assert ok is True and exc is None
+    assert attempts == [None, 'qt']
+    assert 'PYWEBVIEW_GUI' not in os.environ  # environment restored
+    assert 'backend' in capsys.readouterr().out  # failure is reported
+
+
+def test_start_window_no_retry_without_qt(monkeypatch):
+    """Without Qt installed there is nothing to retry: fail straight away."""
+    attempts = []
+
+    class View:
+        def start(self, debug=False, private_mode=False):
+            attempts.append(True)
+            raise Exception('no GUI at all')
+
+    monkeypatch.delenv('PYWEBVIEW_GUI', raising=False)
+    monkeypatch.setattr(main_mod, '_qt_backend_available', lambda: False)
+
+    ok, exc = main_mod._start_window(View())
+
+    assert ok is False
+    assert isinstance(exc, Exception)
+    assert len(attempts) == 1
+
+
+def test_start_window_respects_explicit_backend(monkeypatch):
+    """An explicit PYWEBVIEW_GUI is respected: single attempt, env intact."""
+    attempts = []
+
+    class View:
+        def start(self, debug=False, private_mode=False):
+            attempts.append(os.environ.get('PYWEBVIEW_GUI'))
+            raise Exception('forced backend failed')
+
+    monkeypatch.setenv('PYWEBVIEW_GUI', 'gtk')
+    monkeypatch.setattr(main_mod, '_qt_backend_available', lambda: True)
+
+    ok, _ = main_mod._start_window(View())
+
+    assert ok is False
+    assert attempts == ['gtk']
+    assert os.environ['PYWEBVIEW_GUI'] == 'gtk'
