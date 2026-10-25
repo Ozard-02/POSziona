@@ -88,22 +88,26 @@ def _event_stream(listener):
     The generator exits (triggering GeneratorExit) when the client
     disconnects or the response is cancelled. This is the natural
     cleanup point for listener removal.
+
+    Events are popped under the listener lock but yielded OUTSIDE it:
+    a generator suspended at `yield` has not left its `with` block, so
+    holding the lock across the yield would freeze it while the WSGI
+    server writes the (possibly slow or broken) client socket — every
+    broadcast() in the app, checkout included, would block on that lock.
     """
     last_heartbeat = time.time()
     try:
         while True:
             with listener['lock']:
-                if listener['queue']:
-                    msg = listener['queue'].pop(0)
-                    listener['last_active'] = time.time()
-                    yield msg
-                else:
-                    # No events — send a heartbeat comment every 15s to
-                    # keep proxies from buffering and to detect dead clients
-                    if time.time() - last_heartbeat > 15:
-                        yield ": heartbeat\n\n"
-                        last_heartbeat = time.time()
+                msg = listener['queue'].pop(0) if listener['queue'] else None
+                listener['last_active'] = time.time()
+            if msg is not None:
+                yield msg
+                continue
             time.sleep(0.1)
+            if time.time() - last_heartbeat > 15:
+                yield ": heartbeat\n\n"
+                last_heartbeat = time.time()
     finally:
         # This block runs on GeneratorExit (client disconnect) or
         # when the generator is garbage-collected.
