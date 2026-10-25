@@ -183,6 +183,127 @@ def _gui_install_hint(os_release='/etc/os-release'):
           '  GTK+WebKit2GTK (or Qt) packages, then run from source.')
 
 
+def _gui_detect_state():
+    """Probe this machine for the pieces the desktop window needs (G3).
+
+    Returns a plain dict (injectable into gui_check for tests):
+      webview     pywebview version string, or None when not installed
+      gtk         (bool, detail) — GTK 3 + WebKit2 importable?
+      qt          list of Qt bindings found (qtpy is what pywebview uses)
+      cef         bool — cefpython3 importable?
+      display     display description, or None when missing (Linux only)
+    """
+    import importlib.util
+    import platform
+
+    def _spec(name):
+        try:
+            return importlib.util.find_spec(name)
+        except (ImportError, ValueError):
+            return None
+
+    webview_version = None
+    if _spec('webview'):
+        try:
+            from importlib.metadata import version
+            webview_version = version('pywebview')
+        except Exception:
+            webview_version = 'unknown'
+
+    gtk_ok = False
+    gtk_detail = 'PyGObject (python3-gi) not installed'
+    if _spec('gi'):
+        gtk_detail = 'Gtk 3.0/WebKit2 typelib missing'
+        for ver in ('4.1', '4.0'):
+            try:
+                import gi
+                gi.require_version('Gtk', '3.0')
+                gi.require_version('WebKit2', ver)
+                from gi.repository import Gtk, WebKit2  # noqa: F401
+                gtk_ok = True
+                gtk_detail = f'Gtk 3.0 + WebKit2 {ver}'
+                break
+            except Exception as exc:
+                gtk_detail = str(exc)
+
+    qt = [n for n in ('qtpy', 'PyQt5', 'PyQt6', 'PySide2', 'PySide6')
+          if _spec(n)]
+
+    display = None
+    if sys.platform.startswith('linux'):
+        parts = []
+        if os.environ.get('DISPLAY'):
+            parts.append(f"DISPLAY={os.environ['DISPLAY']}")
+        if os.environ.get('WAYLAND_DISPLAY'):
+            parts.append(f"WAYLAND_DISPLAY={os.environ['WAYLAND_DISPLAY']}")
+        display = ' '.join(parts) or None
+    else:
+        display = platform.system()  # no X/Wayland concept: never missing
+
+    return {
+        'webview': webview_version,
+        'gtk': (gtk_ok, gtk_detail),
+        'qt': qt,
+        'cef': bool(_spec('cefpython3')),
+        'display': display,
+    }
+
+
+def gui_check(state=None):
+    """Doctor for the desktop window (`--gui-check`). Returns an exit code.
+
+    0 = the window should open on this machine, 1 = POSziona will fall
+    back to the browser (still fully usable). Plain language, one line
+    per check, actionable — this is what the IT person reads during
+    first setup (G3 audit 2026-10-25).
+    """
+    if state is None:
+        state = _gui_detect_state()
+
+    lines = [f"Posziona GUI check — Python "
+             f"{sys.version.split()[0]} ({sys.executable})"]
+
+    if state['webview']:
+        lines.append(f"  pywebview:       installed ({state['webview']})")
+    else:
+        lines.append("  pywebview:       MISSING (pip install pywebview)")
+
+    gtk_ok, gtk_detail = state['gtk']
+    lines.append("  GTK backend:     "
+                 + (f"OK ({gtk_detail})" if gtk_ok
+                    else f"not usable: {gtk_detail}"))
+
+    qt = state['qt']
+    lines.append("  Qt backend:      "
+                 + (f"OK ({', '.join(qt)})" if qt else 'not installed (optional)'))
+
+    lines.append("  CEF backend:     "
+                 + ('OK' if state['cef'] else 'not installed (optional)'))
+
+    if state['display']:
+        lines.append(f"  Display:         {state['display']}")
+    else:
+        lines.append("  Display:         MISSING (no DISPLAY/WAYLAND_DISPLAY)")
+
+    has_backend = gtk_ok or bool(qt) or state['cef']
+    ok = bool(state['webview']) and has_backend and bool(state['display'])
+
+    if ok:
+        lines.append("  Result:          the desktop window can open on this machine.")
+    else:
+        lines.append("  Result:          NO desktop window here — POSziona will")
+        lines.append("                   fall back to the browser (it still works).")
+        lines.append(_gui_install_hint())
+        lines.append("  One-time window setup from source (the system Python")
+        lines.append("  sees distro GUI packages; the frozen binary may not):")
+        lines.append("    python3 -m venv --system-site-packages syswin")
+        lines.append("    syswin/bin/pip install flask pywebview flask-cors")
+        lines.append("    syswin/bin/python scripts/run_pos.py")
+
+    print('\n'.join(lines))
+    return 0 if ok else 1
+
+
 def _gui_missing_message(exc, server_url):
     """Explain why the pywebview window could not open."""
     # flush=True: frozen binaries are block-buffered on pipes/files —
@@ -661,6 +782,8 @@ Options:
   --mode {all|server|client}   Startup mode (default: all)
   --server-url URL             Server URL for client mode
                                (e.g., http://192.168.1.10:5000/)
+  --gui-check                  Diagnose whether the desktop window can
+                               open on this machine, then exit
 """,
     )
     parser.add_argument(
@@ -671,7 +794,17 @@ Options:
         '--server-url',
         help='Server URL for client mode (e.g., http://192.168.1.10:5000/)'
     )
+    parser.add_argument(
+        '--gui-check', action='store_true',
+        help='Diagnose whether the desktop window can open, then exit'
+    )
     args = parser.parse_args(argv)
+    if args.gui_check:
+        # Doctor mode: report and exit (0 = window can open, 1 = browser
+        # fallback). Kept inside parse_args so both entry points (source
+        # and frozen) share one implementation without changing the
+        # (mode, server_url) contract they rely on.
+        sys.exit(gui_check())
     return args.mode, args.server_url
 
 

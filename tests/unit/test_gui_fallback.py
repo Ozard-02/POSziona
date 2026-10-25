@@ -273,3 +273,62 @@ def test_start_window_respects_explicit_backend(monkeypatch):
     assert ok is False
     assert attempts == ['gtk']
     assert os.environ['PYWEBVIEW_GUI'] == 'gtk'
+
+
+def test_gui_check_ok(capsys):
+    """Doctor: pywebview + GTK + display → exit 0, no install recipe (G3)."""
+    state = {
+        'webview': '5.0',
+        'gtk': (True, 'Gtk 3.0 + WebKit2 4.1'),
+        'qt': [],
+        'cef': False,
+        'display': 'DISPLAY=:0',
+    }
+    assert main_mod.gui_check(state) == 0
+    out = capsys.readouterr().out
+    assert 'installed (5.0)' in out
+    assert 'GTK backend:     OK' in out
+    assert 'DISPLAY=:0' in out
+    assert 'can open' in out
+    assert 'system-site-packages' not in out
+
+
+def test_gui_check_no_backend_falls_back(capsys):
+    """Doctor: no backend → exit 1 with distro hint + source recipe (G3)."""
+    state = {
+        'webview': '5.0',
+        'gtk': (False, 'PyGObject (python3-gi) not installed'),
+        'qt': [],
+        'cef': False,
+        'display': 'DISPLAY=:0',
+    }
+    assert main_mod.gui_check(state) == 1
+    out = capsys.readouterr().out
+    assert 'fall back to the browser' in out
+    assert 'To enable the desktop window' in out
+    assert 'system-site-packages' in out
+
+
+def test_gui_check_missing_display(capsys):
+    """Doctor: backend present but no display → exit 1, says why (G3)."""
+    state = {
+        'webview': '5.0',
+        'gtk': (True, 'Gtk 3.0 + WebKit2 4.1'),
+        'qt': ['qtpy'],
+        'cef': False,
+        'display': None,
+    }
+    assert main_mod.gui_check(state) == 1
+    out = capsys.readouterr().out
+    assert 'MISSING (no DISPLAY/WAYLAND_DISPLAY)' in out
+    assert 'fall back to the browser' in out
+
+
+def test_cli_gui_check_exits_with_doctor_code(monkeypatch):
+    """--gui-check runs the doctor and exits with its code (G3)."""
+    codes = []
+    monkeypatch.setattr(main_mod, 'gui_check', lambda: codes.append(1) or 1)
+    with pytest.raises(SystemExit) as exc_info:
+        main_mod.parse_args(['--gui-check'])
+    assert exc_info.value.code == 1
+    assert codes == [1]
