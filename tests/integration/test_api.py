@@ -19,6 +19,23 @@ def test_auth_status_not_logged_in(client):
     assert resp.get_json()['logged_in'] is False
 
 
+def test_party_lifecycle_requires_admin(client, clean_db):
+    """Party/template mutations 403 without an admin session (R5).
+
+    Previously an operator (or any logged-in screen) could delete or
+    recreate whole parties by hitting the API directly.
+    """
+    db_name = clean_db
+    r = client.delete(f'/api/parties/{db_name}')  # logged out
+    assert r.status_code == 403
+
+    client.post(f'/api/auth/login?db={db_name}', json={'pin': '1234'})  # operator
+    r = client.post('/api/parties/create-empty', json={'name': f'{db_name}-2'})
+    assert r.status_code == 403
+    r = client.delete(f'/api/parties/{db_name}')
+    assert r.status_code == 403
+
+
 def test_full_pos_workflow(clean_db, client):
     """Test the complete POS workflow: sections → products → cart → checkout."""
     db_name = clean_db

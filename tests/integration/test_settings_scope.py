@@ -16,6 +16,8 @@ from app.services.settings_service import (
 
 @pytest.fixture
 def two_parties(client):
+    login = client.post('/api/auth/login/admin?db=default', json={'pin': '0000'})
+    assert login.status_code == 200, 'two_parties fixture needs admin'
     r = client.post('/api/parties/templates', json={'name': 'scope_tpl'})
     tid = r.get_json()['id']
     for name in ('scope_a', 'scope_b'):

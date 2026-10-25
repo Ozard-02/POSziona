@@ -14,7 +14,6 @@ from app.services.party_service import (
     get_party_settings,
     update_party_setting,
 )
-from app.services.order_service import build_recap_csv
 from app.services.backup_service import list_snapshots, restore_party_db, run_snapshots
 from app.database import templates_db
 from app.utils.logger import get_logger
@@ -35,6 +34,7 @@ def get_templates():
 
 
 @parties_bp.route('/templates', methods=['POST'])
+@require_admin
 def create_template():
     """Create a new party template."""
     data = request.get_json()
@@ -61,6 +61,7 @@ def get_template(template_id):
 
 
 @parties_bp.route('/templates/<int:template_id>', methods=['DELETE'])
+@require_admin
 def remove_template(template_id):
     """Delete a template."""
     templates_db.delete_template(template_id)
@@ -68,6 +69,7 @@ def remove_template(template_id):
 
 
 @parties_bp.route('/templates/<int:template_id>/products', methods=['POST'])
+@require_admin
 def add_template_product(template_id):
     """Add a product to a template."""
     data = request.get_json()
@@ -99,6 +101,7 @@ def get_template_settings(template_id):
 
 
 @parties_bp.route('/templates/<int:template_id>/settings', methods=['POST'])
+@require_admin
 def set_template_settings(template_id):
     """Set settings for a template."""
     data = request.get_json()
@@ -118,6 +121,7 @@ def get_parties():
 
 
 @parties_bp.route('/', methods=['POST'])
+@require_admin
 def create_party():
     """Create a party from a template."""
     data = request.get_json()
@@ -143,6 +147,7 @@ def create_party():
 
 
 @parties_bp.route('/create-empty', methods=['POST'])
+@require_admin
 def create_empty():
     """Create a new party without a template (manual creation)."""
     data = request.get_json()
@@ -166,6 +171,7 @@ def create_empty():
 
 
 @parties_bp.route('/<db_name>', methods=['DELETE'])
+@require_admin
 def remove_party(db_name):
     """Delete a party database."""
     try:
@@ -176,6 +182,7 @@ def remove_party(db_name):
 
 
 @parties_bp.route('/<db_name>/duplicate', methods=['POST'])
+@require_admin
 def duplicate(db_name):
     """Duplicate a party."""
     data = request.get_json() or {}
@@ -219,6 +226,7 @@ def get_template_tags_route(template_id):
 
 
 @parties_bp.route('/templates/<int:template_id>/tags', methods=['POST'])
+@require_admin
 def add_template_tag_route(template_id):
     """Add a tag definition to a template."""
     data = request.get_json()
@@ -236,6 +244,7 @@ def add_template_tag_route(template_id):
 
 
 @parties_bp.route('/templates/<int:template_id>/products/<int:product_id>/tags', methods=['POST'])
+@require_admin
 def assign_template_product_tag(template_id, product_id):
     """Assign an existing template tag to a template product by tag name."""
     data = request.get_json()

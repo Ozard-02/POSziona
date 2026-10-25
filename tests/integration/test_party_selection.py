@@ -7,10 +7,15 @@ authenticates against the chosen party's operators, and checkout writes
 orders/stock/audit into that party's DB only.
 """
 
+from app.database import templates_db
+
 PARTY = 'sel_party_test'
 
 
 def _make_party(client):
+    # Lifecycle routes are admin-only (R5)
+    login = client.post('/api/auth/login/admin?db=default', json={'pin': '0000'})
+    assert login.status_code == 200, 'party setup needs admin login'
     r = client.post('/api/parties/templates', json={'name': 'sel_tpl_test'})
     assert r.status_code == 201
     tid = r.get_json()['id']
@@ -32,12 +37,18 @@ def _setup_product(client, stock=10):
     return resp.get_json()['id']
 
 
-def _cleanup(client, tid):
-    client.delete(f'/api/parties/{PARTY}')
-    client.delete(f'/api/parties/templates/{tid}')
+def _cleanup(tid):
+    # Teardown via services: works regardless of session cookies, and
+    # party deletion needs zero live connections (requests are done).
+    from app.services.party_service import delete_party
+    try:
+        delete_party(PARTY)
+    except FileNotFoundError:
+        pass
+    templates_db.delete_template(tid)
 
 
-def test_login_uses_selected_party_operators(client):
+def test_login_uses_selected_party_operators(client, clean_db):
     """Operator PIN authenticates against the chosen party's DB."""
     tid = _make_party(client)
     try:
@@ -45,10 +56,10 @@ def test_login_uses_selected_party_operators(client):
         assert r.status_code == 200, r.get_json()
         assert r.get_json()['operator']['role'] == 'operator'
     finally:
-        _cleanup(client, tid)
+        _cleanup(tid)
 
 
-def test_sale_lands_in_selected_party_only(client):
+def test_sale_lands_in_selected_party_only(client, clean_db):
     """Checkout with ?db=P writes the order into P, nowhere else."""
     tid = _make_party(client)
     try:
@@ -67,4 +78,4 @@ def test_sale_lands_in_selected_party_only(client):
         others = client.get('/api/orders/report/summary?db=default').get_json()
         assert others['total_orders'] == 0
     finally:
-        _cleanup(client, tid)
+        _cleanup(tid)

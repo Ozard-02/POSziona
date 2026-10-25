@@ -110,6 +110,7 @@ def test_create_empty_refuses_live_party(clean_db, client):
     from app.database.connection import PartyDatabase
 
     db_name = clean_db
+    client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
     held = PartyDatabase(db_name)
     held.__enter__()  # deliberately unbalanced: connection stays open
     try:
@@ -130,6 +131,7 @@ def test_duplicate_is_safe_on_name_edge_cases(clean_db, client):
     from app.database.connection import PartyDatabase
 
     db_name = clean_db
+    client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
     # Self-duplication would delete the files and re-copy from a dead path
     resp = client.post(f'/api/parties/{db_name}/duplicate', json={'name': db_name})
     assert resp.status_code == 400

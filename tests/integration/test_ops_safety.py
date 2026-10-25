@@ -9,6 +9,7 @@ def test_delete_refuses_live_db(clean_db, client):
     from app.database.connection import PartyDatabase
 
     db_name = clean_db
+    client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
     with PartyDatabase(db_name):
         resp = client.delete(f'/api/parties/{db_name}')
         assert resp.status_code == 400
