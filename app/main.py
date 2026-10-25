@@ -43,6 +43,24 @@ def _get_webview():
 app = create_app()
 
 
+def _port_bindable(host, port):
+    """True when the serving port can be bound right now (R14).
+
+    Best-effort pre-flight: without it the LAN beacon would announce a
+    server whose app.run() then dies on a busy port (some other program
+    already listening), so every client menu would offer a dead server.
+    """
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        probe.bind((host, port))
+        return True
+    except OSError:
+        return False
+    finally:
+        probe.close()
+
+
 def start_server():
     """Start Flask server in a background thread."""
     from app.services.backup_service import start_backup_scheduler
@@ -56,16 +74,32 @@ def start_server():
               "would silently diverge the database.", flush=True)
         _server_failed.set()
         return
-    # Lock acquired: this process owns the data dir. Signal it BEFORE
-    # binding the port — the main thread must not mistake another
-    # server's open port for ours (ready/lock race).
+    if not _port_bindable(BIND_HOST, PORT):
+        print(f"ERROR: port {PORT} is already in use by another program.",
+              flush=True)
+        print("Stop that program (or free the port) and start again.",
+              flush=True)
+        _server_failed.set()
+        return
+    # Lock acquired AND port ours: only now signal readiness (the main
+    # thread must not mistake someone else's open port for ours), start
+    # announcing and schedule snapshots.
     _server_serving.set()
-    # LAN beacon so clients on the same Wi-Fi can discover this server.
     from app.utils.discovery import start_beacon_loop
-    start_beacon_loop(PORT)
+    beacon_stop = start_beacon_loop(PORT)
     start_backup_scheduler()
     print(f"Starting Flask server on {BIND_HOST}:{PORT}...")
-    app.run(host=BIND_HOST, port=PORT, threaded=True, use_reloader=False)
+    try:
+        app.run(host=BIND_HOST, port=PORT, threaded=True, use_reloader=False)
+    except OSError as exc:
+        # Rare TOCTOU: the port was taken between the probe and app.run.
+        print(f"ERROR: could not start the server on port {PORT}: {exc}",
+              flush=True)
+        try:
+            beacon_stop.set()  # never keep advertising a dead server
+        except Exception:
+            pass
+        _server_failed.set()
 
 
 # Threading events shared between start_server (daemon thread) and the

@@ -106,3 +106,40 @@ def test_server_check_opt_out(monkeypatch):
     monkeypatch.setattr('app.utils.discovery.discover',
                         lambda *a, **k: (_ for _ in ()).throw(AssertionError))
     main_mod._warn_if_other_server_live()  # must not raise
+
+
+def test_port_busy_fails_without_beacon_or_scheduler(monkeypatch, capsys):
+    """A port held by another program must not be announced (R14).
+
+    Regression: the beacon + snapshot scheduler started BEFORE app.run,
+    so a busy port left clients offering a dead server.
+    """
+    import socket
+    import app.services.backup_service as backups
+    import app.utils.discovery as disc
+    import app.utils.instance_lock as instance_lock
+
+    held = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    held.bind(('127.0.0.1', 0))
+    held.listen(1)
+    port = held.getsockname()[1]
+    calls = []
+    monkeypatch.setattr(main_mod, 'PORT', port)
+    monkeypatch.setattr(main_mod, 'BIND_HOST', '127.0.0.1')
+    monkeypatch.setattr(instance_lock, 'acquire', lambda: True)
+    monkeypatch.setattr(disc, 'start_beacon_loop',
+                        lambda *a, **k: calls.append('beacon') or
+                        type('S', (), {'set': lambda self: None})())
+    monkeypatch.setattr(backups, 'start_backup_scheduler',
+                        lambda: calls.append('scheduler'))
+    main_mod._server_failed.clear()
+    main_mod._server_serving.clear()
+    try:
+        main_mod.start_server()  # must return immediately, not serve
+    finally:
+        held.close()
+
+    assert calls == []                       # nothing announced/scheduled
+    assert main_mod._server_failed.is_set()
+    assert not main_mod._server_serving.is_set()
+    assert f'port {port} is already in use' in capsys.readouterr().out
