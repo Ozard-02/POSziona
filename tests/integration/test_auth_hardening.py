@@ -104,6 +104,34 @@ def test_login_rate_limited(clean_db, client):
     assert 'error' in r.get_json()
 
 
+def test_expired_rate_limit_counters_are_swept():
+    """Successful logins never revisit their key: the table must not grow
+    forever with every client IP ever seen (R16)."""
+    import time as _time
+
+    rate_limit.reset()
+    try:
+        now = _time.time()
+        with rate_limit._lock:
+            for i in range(50):
+                rate_limit._counters[f'old-{i}'] = [now - 10_000, 5]
+            rate_limit._counters['fresh'] = [now, 1]
+
+        original = rate_limit._SWEEP_THRESHOLD
+        rate_limit._SWEEP_THRESHOLD = 10  # table already past the valve
+        try:
+            assert rate_limit.check('new', limit=3, window_seconds=60) is True
+        finally:
+            rate_limit._SWEEP_THRESHOLD = original
+
+        with rate_limit._lock:
+            keys = set(rate_limit._counters)
+        assert not any(k.startswith('old-') for k in keys), keys
+        assert {'fresh', 'new'} <= keys
+    finally:
+        rate_limit.reset()
+
+
 def test_factory_pin_flag(clean_db, client):
     db_name = clean_db
     r = client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
