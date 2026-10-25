@@ -49,3 +49,47 @@ def test_csv_import(clean_db, client):
     for p in products:
         if p['name'] in ('Small Coffee', 'Big Coffee'):
             assert p['stock_count'] is None  # unlimited
+
+
+def test_concurrent_imports_share_lookups_without_failing(clean_db):
+    """Two concurrent importers share section/subsection/tag (R12).
+
+    Lookup columns are UNIQUE: the loser of the SELECT-then-INSERT race
+    must re-select instead of aborting the whole import.
+    """
+    import threading
+    from app.database.connection import PartyDatabase
+    from app.services.product_service import import_products_from_csv
+
+    db_name = clean_db
+    errors = []
+    counts = []
+    barrier = threading.Barrier(2)
+
+    def _rows(tag):
+        return [
+            {'name': f'{tag}-P{i}', 'price': 1.0, 'section': 'Bulk',
+             'subsection': 'Rows', 'tags': 'bulk'}
+            for i in range(300)
+        ]
+
+    def _import(tag):
+        try:
+            barrier.wait(timeout=5)
+            counts.append(import_products_from_csv(db_name, _rows(tag)))
+        except Exception as e:  # noqa: BLE001 — collected, asserted below
+            errors.append(e)
+
+    threads = [threading.Thread(target=_import, args=(f'T{n}',)) for n in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+
+    assert errors == []
+    assert sorted(counts) == [300, 300]
+    with PartyDatabase(db_name) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM sections").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM subsections").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM tags").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM products").fetchone()[0] == 600

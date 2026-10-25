@@ -13,6 +13,30 @@ logger = get_logger('services.products')
 # Used so that stock=None (unlimited) can be explicitly set on products.
 _UNSET = object()
 
+# CSV import commits every N products: keeps the write lock short so a big
+# import can never stall a live checkout behind SQLite's busy timeout.
+CSV_COMMIT_BATCH = 50
+
+
+def _get_or_create_lookup(conn, select_sql, select_params,
+                          insert_sql, insert_params):
+    """Select-or-insert a lookup row (section/subsection/tag).
+
+    The lookup columns are UNIQUE, so a second writer can win the INSERT
+    between our SELECT and INSERT. Re-select instead of failing the whole
+    import with IntegrityError (R12 audit 2026-10-25).
+    """
+    row = conn.execute(select_sql, select_params).fetchone()
+    if row:
+        return row[0]
+    try:
+        return conn.execute(insert_sql, insert_params).lastrowid
+    except sqlite3.IntegrityError:
+        row = conn.execute(select_sql, select_params).fetchone()
+        if row:
+            return row[0]
+        raise
+
 
 # ============================================================
 # SECTION OPERATIONS
@@ -475,9 +499,15 @@ def import_products_from_csv(db_name, csv_rows):
     Expected columns: name, price, section, subsection, sku (opt), stock (opt), tags (opt)
     Tags should be comma-separated tag names within a single CSV cell.
     Uses a single database connection to avoid FK constraint issues.
+
+    The write lock is released every CSV_COMMIT_BATCH rows: a big import
+    must never hold it long enough to stall a live checkout (R12). On a
+    mid-file error earlier batches stay committed — callers get the
+    exception, and re-importing is safe (lookups are get-or-create).
     """
     with PartyDatabase(db_name) as conn:
         imported_count = 0
+        pending = 0
         for row in csv_rows:
             name = row.get('name', '').strip() if isinstance(row.get('name'), str) else str(row.get('name', '')).strip()
             if not name:
@@ -513,29 +543,19 @@ def import_products_from_csv(db_name, csv_rows):
             else:
                 tag_names = []
 
-            # Get or create section
-            sec = conn.execute(
-                "SELECT id FROM sections WHERE name = ?", (section,)
-            ).fetchone()
-            if sec:
-                section_id = sec[0]
-            else:
-                conn.execute("INSERT INTO sections (name) VALUES (?)", (section,))
-                section_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            # Get or create section / subsection (UNIQUE columns: a
+            # concurrent importer can win the INSERT — re-select then)
+            section_id = _get_or_create_lookup(
+                conn,
+                "SELECT id FROM sections WHERE name = ?", (section,),
+                "INSERT INTO sections (name) VALUES (?)", (section,))
 
-            # Get or create subsection
-            sub = conn.execute(
+            subsection_id = _get_or_create_lookup(
+                conn,
                 "SELECT id FROM subsections WHERE name = ? AND section_id = ?",
-                (subsection, section_id)
-            ).fetchone()
-            if sub:
-                subsection_id = sub[0]
-            else:
-                conn.execute(
-                    "INSERT INTO subsections (name, section_id) VALUES (?, ?)",
-                    (subsection, section_id)
-                )
-                subsection_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+                (subsection, section_id),
+                "INSERT INTO subsections (name, section_id) VALUES (?, ?)",
+                (subsection, section_id))
 
             # Insert product
             cursor = conn.execute(
@@ -547,19 +567,12 @@ def import_products_from_csv(db_name, csv_rows):
 
             # Assign tags — get or create each tag, then link
             for tag_name in tag_names:
-                tag = conn.execute(
-                    "SELECT id FROM tags WHERE name = ? AND is_active = 1",
-                    (tag_name,)
-                ).fetchone()
-                if tag:
-                    tag_id = tag[0]
-                else:
-                    # Create new tag if it doesn't exist
-                    conn.execute(
-                        "INSERT INTO tags (name, color, bg_color, text_color, is_active) VALUES (?, ?, ?, ?, 1)",
-                        (tag_name, '#ffffff', '#3498db', '#000000')
-                    )
-                    tag_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+                tag_id = _get_or_create_lookup(
+                    conn,
+                    "SELECT id FROM tags WHERE name = ?", (tag_name,),
+                    "INSERT INTO tags (name, color, bg_color, text_color, is_active) "
+                    "VALUES (?, ?, ?, ?, 1)",
+                    (tag_name, '#ffffff', '#3498db', '#000000'))
 
                 # Link tag to product
                 conn.execute(
@@ -568,6 +581,10 @@ def import_products_from_csv(db_name, csv_rows):
                 )
 
             imported_count += 1
+            pending += 1
+            if pending >= CSV_COMMIT_BATCH:
+                conn.commit()
+                pending = 0
 
         conn.commit()
         logger.info(f"Imported {imported_count} products from CSV")
