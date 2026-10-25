@@ -155,11 +155,12 @@ def discover(timeout=LISTEN_WINDOW, port=DISCOVERY_PORT):
     deadline = time.time() + timeout
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
+        # SO_REUSEADDR is all we need: it lets several clients listen on
+        # the discovery port at once (broadcast is delivered to all).
+        # SO_REUSEPORT would add nothing and lets the kernel load-balance
+        # unicast datagrams between competing sockets, so a client menu
+        # could come out empty for no reason (R17).
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        try:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        except (AttributeError, OSError):
-            pass  # macOS-only / unavailable — REUSEADDR suffices
         sock.bind(('0.0.0.0', port))
         while True:
             remaining = deadline - time.time()
