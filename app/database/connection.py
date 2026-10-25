@@ -18,6 +18,11 @@ logger = get_logger('database')
 _checked_paths = set()
 _checked_paths_lock = threading.Lock()
 
+# Party DB paths whose schema/migration replay already ran in this process,
+# so _run_migrations is not repeated on every open (it sweeps the entire
+# schema and two concurrent opens would race the check-then-ALTER pattern).
+_migrated_paths = set()  # guarded by _checked_paths_lock
+
 # Best-effort count of currently open connections per party DB path.
 # delete_party() refuses to remove a DB with live connections instead of
 # pulling the file out from under running requests mid-party.
@@ -107,8 +112,12 @@ def _ensure_party_db_exists(db_name):
     else:
         # Existing DB: verify integrity once per process, run migrations
         _verify_integrity_once(db_path)
-        # Run migrations on existing databases
-        _run_migrations(db_path)
+        with _checked_paths_lock:
+            already_migrated = db_path in _migrated_paths
+        if not already_migrated:
+            _run_migrations(db_path)
+            with _checked_paths_lock:
+                _migrated_paths.add(db_path)
 
     return db_path
 
@@ -423,18 +432,24 @@ class PartyDatabase:
         self.conn = None
 
     def __enter__(self):
-        self.db_path = _ensure_party_db_exists(self.db_name)
-        if is_deleting(self.db_path):
-            raise RuntimeError(
-                f'Party database is being deleted: {self.db_name}')
-        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-        self.conn.execute('PRAGMA foreign_keys = ON')
-        self.conn.execute('PRAGMA busy_timeout = 10000')  # Wait up to 10s for locks
-        self.conn.execute('PRAGMA journal_mode = WAL')
-        self.conn.execute('PRAGMA synchronous = NORMAL')  # Faster WAL writes
-        with _open_counts_lock:
-            _open_counts[self.db_path] = _open_counts.get(self.db_path, 0) + 1
+        self.db_path = _get_party_db_path(self.db_name)
+        # Create/verify + connect + count all under the lifecycle lock, so
+        # a delete/restore (which holds the same lock) can never remove the
+        # file between our ensure and our open, and a concurrent open can
+        # never seed the file twice (R6 audit 2026-10-25).
+        with _lifecycle_lock:
+            if is_deleting(self.db_path):
+                raise RuntimeError(
+                    f'Party database is being deleted: {self.db_name}')
+            self.conn = sqlite3.connect(
+                _ensure_party_db_exists(self.db_name), check_same_thread=False)
+            self.conn.row_factory = sqlite3.Row
+            self.conn.execute('PRAGMA foreign_keys = ON')
+            self.conn.execute('PRAGMA busy_timeout = 10000')  # Wait up to 10s for locks
+            self.conn.execute('PRAGMA journal_mode = WAL')
+            self.conn.execute('PRAGMA synchronous = NORMAL')  # Faster WAL writes
+            with _open_counts_lock:
+                _open_counts[self.db_path] = _open_counts.get(self.db_path, 0) + 1
         return self.conn
 
     def __exit__(self, exc_type, exc_val, exc_tb):

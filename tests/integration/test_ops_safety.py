@@ -1,6 +1,7 @@
 """
 Operational-safety tests: lifecycle guards, health endpoint, audit trail.
 """
+import os
 import sqlite3
 
 
@@ -60,3 +61,73 @@ def test_discount_and_void_are_audited(clean_db, client):
     conn.close()
     assert 'discount_applied' in actions
     assert 'order_voided' in actions
+
+
+def test_open_refused_and_no_resurrection_while_being_deleted(clean_db):
+    """Open cannot resurrect a party DB while its deletion is in progress (R6)."""
+    import pytest
+    from app.database.connection import (
+        PartyDatabase, mark_deleting, _get_party_db_path)
+
+    with PartyDatabase(clean_db):
+        pass  # file must exist
+    path = _get_party_db_path(clean_db)
+    mark_deleting(path, True)
+    try:
+        with pytest.raises(RuntimeError, match='being deleted'):
+            with PartyDatabase(clean_db):
+                pass
+        # The opener must not have recreated/touched the file
+        assert path.endswith(clean_db + '.db')
+    finally:
+        mark_deleting(path, False)
+
+
+def test_concurrent_first_opens_seed_once(clean_db):
+    """Simultaneous first-opens of a NEW party seed the defaults once (R6)."""
+    import threading
+    from app.database.connection import (
+        PartyDatabase, _get_party_db_path, _checked_paths, _checked_paths_lock,
+        _migrated_paths)
+
+    db_name = 'race_seed_check'
+    path = _get_party_db_path(db_name)
+    # Fresh slate for path/tracking state
+    for ext in ('', '-wal', '-shm'):
+        if os.path.exists(path + ext):
+            os.remove(path + ext)
+    with _checked_paths_lock:
+        _checked_paths.discard(path)
+        _migrated_paths.discard(path)
+
+    barrier = threading.Barrier(6)
+    failures = []
+
+    def _open():
+        try:
+            barrier.wait(timeout=5)
+            with PartyDatabase(db_name) as conn:
+                conn.execute("SELECT COUNT(*) FROM products").fetchone()
+        except Exception as e:  # noqa: BLE001 — collect, assert below
+            failures.append(e)
+
+    threads = [threading.Thread(target=_open) for _ in range(6)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=10)
+    assert failures == []
+
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    products = conn.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+    conn.close()
+
+    for ext in ('', '-wal', '-shm'):
+        if os.path.exists(path + ext):
+            os.remove(path + ext)
+    with _checked_paths_lock:
+        _checked_paths.discard(path)
+        _migrated_paths.discard(path)
+
+    assert products == 13  # one default seed run (9 drinks + 4 snacks), never doubled
