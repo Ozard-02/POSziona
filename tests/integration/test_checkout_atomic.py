@@ -186,8 +186,12 @@ def test_concurrent_same_key_single_order(clean_db, client):
     assert get_sales_summary(db_name)['total_orders'] == 1
 
 
-def test_concurrent_checkouts_never_negative_stock(clean_db, client):
-    """10 threads × qty 2 against stock 5 → stock clamps at exactly 0."""
+def test_concurrent_checkouts_never_oversell(clean_db, client):
+    """10 threads × qty 2 against stock 5: exactly 2 sales land (R13).
+
+    Replaces the old clamp-at-0 contract: a sale that cannot be covered by
+    the shelf must be REFUSED, never silently recorded and clamped.
+    """
     import threading
     from app.services.order_service import checkout_order
     from app.services.product_service import get_product_by_id
@@ -195,15 +199,24 @@ def test_concurrent_checkouts_never_negative_stock(clean_db, client):
     db_name = clean_db
     _setup_product(client, db_name, stock=5)
 
-    errors = []
+    ok = []
+    refused = []
+    other = []
+    lock = threading.Lock()
 
     def attempt(i):
         try:
             checkout_order(
                 db_name, [{'product_id': 1, 'quantity': 2, 'unit_price': 2.50}],
                 'cash', 1, idempotency_key=f'test-key-load-{i}')
+            with lock:
+                ok.append(i)
+        except ValueError:
+            with lock:
+                refused.append(i)
         except Exception as e:  # noqa: BLE001
-            errors.append(e)
+            with lock:
+                other.append(e)
 
     threads = [threading.Thread(target=attempt, args=(i,)) for i in range(10)]
     for t in threads:
@@ -211,8 +224,12 @@ def test_concurrent_checkouts_never_negative_stock(clean_db, client):
     for t in threads:
         t.join()
 
-    assert not errors
-    assert get_product_by_id(db_name, 1)['stock_count'] == 0
+    assert other == []
+    assert len(ok) == 2, ok            # floor(stock 5 / qty 2)
+    assert len(ok) + len(refused) == 10
+    assert get_product_by_id(db_name, 1)['stock_count'] == 1
+    summary = client.get(f'/api/orders/report/summary?db={db_name}').get_json()
+    assert summary['total_orders'] == 2
 
 
 def test_loser_reread_sees_winner_commit(clean_db, client):

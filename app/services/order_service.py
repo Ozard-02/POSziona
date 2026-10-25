@@ -86,20 +86,25 @@ def checkout_order(db_name, cart_items, payment_method, operator_id,
                 (order_id, item['product_id'], item['quantity'], item['unit_price'])
             )
 
-            # Atomically decrement stock. Uses MAX(0, ...) to clamp at 0
-            # rather than going negative. The WHERE clause ensures this is
-            # atomic — concurrent checkouts for the same product will each
-            # update the row sequentially (SQLite serializes via WAL + busy_timeout),
-            # so stock_count - quantity is always computed against the latest value.
-            conn.execute(
+            # Guarded atomic decrement: never oversell the last unit.
+            # Unlimited stock (NULL) always succeeds; limited stock
+            # requires stock_count >= quantity on the latest committed
+            # row, so a concurrent checkout that already sold the last
+            # unit makes this rowcount 0 and the whole sale is refused
+            # (R13 audit 2026-10-25).
+            cur = conn.execute(
                 """UPDATE products
-                   SET stock_count = CASE
-                       WHEN stock_count IS NOT NULL THEN MAX(0, stock_count - ?)
-                       ELSE NULL
-                   END
-                   WHERE id = ?""",
-                (item['quantity'], item['product_id'])
+                   SET stock_count = stock_count - ?
+                   WHERE id = ?
+                     AND (stock_count IS NULL OR stock_count >= ?)""",
+                (item['quantity'], item['product_id'], item['quantity'])
             )
+            if cur.rowcount == 0:
+                conn.rollback()
+                label = item.get('name') or f"product {item['product_id']}"
+                raise ValueError(
+                    f'Not enough stock for "{label}" — sale not recorded. '
+                    'Reduce the quantity and retry.')
 
         # Record payment in the SAME transaction (an order must never
         # exist without its payment, or vice versa)

@@ -33,16 +33,65 @@ def test_checkout_decrements_stock_once(clean_db, client):
     assert order['items'][0]['quantity'] == 2
 
 
-def test_stock_never_negative_on_checkout(clean_db, client):
-    """Stale carts (qty > stock) clamp at 0, never below."""
+def test_stale_cart_over_stock_is_refused(clean_db, client):
+    """A stale cart above available stock refuses the sale, stock untouched.
+
+    (Replaces the old clamp-at-0 contract: silently recording a sale of
+    goods that are not on the shelf was the oversell bug — R13.)
+    """
     db = clean_db
     _seed_stocked_product(client, db, stock=1)
 
     client.post(f'/api/cart/add?db={db}', json={'product_id': 1, 'quantity': 3})
     resp = client.post(f'/api/orders/checkout?db={db}',
                        json={'payment_method': 'cash'})
-    assert resp.status_code == 201
+    assert resp.status_code == 400
+    assert 'stock' in resp.get_json()['error'].lower()
+    assert _stock(client, db) == 1
+    summary = client.get(f'/api/orders/report/summary?db={db}').get_json()
+    assert summary['total_orders'] == 0
+
+
+def test_last_unit_concurrent_checkouts_sell_once(clean_db, client, app):
+    """Two parallel checkouts of the last unit: exactly one sale (R13)."""
+    import threading
+
+    db = clean_db
+    _seed_stocked_product(client, db, stock=1)
+
+    # Two separate screens with DIFFERENT operators (same operator means
+    # the same shared cart by design — the session locks merge it)
+    c1, c2 = app.test_client(), app.test_client()
+    assert c1.post(f'/api/auth/login/admin?db={db}',
+                   json={'pin': '0000'}).status_code == 200
+    assert c2.post(f'/api/auth/login?db={db}',
+                   json={'pin': '1234'}).status_code == 200
+    for c in (c1, c2):
+        resp = c.post(f'/api/cart/add?db={db}',
+                      json={'product_id': 1, 'quantity': 1})
+        assert resp.status_code == 200
+
+    barrier = threading.Barrier(2)
+    codes = []
+    lock = threading.Lock()
+
+    def _checkout(c):
+        barrier.wait(timeout=5)
+        resp = c.post(f'/api/orders/checkout?db={db}',
+                      json={'payment_method': 'cash'})
+        with lock:
+            codes.append(resp.status_code)
+
+    threads = [threading.Thread(target=_checkout, args=(c,)) for c in (c1, c2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=15)
+
+    assert sorted(codes) == [201, 400], codes
     assert _stock(client, db) == 0
+    summary = client.get(f'/api/orders/report/summary?db={db}').get_json()
+    assert summary['total_orders'] == 1
 
 
 def test_depleted_product_flagged_out_of_stock(clean_db, client):
