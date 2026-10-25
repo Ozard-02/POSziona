@@ -173,3 +173,44 @@ def test_snapshot_is_atomic_and_tmp_invisible(isolated_backups):
     finally:
         shutil.rmtree(os.path.join(isolated_backups, name), ignore_errors=True)
         prune_snapshots()
+
+
+def test_restore_refused_while_party_open(clean_db, client, isolated_backups):
+    """Restore refuses (data untouched) while the party DB is in use."""
+    from app.database.connection import PartyDatabase
+
+    db_name = clean_db
+    _setup_sale(client, db_name)
+    name = backups.run_snapshots(keep=10)
+
+    # One more sale after the snapshot (2 live orders) — must survive the
+    # failed restore byte-for-byte.
+    client.post(f'/api/cart/add?db={db_name}', json={'product_id': 1, 'quantity': 1})
+    r = client.post(f'/api/orders/checkout?db={db_name}', json={'payment_method': 'cash'})
+    assert r.status_code == 201
+
+    with pytest.raises(RuntimeError, match='in use'):
+        with PartyDatabase(db_name) as conn:
+            # Hold the connection open while the restore is attempted
+            backups.restore_party_db(db_name, name)
+
+    summary = client.get(f'/api/orders/report/summary?db={db_name}').get_json()
+    assert summary['total_orders'] == 2
+
+
+def test_restore_api_reports_in_use(clean_db, client, isolated_backups):
+    """Restore API maps the in-use refusal to a readable operator error."""
+    from app.database.connection import PartyDatabase
+
+    db_name = clean_db
+    _setup_sale(client, db_name)
+    name = backups.run_snapshots(keep=10)
+
+    held = PartyDatabase(db_name)
+    try:
+        held.__enter__()  # deliberately unbalanced: connection stays open
+        r = client.post(f'/api/parties/{db_name}/restore', json={'snapshot': name})
+        assert r.status_code == 400
+        assert 'in use' in r.get_json()['error']
+    finally:
+        held.__exit__(None, None, None)

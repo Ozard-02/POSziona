@@ -201,9 +201,13 @@ def restore_party_db(db_name, snapshot):
 
     The live WAL is checkpointed first, then the snapshot copy replaces the
     live file and stale WAL/SHM sidecars are removed. Raises ValueError for
-    bad names, FileNotFoundError for missing snapshots.
+    bad names, FileNotFoundError for missing snapshots, RuntimeError when
+    the party is still in use (live connections) — replacing the file
+    under open connections would silently lose WAL-committed sales.
     """
-    from app.database.connection import validate_db_name, _get_party_db_path
+    from app.database.connection import (
+        validate_db_name, _get_party_db_path, _lifecycle_lock,
+        open_count, mark_deleting)
     validate_db_name(db_name)
     validate_snapshot_name(snapshot)
 
@@ -214,19 +218,31 @@ def restore_party_db(db_name, snapshot):
 
     dst = _get_party_db_path(db_name)
 
-    from app.database.connection import _lifecycle_lock
     with _lifecycle_lock:
-        # Checkpoint the live DB so no committed data lingers only in the WAL
-        if os.path.exists(dst):
-            conn = sqlite3.connect(dst)
-            try:
-                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-            finally:
-                conn.close()
+        # Same guard as delete_party: no open connections on the file that
+        # is about to be replaced. copyfile under live fds + unlinking the
+        # WAL/SHM would drop every transaction not yet checkpointed.
+        live = open_count(dst)
+        if live > 0:
+            raise RuntimeError(
+                f'Party "{db_name}" is in use ({live} open connections) — '
+                'close POS screens on this party, then retry the restore')
+        # Refuse new opens for the whole swap window.
+        mark_deleting(dst, True)
+        try:
+            # Checkpoint the live DB so no committed data lingers only in the WAL
+            if os.path.exists(dst):
+                conn = sqlite3.connect(dst)
+                try:
+                    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                finally:
+                    conn.close()
 
-        shutil.copyfile(src, dst)
-        from app.services.party_service import _remove_sidecars
-        _remove_sidecars(dst)
+            shutil.copyfile(src, dst)
+            from app.services.party_service import _remove_sidecars
+            _remove_sidecars(dst)
+        finally:
+            mark_deleting(dst, False)
 
     # Force a fresh integrity verification on next open
     from app.database import connection as _conn_mod

@@ -297,6 +297,9 @@ def restore_party(db_name):
         return jsonify({'error': str(e)}), 404
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
+    except RuntimeError as e:
+        # Party still in use (live connections) — operator-fixable, not a 500
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         logger.error(f"Restore failed: {e}")
         return jsonify({'error': str(e)}), 500
