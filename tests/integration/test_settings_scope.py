@@ -58,3 +58,35 @@ def test_migrate_on_write_removes_party_shadow(client, clean_db, two_parties):
     assert 'printer_baud' not in get_party_settings(a)
     assert get_effective_settings(a)['printer_baud'] == '9600'
     assert get_effective_settings(b)['printer_baud'] == '9600'
+
+
+def test_device_cache_reads_and_ttl(monkeypatch, clean_db):
+    """Device settings: own writes visible immediately, TTL re-reads externally."""
+    import sqlite3
+    import time
+    from app.services import settings_service as ss
+    from app.utils.config import TEMPLATES_DB
+
+    ss.update_device_setting('server_name', 'C1')
+    assert ss.get_device_settings()['server_name'] == 'C1'
+
+    # External write (raw sqlite): still hidden inside the TTL window
+    conn = sqlite3.connect(TEMPLATES_DB)
+    conn.execute(
+        "INSERT OR REPLACE INTO global_settings (key, value) "
+        "VALUES ('server_name', 'C2')")
+    conn.commit()
+    conn.close()
+    assert ss.get_device_settings()['server_name'] == 'C1'
+
+    # TTL elapsed → re-read surfaces the external value
+    monkeypatch.setattr(ss, 'DEVICE_CACHE_TTL', 0.0)
+    time.sleep(0.002)
+    assert ss.get_device_settings()['server_name'] == 'C2'
+
+    # Teardown: drop the row and drop the cache
+    conn = sqlite3.connect(TEMPLATES_DB)
+    conn.execute("DELETE FROM global_settings WHERE key = 'server_name'")
+    conn.commit()
+    conn.close()
+    ss._invalidate_device_cache()

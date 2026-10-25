@@ -111,3 +111,12 @@ def _cleanup_test_templates():
             conn.close()
     except Exception:
         pass
+    # The device-settings cache must not outlive the wipe above: a
+    # printer_path set by an earlier test leaks into the next one.
+    try:
+        from app.services import settings_service as _ss
+        with _ss._device_cache_lock:
+            _ss._device_cache['data'] = None
+            _ss._device_cache['at'] = 0.0
+    except Exception:
+        pass

@@ -14,7 +14,10 @@ Reads merge DEFAULTS < device < party. Writes route by key; writing a
 device key also deletes any stale party-level row (migrate-on-write),
 so old per-party values can never shadow the global one.
 """
+import os
 import sqlite3
+import threading
+import time
 
 from app.services.party_service import get_party_settings, update_party_setting
 from app.utils.config import TEMPLATES_DB
@@ -68,33 +71,68 @@ DEFAULT_SETTINGS = {
 }
 
 
-def get_device_settings():
-    """All device-level settings from the shared DB (missing = {})."""
-    import os
-    if not os.path.exists(TEMPLATES_DB):
-        return {}
-    conn = sqlite3.connect(TEMPLATES_DB)
-    try:
+# Templates DB connections: one pattern for reads+writes — WAL +
+# explicit busy timeout — used on the checkout hot path (default
+# payment method) and by the 2-second beacon (server name), so a held
+# templates lock must not surface as a failed checkout.
+_device_cache = {'data': None, 'at': 0.0}
+_device_cache_lock = threading.Lock()
+# Short TTL: settings changes are rare; a stale read decays fast.
+DEVICE_CACHE_TTL = 1.0
+_global_table_ready = False  # benign race: CREATE IF NOT EXISTS is idempotent
+
+
+def _open_templates_db():
+    """Connect to the shared templates DB with the standard pragmas."""
+    global _global_table_ready
+    os.makedirs(os.path.dirname(TEMPLATES_DB), exist_ok=True)
+    conn = sqlite3.connect(TEMPLATES_DB, timeout=10)
+    conn.execute('PRAGMA busy_timeout = 10000')
+    conn.execute('PRAGMA journal_mode = WAL')
+    if not _global_table_ready:
+        # Upgrades pre-tiers DBs that never had global_settings. Once per
+        # process — not on every call (R7).
         conn.execute(
             "CREATE TABLE IF NOT EXISTS global_settings "
-            "(key TEXT PRIMARY KEY, value TEXT)"
-        )
+            "(key TEXT PRIMARY KEY, value TEXT)")
+        conn.commit()
+        _global_table_ready = True
+    return conn
+
+
+def _invalidate_device_cache():
+    with _device_cache_lock:
+        _device_cache['data'] = None
+        _device_cache['at'] = 0.0
+
+
+def get_device_settings():
+    """All device-level settings from the shared DB (missing = {}).
+
+    Cached with a short TTL: this sits on every checkout (default
+    payment method) and every beacon tick; a fresh read is one SELECT.
+    """
+    now = time.time()
+    with _device_cache_lock:
+        cached = _device_cache['data']
+        if cached is not None and now - _device_cache['at'] <= DEVICE_CACHE_TTL:
+            return dict(cached)
+    conn = _open_templates_db()
+    try:
         rows = conn.execute("SELECT key, value FROM global_settings").fetchall()
-        return {row[0]: row[1] for row in rows}
     finally:
         conn.close()
+    data = {row[0]: row[1] for row in rows}
+    with _device_cache_lock:
+        _device_cache['data'] = data
+        _device_cache['at'] = now
+    return dict(data)
 
 
 def update_device_setting(key, value):
     """Write one device-level setting to the shared DB."""
-    import os
-    os.makedirs(os.path.dirname(TEMPLATES_DB), exist_ok=True)
-    conn = sqlite3.connect(TEMPLATES_DB)
+    conn = _open_templates_db()
     try:
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS global_settings "
-            "(key TEXT PRIMARY KEY, value TEXT)"
-        )
         conn.execute(
             "INSERT OR REPLACE INTO global_settings (key, value) VALUES (?, ?)",
             (key, value)
@@ -102,6 +140,7 @@ def update_device_setting(key, value):
         conn.commit()
     finally:
         conn.close()
+    _invalidate_device_cache()
 
 
 def get_effective_settings(db_name):
