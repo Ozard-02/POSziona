@@ -13,7 +13,6 @@ import sys
 import threading
 import time
 import socket
-import webview
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,7 +20,22 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app import create_app
 from app.utils.config import HOST, PORT, BIND_HOST
 
-webview.settings['ALLOW_DOWNLOADS'] = True
+# pywebview is imported LAZILY (G1 audit 2026-10-25): a top-level import
+# kills the whole process at startup wherever the package or its GUI
+# libraries are missing — server mode and the browser fallback must work
+# there. Module-global so tests can stub it (a non-None value is used
+# as-is, no real import).
+webview = None
+
+
+def _get_webview():
+    """Import pywebview on first window use (G1). Raises when unavailable."""
+    global webview
+    if webview is None:
+        import webview as module  # local import: see note above
+        module.settings['ALLOW_DOWNLOADS'] = True
+        webview = module
+    return webview
 
 # Create Flask app (shared across modes)
 app = create_app()
@@ -462,7 +476,16 @@ def run_client_only(server_url=None):
     print(f"Opening pywebview window (client-only mode)...")
     print(f"  Connecting to: {server_url}")
 
-    window = webview.create_window(
+    try:
+        view = _get_webview()
+    except Exception as exc:
+        # pywebview itself unavailable (pip package or GUI libs missing).
+        # A client window is the whole point of this mode.
+        _gui_missing_message(exc, server_url)
+        _open_browser(server_url)
+        sys.exit(1)
+
+    view.create_window(
         title='Posziona',
         url=server_url,
         width=1200,
@@ -471,7 +494,7 @@ def run_client_only(server_url=None):
         resizable=True,
     )
     try:
-        webview.start(debug=False, private_mode=True)
+        view.start(debug=False, private_mode=True)
     except Exception as exc:
         # No usable GUI backend (missing GTK/Qt system libs, no display...).
         # A client window is the whole point of this mode, so exit with a
@@ -504,7 +527,20 @@ def run_server_and_client():
     # The iframe approach was breaking Flask session cookies because
     # cookies set inside the iframe may not persist in pywebview contexts.
     # Direct URL loading ensures cookies work correctly.
-    window = webview.create_window(
+    try:
+        view = _get_webview()
+    except Exception as exc:
+        # pywebview missing entirely: the server is already up — degrade
+        # to server-only + browser instead of dying (G1).
+        print("  Continuing in server-only mode.", flush=True)
+        _gui_missing_message(exc, f'http://{HOST}:{PORT}/')
+        _print_lan_hint()
+        _open_browser(f'http://{HOST}:{PORT}/')
+        print("Press Ctrl+C to stop.")
+        _serve_forever()
+        return
+
+    view.create_window(
         title='Posziona',
         url=f'http://{HOST}:{PORT}/',
         width=1200,
@@ -517,7 +553,7 @@ def run_server_and_client():
     # debug=False: prevents inspector from opening
     # private_mode=True: preserves cookies/sessions
     try:
-        webview.start(debug=False, private_mode=True)
+        view.start(debug=False, private_mode=True)
     except Exception as exc:
         # No usable GUI backend (missing GTK/Qt system libs, no display...).
         # The server is already up, so degrade to server-only mode instead

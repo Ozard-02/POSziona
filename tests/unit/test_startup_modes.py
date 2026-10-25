@@ -44,9 +44,17 @@ def test_main_no_mode_tty_prompts(monkeypatch):
 
 def test_client_auto_localhost_names_override(monkeypatch, capsys):
     """Silent localhost attach now tells how to pick another server."""
+    class FakeWebview:
+        settings = {}
+
+        def create_window(self, **kw):
+            return object()
+
+        def start(self, **kw):
+            return None
+
+    monkeypatch.setattr(main_mod, 'webview', FakeWebview())
     monkeypatch.setattr(main_mod, 'check_server_ready', lambda *a, **k: True)
-    monkeypatch.setattr(main_mod.webview, 'create_window', lambda **kw: object())
-    monkeypatch.setattr(main_mod.webview, 'start', lambda **kw: None)
     main_mod.run_client_only()
     out = capsys.readouterr().out
     assert 'this machine' in out

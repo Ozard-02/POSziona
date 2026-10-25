@@ -12,7 +12,7 @@ import app.main as main_mod
 
 
 def _no_gui(monkeypatch):
-    """Stub out everything except the webview.start failure."""
+    """Stub everything except the webview.start failure."""
     # Blocking stub: a real server thread stays alive; _wait_for_server
     # treats a dead thread as a startup failure.
     main_mod._server_failed.clear()
@@ -20,14 +20,37 @@ def _no_gui(monkeypatch):
     stop = threading.Event()
     monkeypatch.setattr(main_mod, 'start_server', lambda: stop.wait(30))
     monkeypatch.setattr(main_mod, 'check_server_ready', lambda *a, **k: True)
-    monkeypatch.setattr(main_mod.webview, 'create_window', lambda **kw: object())
     monkeypatch.setattr('app.utils.discovery.discover', lambda *a, **k: [])
     main_mod._server_serving.set()
     monkeypatch.setattr('webbrowser.open', lambda *a, **k: False)
 
-    def boom(*a, **k):
-        raise Exception('You must have either QT or GTK')
-    monkeypatch.setattr(main_mod.webview, 'start', boom)
+    class FakeWebview:
+        settings = {}
+
+        def create_window(self, **kw):
+            return object()
+
+        def start(self, **kw):
+            raise Exception('You must have either QT or GTK')
+
+    # Non-None global: _get_webview() uses it without a real import
+    monkeypatch.setattr(main_mod, 'webview', FakeWebview())
+
+
+def _no_webview_at_all(monkeypatch):
+    """pywebview PACKAGE missing: the lazy import itself raises (G1)."""
+    main_mod._server_failed.clear()
+    main_mod._shutdown_requested.clear()
+    stop = threading.Event()
+    monkeypatch.setattr(main_mod, 'start_server', lambda: stop.wait(30))
+    monkeypatch.setattr(main_mod, 'check_server_ready', lambda *a, **k: True)
+    monkeypatch.setattr('app.utils.discovery.discover', lambda *a, **k: [])
+    main_mod._server_serving.set()
+    monkeypatch.setattr(main_mod, 'webview', None)
+
+    def _import_boom():
+        raise ImportError("No module named 'webview'")
+    monkeypatch.setattr(main_mod, '_get_webview', _import_boom)
 
 
 import pytest
@@ -74,6 +97,46 @@ def test_client_mode_no_gui(monkeypatch, capsys):
     assert exc_info.value.code == 1
     assert opened == ['http://127.0.0.1:5000/']
     assert 'browser' in capsys.readouterr().out
+
+
+def test_all_mode_pywebview_missing_degrades(monkeypatch, capsys):
+    """No pywebview package at all: server keeps serving, browser opens (G1).
+
+    Regression: a top-level `import webview` used to kill the process
+    before any mode decision — even plain server mode died.
+    """
+    _no_webview_at_all(monkeypatch)
+    opened = []
+    monkeypatch.setattr('webbrowser.open',
+                        lambda url, new=0: opened.append(url) or True)
+
+    def stop_at_once(timeout=None):
+        raise KeyboardInterrupt
+    monkeypatch.setattr(main_mod._shutdown_requested, 'wait', stop_at_once)
+
+    main_mod.run_server_and_client()  # must not raise
+
+    out = capsys.readouterr().out
+    assert 'server-only' in out
+    assert 'browser' in out
+    assert opened == [f'http://{main_mod.HOST}:{main_mod.PORT}/']
+
+
+def test_client_mode_pywebview_missing_exits_with_hint(monkeypatch, capsys):
+    """No pywebview package in client mode: browser + exit(1) + recipe (G1)."""
+    _no_webview_at_all(monkeypatch)
+    opened = []
+    monkeypatch.setattr('webbrowser.open',
+                        lambda url, new=0: opened.append(url) or True)
+
+    with pytest.raises(SystemExit) as exc_info:
+        main_mod.run_client_only(server_url='http://127.0.0.1:5000/')
+
+    assert exc_info.value.code == 1
+    assert opened == ['http://127.0.0.1:5000/']
+    out = capsys.readouterr().out
+    assert 'browser' in out
+    assert 'system-site-packages' in out  # the one-time setup recipe
 
 
 def test_gui_missing_message_has_source_recipe(monkeypatch, capsys):
