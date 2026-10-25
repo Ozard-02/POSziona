@@ -235,3 +235,65 @@ def test_server_reachable_loopback():
     finally:
         srv.close()
     assert main_mod._server_reachable('http://127.0.0.1:9/') is False
+
+
+def test_tcp_scan_finds_a_real_pos_http():
+    """Direct /24 probe confirms a POS by /api/status (fallback discovery)."""
+    import json
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == '/api/status':
+                body = json.dumps({
+                    'status': 'ok', 'version': '9.9.9',
+                    'server_name': 'CASSA-T',
+                }).encode()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    srv = HTTPServer(('127.0.0.1', 0), Handler)
+    port = srv.server_address[1]
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        found = discovery.scan_tcp_servers(
+            port, hosts=['127.0.0.1'], timeout=1)
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+    assert len(found) == 1
+    assert found[0]['name'] == 'CASSA-T'
+    assert found[0]['version'] == '9.9.9'
+    assert found[0]['url'] == f'http://127.0.0.1:{port}/'
+
+
+def test_tcp_scan_ignores_non_pos_and_honours_opt_out(monkeypatch):
+    """Only real POSziona answers count; POSZIONA_NO_TCP_SCAN skips probing."""
+    import socket
+
+    # Open port, but no /api/status → not a POSziona server
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.bind(('127.0.0.1', 0))
+    srv.listen(5)
+    port = srv.getsockname()[1]
+    try:
+        assert discovery.scan_tcp_servers(
+            port, hosts=['127.0.0.1'], timeout=0.5) == []
+    finally:
+        srv.close()
+
+    def _never():
+        raise AssertionError('opt-out must not probe the network')
+    monkeypatch.setenv('POSZIONA_NO_TCP_SCAN', '1')
+    monkeypatch.setattr(discovery, '_local_24_hosts', _never)
+    assert discovery.scan_tcp_servers(5000) == []

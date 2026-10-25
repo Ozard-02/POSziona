@@ -21,6 +21,13 @@ MAGIC = 'posziona-v1'
 BEACON_INTERVAL = 2.0
 LISTEN_WINDOW = 5.0
 
+# Fallback direct scan (POSZIONA_NO_TCP_SCAN=1 opts out): some APs use
+# client isolation or filter UDP broadcast — beacons never arrive, but a
+# plain TCP connect to the POS port usually still works.
+SCAN_TIMEOUT = 0.35        # per-host TCP connect timeout (seconds)
+SCAN_WORKERS = 64          # probe parallelism (low-end friendly)
+SCAN_HTTP_TIMEOUT = 0.8    # /api/status read timeout on open ports
+
 
 def _local_ipv4s():
     """Non-loopback IPv4 addresses of this machine (stdlib only)."""
@@ -191,6 +198,81 @@ def discover(timeout=LISTEN_WINDOW, port=DISCOVERY_PORT):
     finally:
         sock.close()
     return sorted(found.values(), key=lambda s: (s['host'], s['port']))
+
+
+def tcp_scan_enabled():
+    """True unless POSZIONA_NO_TCP_SCAN=1 (fallback direct scan opt-out)."""
+    return not os.environ.get('POSZIONA_NO_TCP_SCAN')
+
+
+def _local_24_hosts():
+    """All other addresses of this machine's /24 (primary interface guess)."""
+    ip = get_lan_ip()
+    parts = ip.split('.')
+    if len(parts) != 4 or parts[0] == '127':
+        return []
+    prefix = '.'.join(parts[:3])
+    own = parts[3]
+    return [f'{prefix}.{i}' for i in range(1, 255) if str(i) != own]
+
+
+def _probe_http_status(host, port, timeout=SCAN_HTTP_TIMEOUT):
+    """GET /api/status; returns the JSON dict only for a real POSziona."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(
+                f'http://{host}:{port}/api/status', timeout=timeout) as resp:
+            if resp.status != 200:
+                return None
+            data = json.loads(resp.read(8192).decode('utf-8'))
+    except Exception:
+        return None
+    if not isinstance(data, dict) or 'version' not in data \
+            or 'server_name' not in data:
+        return None
+    return data
+
+
+def scan_tcp_servers(port, hosts=None, timeout=SCAN_TIMEOUT,
+                     max_workers=SCAN_WORKERS):
+    """Direct TCP probe of the local /24 for POS servers (fallback).
+
+    Used only when UDP beacons found nothing: client-isolating APs and
+    UDP-filtering networks kill broadcast, while a plain TCP connect to
+    the POS port still goes through. Candidates are confirmed with
+    GET /api/status, so unrelated services on the same port are ignored.
+    Returns the same shape as discover(); never raises.
+    """
+    if hosts is None:
+        if not tcp_scan_enabled():
+            return []
+        hosts = _local_24_hosts()
+    results = []
+    lock = threading.Lock()
+
+    def _probe(host):
+        try:
+            with socket.create_connection((host, port), timeout=timeout):
+                pass
+        except OSError:
+            return
+        info = _probe_http_status(host, port)
+        if info is None:
+            return
+        entry = {
+            'name': str(info.get('server_name') or host),
+            'host': host,
+            'port': port,
+            'url': f'http://{host}:{port}/',
+            'version': info.get('version'),
+        }
+        with lock:
+            results.append(entry)
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        list(pool.map(_probe, hosts))
+    return sorted(results, key=lambda s: (s['host'], s['port']))
 
 
 def start_beacon_loop(port, interval=BEACON_INTERVAL):

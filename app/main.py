@@ -660,10 +660,15 @@ def _discover_or_ask_server():
     (blank re-prompts — it must NOT start a silent local server, which
     would split sales across two databases in multi-machine setups).
     """
-    from app.utils.discovery import discover
+    from app.utils.discovery import discover, scan_tcp_servers, tcp_scan_enabled
     print(f"No server detected on {HOST}:{PORT}.")
     print("  Scanning the local network for POSziona servers...")
     found = discover()
+    if not found and tcp_scan_enabled():
+        # Some Wi-Fi APs isolate clients or drop UDP broadcast: beacons
+        # never arrive even when the server is reachable over TCP.
+        print("  No beacon answers — probing the network directly (TCP)...")
+        found = scan_tcp_servers(PORT)
     if found:
         print("  Found on this network:")
         for i, srv in enumerate(found, 1):

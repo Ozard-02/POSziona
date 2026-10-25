@@ -168,6 +168,35 @@ Then: on the client, type the URL ONCE in Connect → it becomes a
 one-tap Recent button. Notes: plain HTTP (trusted networks only);
  beacons/UDP discovery do not cross subnets — that path is manual URL.
 
+## C5b — firewall one-liners (only the venue LAN, never the internet)
+
+When typing the URL works but discovery does not, one of these is the
+usual cause. Port 5000/tcp is the POS page (required); 42137/udp is the
+auto-discovery beacon (optional — the client also tries a direct TCP
+scan of the local /24 after 5 s of silence, disable that with
+`POSZIONA_NO_TCP_SCAN=1`).
+
+- Linux (ufw):
+  ```
+  sudo ufw allow 5000/tcp
+  sudo ufw allow 42137/udp
+  ```
+- Linux (firewalld):
+  ```
+  sudo firewall-cmd --add-port=5000/tcp --permanent
+  sudo firewall-cmd --add-port=42137/udp --permanent
+  sudo firewall-cmd --reload
+  ```
+- Windows (`posziona.exe`): allow "Private networks" in the Defender
+  popup, or from an elevated prompt:
+  ```
+  netsh advfirewall firewall add rule name="POSziona HTTP" dir=in action=allow protocol=TCP localport=5000
+  netsh advfirewall firewall add rule name="Posziona discovery" dir=in action=allow protocol=UDP localport=42137
+  ```
+- Hotel/guest Wi-Fi with **client isolation**: devices cannot see each
+  other even with ports open. Use a phone hotspot (isolation off) or the
+  C5 VPN recipe.
+
 ## C6 — 2-device live checklist (for the user, needs real LAN)
 
 Use the v0.2.0 release assets (GitHub Releases: `posziona` + `posziona.exe`).
