@@ -300,13 +300,16 @@ def delete_order_by_id(db_name, order_id):
         if not order:
             return False
 
-        # Restore stock for products with stock_count
+        # Restore stock for products with stock_count. SUM() per product:
+        # a legacy/API-crafted order may hold the same product on several
+        # lines — a scalar subquery would restore only the first one
+        # (R19 audit 2026-10-25).
         conn.execute(
             """
             UPDATE products
             SET stock_count = CASE
                 WHEN stock_count IS NOT NULL THEN stock_count + (
-                    SELECT oi.quantity
+                    SELECT SUM(oi.quantity)
                     FROM order_items oi
                     WHERE oi.product_id = products.id
                       AND oi.order_id = ?

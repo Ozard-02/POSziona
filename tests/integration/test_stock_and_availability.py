@@ -94,6 +94,39 @@ def test_last_unit_concurrent_checkouts_sell_once(clean_db, client, app):
     assert summary['total_orders'] == 1
 
 
+def test_void_order_restores_stock_summed_per_product(clean_db, client):
+    """Same product on two order lines: the void restores the FULL amount.
+
+    Legacy/API-crafted orders can hold the product twice; a scalar
+    subquery used to restore only the first line (R19).
+    """
+    from app.database.connection import PartyDatabase
+    from app.services.order_service import delete_order_by_id
+
+    db = clean_db
+    _seed_stocked_product(client, db, stock=10)  # product id 1
+
+    with PartyDatabase(db) as conn:
+        conn.execute(
+            "INSERT INTO orders (subtotal, total, payment_method, operator_id) "
+            "VALUES (7.5, 7.5, 'cash', 1)")
+        oid = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+        conn.execute(
+            "INSERT INTO order_items (order_id, product_id, quantity, unit_price) "
+            "VALUES (?, 1, 2, 2.5)", (oid,))
+        conn.execute(
+            "INSERT INTO order_items (order_id, product_id, quantity, unit_price) "
+            "VALUES (?, 1, 1, 2.5)", (oid,))
+        # Stock after that 3-unit sale
+        conn.execute("UPDATE products SET stock_count = stock_count - 3 "
+                     "WHERE id = 1")
+        conn.commit()
+
+    assert _stock(client, db) == 7
+    assert delete_order_by_id(db, oid) is True
+    assert _stock(client, db) == 10, 'restored 2+1, not just the first line'
+
+
 def test_depleted_product_flagged_out_of_stock(clean_db, client):
     """Stock 0 is visible in the POS list so the grid can disable the item."""
     db = clean_db
