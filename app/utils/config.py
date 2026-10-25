@@ -49,6 +49,12 @@ SECRET_KEY_FILE = os.path.join(DATA_DIR, '.secret_key')
 def get_secret_key():
     """Load or create this install's Flask secret key.
 
+    Creation is race-safe: exclusive create (O_CREAT|O_EXCL) plus a
+    read-back, so two processes booting on the same data dir for the
+    first time end up with the SAME key. With check-then-create each
+    could write its own and then reject the other's session cookies
+    (R15 audit 2026-10-25).
+
     Falls back to a throwaway dev key only when the data dir is not
     writable — sessions then don't survive restarts, but the app stays up.
     """
@@ -58,18 +64,30 @@ def get_secret_key():
     if env_key:
         return env_key
     try:
-        if os.path.exists(SECRET_KEY_FILE):
-            with open(SECRET_KEY_FILE, 'r') as f:
-                stored = f.read().strip()
-            if stored:
-                return stored
         os.makedirs(DATA_DIR, exist_ok=True)
+        try:
+            fd = os.open(SECRET_KEY_FILE,
+                         os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            pass  # another boot won the race: read its key below
+        else:
+            with os.fdopen(fd, 'w') as f:
+                f.write(secrets.token_hex(32))
+        # ALWAYS trust the file, never the in-memory value: whoever
+        # created it first owns the install key.
+        with open(SECRET_KEY_FILE, 'r') as f:
+            stored = f.read().strip()
+        if stored:
+            return stored
+        # Empty file (process killed mid-write): rewrite atomically.
         fresh = secrets.token_hex(32)
-        # Best effort: restrict to owner (POS kiosk = single user box)
-        fd = os.open(SECRET_KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        tmp_path = SECRET_KEY_FILE + '.tmp'
+        fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, 'w') as f:
             f.write(fresh)
-        return fresh
+        os.replace(tmp_path, SECRET_KEY_FILE)
+        with open(SECRET_KEY_FILE, 'r') as f:
+            return f.read().strip() or fresh
     except OSError:
         return 'dev-secret-key-change-in-production'
 
