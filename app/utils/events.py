@@ -26,10 +26,14 @@ _listeners_lock = threading.Lock()
 # Prevents unbounded memory growth when clients are slow or disconnected.
 _MAX_QUEUE_SIZE = 100
 
-# Listener is considered stale if no client activity (popping events)
+# Listener is considered stale if no client activity (loop advancing)
 # for this many seconds. Prevents zombie SSE connections from leaking
 # memory over long-running multi-hour sessions.
 _STALE_TIMEOUT = 120  # 2 minutes
+
+# Heartbeat comment cadence on idle listeners (seconds): keeps proxies
+# from buffering and tells dead clients from idle ones.
+HEARTBEAT_INTERVAL = 15
 
 # Track last cleanup time for periodic stale-listener pruning
 _last_prune = 0.0
@@ -105,7 +109,7 @@ def _event_stream(listener):
                 yield msg
                 continue
             time.sleep(0.1)
-            if time.time() - last_heartbeat > 15:
+            if time.time() - last_heartbeat > HEARTBEAT_INTERVAL:
                 yield ": heartbeat\n\n"
                 last_heartbeat = time.time()
     finally:

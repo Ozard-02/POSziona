@@ -42,3 +42,28 @@ def test_broadcast_not_blocked_by_suspended_yield():
 
     gen.close()  # GeneratorExit → listener unregistered
     assert events.listener_count() == 0
+
+
+def test_idle_listener_refreshes_activity_and_heartbeats(monkeypatch):
+    """Idle-but-connected listeners never go stale while they advance.
+
+    Regression R4: the idle/heartbeat branch never touched
+    last_active, so a healthy screen that received only heartbeats
+    for 120 s was pruned as stale — visually alive, silently
+    event-dead. Now the poll loop refreshes last_active every turn.
+    """
+    monkeypatch.setattr(events, 'HEARTBEAT_INTERVAL', 0.05)
+    listener = events._new_listener()
+    gen = events._event_stream(listener)
+
+    start = time.time()
+    msg = next(gen)  # idle → loops (refreshing last_active) → heartbeat
+    assert msg == ': heartbeat\n\n'
+    assert listener['last_active'] >= start
+
+    # Events still flow after long idle periods
+    events.broadcast('tick', {'n': 2})
+    assert next(gen) == 'event: tick\ndata: {"n": 2}\n\n'
+
+    gen.close()
+    assert events.listener_count() == 0
