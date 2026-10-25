@@ -25,6 +25,7 @@ def test_main_no_mode_non_tty_defaults_all(monkeypatch, capsys):
     called = []
     monkeypatch.setattr(main_mod, 'run_server_and_client',
                         lambda: called.append(True))
+    monkeypatch.setattr(main_mod, '_maybe_auto_setup_window', lambda: False)
     monkeypatch.setattr('sys.stdin.isatty', lambda: False)
     main_mod.main(mode=None)
     assert called == [True]
@@ -36,6 +37,7 @@ def test_main_no_mode_tty_prompts(monkeypatch):
     called = []
     monkeypatch.setattr(main_mod, 'run_server_only',
                         lambda: called.append(True))
+    monkeypatch.setattr(main_mod, '_maybe_auto_setup_window', lambda: False)
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
     monkeypatch.setattr(builtins, 'input', lambda *a: '2')
     main_mod.main(mode=None)

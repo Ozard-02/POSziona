@@ -9,6 +9,8 @@ Startup modes (selectable at startup):
   3. client          — Open pywebview window only, connecting to an already-running server
 """
 import os
+import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -286,7 +288,7 @@ def gui_check(state=None):
         lines.append("  Display:         MISSING (no DISPLAY/WAYLAND_DISPLAY)")
 
     has_backend = gtk_ok or bool(qt) or state['cef']
-    ok = bool(state['webview']) and has_backend and bool(state['display'])
+    ok = _window_possible(state)
 
     if ok:
         lines.append("  Result:          the desktop window can open on this machine.")
@@ -302,6 +304,94 @@ def gui_check(state=None):
 
     print('\n'.join(lines))
     return 0 if ok else 1
+
+
+_APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Auto-setup of the window environment (G6): the syswin venv from the
+# documented recipe, created once and reused. Env knobs:
+#   POSZIONA_NO_AUTO_WINDOW_SETUP=1   never touch the network / create it
+#   POSZIONA_AUTO_WINDOW_SETUP_TRIED=1 set before the re-exec so a broken
+#                                     window env can never loop
+_SYSWIN_DIR_NAME = 'syswin'
+
+
+def _window_possible(state=None):
+    """True when the desktop window can open with THIS Python."""
+    if state is None:
+        state = _gui_detect_state()
+    gtk_ok, _ = state['gtk']
+    return bool(state['webview']) and (gtk_ok or bool(state['qt'])
+                                       or state['cef']) and bool(state['display'])
+
+
+def _running_inside_syswin():
+    """Guard against re-exec loops: already using the window venv?"""
+    return os.path.basename(os.path.normpath(sys.prefix)) == _SYSWIN_DIR_NAME
+
+
+def _maybe_auto_setup_window():
+    """Create/reuse the syswin venv and re-exec in it when a window is
+    wanted but this Python cannot provide one (G6).
+
+    Called only for 'all'/'client' modes, before the server starts. The
+    happy path never returns: os.execv replaces this process with the
+    same PID (the instance lock stays valid — never two live servers).
+    Returns False when there is nothing to do or anything fails; the
+    caller then continues with the browser fallback (fail-open).
+    """
+    if os.environ.get('POSZIONA_NO_AUTO_WINDOW_SETUP'):
+        return False
+    if os.environ.get('POSZIONA_AUTO_WINDOW_SETUP_TRIED'):
+        return False
+    if getattr(sys, 'frozen', False):
+        return False  # embeds its own Python: the recipe is source-only
+    if not sys.platform.startswith('linux'):
+        return False
+    if _running_inside_syswin():
+        return False
+
+    state = _gui_detect_state()
+    if not state['display']:
+        return False          # no graphical session at all
+    if _window_possible(state):
+        return False          # this Python is already fine
+
+    python3 = shutil.which('python3')
+    if not python3:
+        return False
+    syswin = os.path.join(_APP_ROOT, _SYSWIN_DIR_NAME)
+    venv_python = os.path.join(syswin, 'bin', 'python')
+    script = os.path.join(_APP_ROOT, 'scripts', 'run_pos.py')
+    if not os.path.exists(script):
+        return False
+
+    print("  Desktop window support is missing in this Python.",
+          flush=True)
+    print("  Setting up a one-time window environment (needs internet)...",
+          flush=True)
+    try:
+        if not os.path.exists(venv_python):
+            print(f"    creating {_SYSWIN_DIR_NAME}/ ...", flush=True)
+            subprocess.run([python3, '-m', 'venv', '--system-site-packages',
+                            syswin], check=True, timeout=180)
+        probe = subprocess.run(
+            [venv_python, '-c', 'import flask, webview'],
+            capture_output=True, timeout=60)
+        if probe.returncode != 0:
+            print("    installing flask + pywebview (one time)...", flush=True)
+            subprocess.run([venv_python, '-m', 'pip', 'install', '--quiet',
+                            'flask', 'pywebview', 'flask-cors'],
+                           check=True, timeout=600)
+    except Exception as exc:
+        print(f"  Window setup failed ({exc}) — using the browser instead.",
+              flush=True)
+        return False
+
+    print("  Relaunching with the window environment...", flush=True)
+    os.environ['POSZIONA_AUTO_WINDOW_SETUP_TRIED'] = '1'
+    os.execv(venv_python, [venv_python, script, *sys.argv[1:]])
+    return False  # not reached with a real execv
 
 
 def _gui_missing_message(exc, server_url):
@@ -756,8 +846,10 @@ def main(mode=None, server_url=None):
     if mode == 'server':
         run_server_only()
     elif mode == 'client':
+        _maybe_auto_setup_window()
         run_client_only(server_url=server_url)
     else:  # 'all' or anything else
+        _maybe_auto_setup_window()
         run_server_and_client()
 
 

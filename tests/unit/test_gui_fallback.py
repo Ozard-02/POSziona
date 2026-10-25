@@ -332,3 +332,162 @@ def test_cli_gui_check_exits_with_doctor_code(monkeypatch):
         main_mod.parse_args(['--gui-check'])
     assert exc_info.value.code == 1
     assert codes == [1]
+
+
+def _impossible_state():
+    """This Python cannot open a window: no GTK/Qt/CEF, display present."""
+    return {
+        'webview': '5.0',
+        'gtk': (False, 'PyGObject (python3-gi) not installed'),
+        'qt': [],
+        'cef': False,
+        'display': 'DISPLAY=:0',
+    }
+
+
+def test_auto_setup_skips_when_disabled_or_pointless(monkeypatch):
+    """Opt-out, working Python and headless boxes never touch disk (G6)."""
+    for var in ('POSZIONA_NO_AUTO_WINDOW_SETUP',
+                'POSZIONA_AUTO_WINDOW_SETUP_TRIED'):
+        monkeypatch.delenv(var, raising=False)
+    calls = []
+    monkeypatch.setattr(main_mod.subprocess, 'run',
+                        lambda *a, **k: calls.append(a) or object())
+
+    monkeypatch.setenv('POSZIONA_NO_AUTO_WINDOW_SETUP', '1')
+    assert main_mod._maybe_auto_setup_window() is False
+    assert calls == []
+
+    monkeypatch.delenv('POSZIONA_NO_AUTO_WINDOW_SETUP')
+    monkeypatch.setattr(main_mod, '_gui_detect_state',
+                        lambda: dict(_impossible_state(),
+                                    gtk=(True, 'Gtk 3.0 + WebKit2 4.1')))
+    assert main_mod._maybe_auto_setup_window() is False
+    assert calls == []
+
+    monkeypatch.setattr(main_mod, '_gui_detect_state',
+                        lambda: dict(_impossible_state(), display=None))
+    assert main_mod._maybe_auto_setup_window() is False
+    assert calls == []
+
+
+def test_auto_setup_creates_venv_and_reexecs(monkeypatch, tmp_path):
+    """No window backend → syswin venv created once, then execv into it (G6)."""
+    root = tmp_path
+    (root / 'scripts').mkdir()
+    (root / 'scripts' / 'run_pos.py').write_text('# stub\n')
+    monkeypatch.setattr(main_mod, '_APP_ROOT', str(root))
+    for var in ('POSZIONA_NO_AUTO_WINDOW_SETUP',
+                'POSZIONA_AUTO_WINDOW_SETUP_TRIED'):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setattr(main_mod, '_running_inside_syswin', lambda: False)
+    monkeypatch.setattr(main_mod, '_gui_detect_state', _impossible_state)
+    monkeypatch.setattr(main_mod.shutil, 'which',
+                        lambda name: '/usr/bin/python3')
+    monkeypatch.setattr(main_mod.sys, 'argv',
+                        ['run_pos.py', '--mode', 'all'])
+
+    commands = []
+
+    class Proc:
+        returncode = 0
+
+    def fake_run(cmd, **kw):
+        commands.append(cmd)
+        return Proc()
+
+    monkeypatch.setattr(main_mod.subprocess, 'run', fake_run)
+
+    exec_calls = []
+
+    def fake_execv(path, argv):
+        exec_calls.append((path, argv))
+        raise SystemExit(0)
+
+    monkeypatch.setattr(main_mod.os, 'execv', fake_execv)
+
+    with pytest.raises(SystemExit):
+        main_mod._maybe_auto_setup_window()
+
+    syswin = str(root / 'syswin')
+    venv_python = str(root / 'syswin' / 'bin' / 'python')
+    script = str(root / 'scripts' / 'run_pos.py')
+    assert commands[0] == ['/usr/bin/python3', '-m', 'venv',
+                           '--system-site-packages', syswin]
+    assert commands[1][0] == venv_python          # dependency probe
+    assert len(commands) == 2                     # probe OK → no pip run
+    assert exec_calls == [(venv_python,
+                           [venv_python, script, '--mode', 'all'])]
+    assert os.environ['POSZIONA_AUTO_WINDOW_SETUP_TRIED'] == '1'
+    monkeypatch.delenv('POSZIONA_AUTO_WINDOW_SETUP_TRIED')
+
+
+def test_auto_setup_installs_deps_when_probe_fails(monkeypatch, tmp_path):
+    """Existing venv without flask/pywebview → pip install, then execv (G6)."""
+    root = tmp_path
+    (root / 'scripts').mkdir()
+    (root / 'scripts' / 'run_pos.py').write_text('# stub\n')
+    venv_bin = root / 'syswin' / 'bin'
+    venv_bin.mkdir(parents=True)
+    (venv_bin / 'python').write_text('')  # venv already exists
+    monkeypatch.setattr(main_mod, '_APP_ROOT', str(root))
+    for var in ('POSZIONA_NO_AUTO_WINDOW_SETUP',
+                'POSZIONA_AUTO_WINDOW_SETUP_TRIED'):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setattr(main_mod, '_running_inside_syswin', lambda: False)
+    monkeypatch.setattr(main_mod, '_gui_detect_state', _impossible_state)
+    monkeypatch.setattr(main_mod.shutil, 'which',
+                        lambda name: '/usr/bin/python3')
+
+    commands = []
+
+    class Proc:
+        def __init__(self, returncode):
+            self.returncode = returncode
+
+    def fake_run(cmd, **kw):
+        commands.append(cmd)
+        if cmd[1:3] == ['-c', 'import flask, webview']:
+            return Proc(1)  # deps missing
+        return Proc(0)
+
+    monkeypatch.setattr(main_mod.subprocess, 'run', fake_run)
+    exec_calls = []
+    monkeypatch.setattr(main_mod.os, 'execv',
+                        lambda path, argv: exec_calls.append((path, argv)))
+
+    assert main_mod._maybe_auto_setup_window() is False  # execv stub returns
+
+    assert commands[0][1:3] == ['-c', 'import flask, webview']  # probe
+    pip = commands[1]
+    assert pip[1:4] == ['-m', 'pip', 'install']
+    assert 'flask' in pip and 'pywebview' in pip
+    assert len(exec_calls) == 1
+    monkeypatch.delenv('POSZIONA_AUTO_WINDOW_SETUP_TRIED')
+
+
+def test_auto_setup_failure_falls_back_to_browser(monkeypatch, tmp_path, capsys):
+    """Any setup failure: no execv, clear message, browser fallback (G6)."""
+    root = tmp_path
+    (root / 'scripts').mkdir()
+    (root / 'scripts' / 'run_pos.py').write_text('# stub\n')
+    monkeypatch.setattr(main_mod, '_APP_ROOT', str(root))
+    for var in ('POSZIONA_NO_AUTO_WINDOW_SETUP',
+                'POSZIONA_AUTO_WINDOW_SETUP_TRIED'):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setattr(main_mod, '_running_inside_syswin', lambda: False)
+    monkeypatch.setattr(main_mod, '_gui_detect_state', _impossible_state)
+    monkeypatch.setattr(main_mod.shutil, 'which',
+                        lambda name: '/usr/bin/python3')
+
+    def boom(cmd, **kw):
+        raise main_mod.subprocess.CalledProcessError(1, cmd)
+
+    monkeypatch.setattr(main_mod.subprocess, 'run', boom)
+    exec_calls = []
+    monkeypatch.setattr(main_mod.os, 'execv',
+                        lambda path, argv: exec_calls.append((path, argv)))
+
+    assert main_mod._maybe_auto_setup_window() is False
+    assert exec_calls == []
+    assert 'using the browser instead' in capsys.readouterr().out
