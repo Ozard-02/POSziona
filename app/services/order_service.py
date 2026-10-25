@@ -158,23 +158,28 @@ def checkout_order(db_name, cart_items, payment_method, operator_id,
 def get_sales_summary(db_name, date_filter=None):
     """Get basic sales summary for the session."""
     with PartyDatabase(db_name) as conn:
-        where_clause = "WHERE DATE(timestamp) = ?" if date_filter else ""
-        params = [date_filter] if date_filter else []
+        return _sales_summary(conn, date_filter)
 
-        result = conn.execute(
-            f"""SELECT
-                  COUNT(*) as total_orders,
-                  COALESCE(SUM(total), 0) as total_revenue,
-                  COALESCE(SUM(discount_amount), 0) as total_discounts
-                FROM orders {where_clause}""",
-            params
-        ).fetchone()
 
-        return dict(result) if result else {
-            'total_orders': 0,
-            'total_revenue': 0.0,
-            'total_discounts': 0.0
-        }
+def _sales_summary(conn, date_filter=None):
+    """Sales summary on an EXISTING connection (shared snapshot, R18)."""
+    where_clause = "WHERE DATE(timestamp) = ?" if date_filter else ""
+    params = [date_filter] if date_filter else []
+
+    result = conn.execute(
+        f"""SELECT
+              COUNT(*) as total_orders,
+              COALESCE(SUM(total), 0) as total_revenue,
+              COALESCE(SUM(discount_amount), 0) as total_discounts
+            FROM orders {where_clause}""",
+        params
+    ).fetchone()
+
+    return dict(result) if result else {
+        'total_orders': 0,
+        'total_revenue': 0.0,
+        'total_discounts': 0.0
+    }
 
 
 def get_items_sold_summary(db_name, date_filter=None):
@@ -182,58 +187,68 @@ def get_items_sold_summary(db_name, date_filter=None):
     Optionally filter by a specific date (YYYY-MM-DD).
     """
     with PartyDatabase(db_name) as conn:
-        date_clause = "WHERE DATE(o.timestamp) = ?" if date_filter else ""
-        params = [date_filter] if date_filter else []
+        return _items_sold_summary(conn, date_filter)
 
-        rows = conn.execute(
-            f"""
-            SELECT
-                p.id as product_id,
-                p.name as product_name,
-                p.sku,
-                s.name as section,
-                ss.name as subsection,
-                SUM(oi.quantity) as total_quantity,
-                SUM(oi.quantity * oi.unit_price) as total_amount,
-                p.price as current_price,
-                p.stock_count,
-                p.is_active
-            FROM order_items oi
-            JOIN orders o ON oi.order_id = o.id
-            JOIN products p ON oi.product_id = p.id
-            JOIN sections s ON p.section_id = s.id
-            JOIN subsections ss ON p.subsection_id = ss.id
-            {date_clause}
-            GROUP BY p.id
-            ORDER BY total_amount DESC
-            """,
-            params
-        ).fetchall()
 
-        return [dict(row) for row in rows]
+def _items_sold_summary(conn, date_filter=None):
+    """Items-sold rows on an EXISTING connection (shared snapshot, R18)."""
+    date_clause = "WHERE DATE(o.timestamp) = ?" if date_filter else ""
+    params = [date_filter] if date_filter else []
+
+    rows = conn.execute(
+        f"""
+        SELECT
+            p.id as product_id,
+            p.name as product_name,
+            p.sku,
+            s.name as section,
+            ss.name as subsection,
+            SUM(oi.quantity) as total_quantity,
+            SUM(oi.quantity * oi.unit_price) as total_amount,
+            p.price as current_price,
+            p.stock_count,
+            p.is_active
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.id
+        JOIN products p ON oi.product_id = p.id
+        JOIN sections s ON p.section_id = s.id
+        JOIN subsections ss ON p.subsection_id = ss.id
+        {date_clause}
+        GROUP BY p.id
+        ORDER BY total_amount DESC
+        """,
+        params
+    ).fetchall()
+
+    return [dict(row) for row in rows]
 
 
 def get_recent_orders(db_name, limit=50, date_filter=None):
     """Get recent orders for admin review. Optionally filter by date."""
     with PartyDatabase(db_name) as conn:
-        date_clause = "WHERE DATE(o.timestamp) = ?" if date_filter else ""
-        date_param = [date_filter] if date_filter else []
+        return _recent_orders(conn, limit, date_filter)
 
-        rows = conn.execute(
-            f"""
-            SELECT
-                o.id, o.timestamp, o.total, o.payment_method,
-                o.subtotal, o.discount_amount,
-                op.name as operator_name
-            FROM orders o
-            LEFT JOIN operators op ON o.operator_id = op.id
-            {date_clause}
-            ORDER BY o.timestamp DESC
-            LIMIT ?
-            """,
-            date_param + [limit]
-        ).fetchall()
-        return [dict(row) for row in rows]
+
+def _recent_orders(conn, limit=50, date_filter=None):
+    """Recent orders on an EXISTING connection (shared snapshot, R18)."""
+    date_clause = "WHERE DATE(o.timestamp) = ?" if date_filter else ""
+    date_param = [date_filter] if date_filter else []
+
+    rows = conn.execute(
+        f"""
+        SELECT
+            o.id, o.timestamp, o.total, o.payment_method,
+            o.subtotal, o.discount_amount,
+            op.name as operator_name
+        FROM orders o
+        LEFT JOIN operators op ON o.operator_id = op.id
+        {date_clause}
+        ORDER BY o.timestamp DESC
+        LIMIT ?
+        """,
+        date_param + [limit]
+    ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def get_order_details(db_name, order_id):
@@ -319,10 +334,21 @@ def delete_order_by_id(db_name, order_id):
 # RECAP CSV EXPORT (shared by /orders/report/export-csv and /parties/<db>/recap)
 # ============================================================
 def build_recap_csv(db_name, date_filter=None):
-    """Build the 3-section sales recap CSV text (summary / items / recent)."""
-    summary = get_sales_summary(db_name, date_filter)
-    items = get_items_sold_summary(db_name, date_filter)
-    recent = get_recent_orders(db_name, 50, date_filter)
+    """Build the 3-section sales recap CSV text (summary / items / recent).
+
+    All three sections read the SAME connection inside ONE read
+    transaction: with a connection per section (old behaviour) a sale
+    landing between the queries made the totals disagree with each other
+    (R18 audit 2026-10-25).
+    """
+    with PartyDatabase(db_name) as conn:
+        conn.execute('BEGIN')  # one WAL read snapshot for all sections
+        try:
+            summary = _sales_summary(conn, date_filter)
+            items = _items_sold_summary(conn, date_filter)
+            recent = _recent_orders(conn, 50, date_filter)
+        finally:
+            conn.rollback()  # read-only transaction: just release it
 
     output = io.StringIO()
     writer = csv.writer(output)

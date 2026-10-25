@@ -232,6 +232,58 @@ def test_concurrent_checkouts_never_oversell(clean_db, client):
     assert summary['total_orders'] == 2
 
 
+def test_recap_csv_sections_share_one_snapshot(clean_db, client, monkeypatch):
+    """A sale committing mid-recap must not split the sections (R18).
+
+    Old code opened one connection per section: summary could say one
+    order while items/recent (read later) already showed two.
+    """
+    import csv
+    import io
+
+    import app.services.order_service as osvc
+    from app.database.connection import PartyDatabase
+
+    db_name = clean_db
+    pid = _setup_product(client, db_name, stock=10)
+    _fill_cart(client, db_name, pid, qty=1)
+    r = client.post(f'/api/orders/checkout?db={db_name}',
+                    json={'payment_method': 'cash'})
+    assert r.status_code == 201
+
+    real_summary = osvc._sales_summary
+
+    def summary_then_concurrent_sale(conn, date_filter=None):
+        result = real_summary(conn, date_filter)  # first read pins the snapshot
+        # Another connection sells one more while the recap is running
+        osvc.checkout_order(
+            db_name,
+            [{'product_id': pid, 'quantity': 1, 'unit_price': 2.50,
+              'name': 'Coffee'}],
+            'cash', 1)
+        return result
+
+    monkeypatch.setattr(osvc, '_sales_summary',
+                        summary_then_concurrent_sale)
+
+    csv_text = osvc.build_recap_csv(db_name)
+
+    rows = list(csv.reader(io.StringIO(csv_text)))
+    assert ['Total Orders', '1'] in rows          # pre-sale snapshot
+    item_header = rows.index([
+        'Product Name', 'SKU', 'Section', 'Subsection', 'Quantity Sold',
+        'Total Amount', 'Current Price', 'Current Stock', 'Active'])
+    assert rows[item_header + 1][4] == '1'        # same snapshot
+    ridx = rows.index([
+        'Order ID', 'Timestamp', 'Operator', 'Total', 'Discount',
+        'Payment Method'])
+    assert len([r for r in rows[ridx + 1:] if r]) == 1
+
+    # ... while the concurrent sale DID land in the database.
+    with PartyDatabase(db_name) as conn:
+        assert conn.execute('SELECT COUNT(*) FROM orders').fetchone()[0] == 2
+
+
 def test_loser_reread_sees_winner_commit(clean_db, client):
     """The idempotency race fallback relies on rollback giving a fresh read.
 
