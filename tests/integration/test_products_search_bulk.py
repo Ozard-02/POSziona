@@ -153,3 +153,40 @@ def test_bulk_update_requires_admin(client, clean_db):
     resp = client.post(f'/api/products/products/bulk?db={db}', json={
         'product_ids': [1], 'updates': {'price': 5.00}})
     assert resp.status_code == 403
+
+
+def test_concurrent_sections_get_unique_sort_order(clean_db):
+    """Parallel creates never share a sort_order (R20).
+
+    Old code did SELECT MAX(sort_order) then INSERT: two racing creators
+    read the same max and both appended at the same position.
+    """
+    import threading
+
+    from app.database.connection import PartyDatabase
+    from app.services.product_service import create_section
+
+    db = clean_db
+    barrier = threading.Barrier(2)
+    errors = []
+
+    def _create(prefix):
+        try:
+            barrier.wait(timeout=5)
+            for i in range(40):
+                create_section(db, f'{prefix}-{i}')
+        except Exception as e:  # noqa: BLE001 — collected, asserted below
+            errors.append(e)
+
+    threads = [threading.Thread(target=_create, args=(f'T{n}',))
+               for n in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=60)
+
+    assert errors == []
+    with PartyDatabase(db) as conn:
+        orders = [row['sort_order'] for row in
+                  conn.execute('SELECT sort_order FROM sections').fetchall()]
+    assert sorted(orders) == list(range(1, 81)), 'no duplicates, no gaps'

@@ -77,13 +77,14 @@ def get_all_sections_with_subsections(db_name):
 def create_section(db_name, name):
     """Create a new section (duplicate names are rejected with ValueError)."""
     with PartyDatabase(db_name) as conn:
-        # Get the max sort_order to append at the end
-        max_order = conn.execute("SELECT MAX(sort_order) FROM sections").fetchone()[0]
-        sort_order = (max_order or 0) + 1
         try:
+            # sort_order is computed INSIDE the insert: a separate
+            # SELECT MAX + INSERT let two concurrent creations share a
+            # sort_order (R20 audit 2026-10-25).
             conn.execute(
-                "INSERT INTO sections (name, sort_order) VALUES (?, ?)",
-                (name, sort_order)
+                """INSERT INTO sections (name, sort_order)
+                   SELECT ?, COALESCE(MAX(sort_order), 0) + 1 FROM sections""",
+                (name,)
             )
         except sqlite3.IntegrityError:
             raise ValueError(f"Section '{name}' already exists")
