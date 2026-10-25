@@ -92,12 +92,18 @@ def authenticate_operator(db_name, pin):
         for row in rows:
             if verify_pin(pin, row['pin_hash']):
                 if needs_upgrade(row['pin_hash']):
-                    conn.execute(
-                        "UPDATE operators SET pin_hash = ? WHERE id = ?",
-                        (hash_pin(pin), row['id'])
+                    # Conditional upgrade: only rewrite the exact hash we
+                    # verified. If an admin PIN reset committed between our
+                    # SELECT and this UPDATE, the reset wins (R10) instead
+                    # of being silently overwritten by the old PIN's hash.
+                    cur = conn.execute(
+                        "UPDATE operators SET pin_hash = ? "
+                        "WHERE id = ? AND pin_hash = ?",
+                        (hash_pin(pin), row['id'], row['pin_hash'])
                     )
                     conn.commit()
-                    logger.info(f"Upgraded legacy PIN hash for '{row['name']}'")
+                    if cur.rowcount:
+                        logger.info(f"Upgraded legacy PIN hash for '{row['name']}'")
                 logger.info(f"Operator '{row['name']}' authenticated (role={row['role']})")
                 return dict(row)
         return None

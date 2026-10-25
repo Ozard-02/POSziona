@@ -52,6 +52,48 @@ def test_legacy_hash_login_upgrades(clean_db, client):
     assert stored != legacy
 
 
+def test_legacy_upgrade_does_not_clobber_concurrent_reset(clean_db, monkeypatch):
+    """An admin PIN reset landing in the upgrade window must win (R10)."""
+    import sqlite3
+    import app.services.auth_service as auth
+    from app.database.connection import _get_party_db_path
+
+    db_name = clean_db
+    legacy = hashlib.sha256('9999'.encode()).hexdigest()
+    path = _get_party_db_path(db_name)
+    conn = sqlite3.connect(path)
+    conn.execute(
+        "INSERT INTO operators (name, pin_hash, role, is_active) "
+        "VALUES (?, ?, 'operator', 1)", ('legacy-op', legacy))
+    conn.commit()
+    conn.close()
+
+    new_hash = auth.hash_pin('4321')
+    real_verify = auth.verify_pin
+
+    def verify_with_concurrent_reset(pin, stored_hash):
+        ok = real_verify(pin, stored_hash)
+        if ok:
+            # The admin reset commits from ANOTHER connection exactly in
+            # the vulnerable window (after verify, before the upgrade).
+            c = sqlite3.connect(path)
+            c.execute("UPDATE operators SET pin_hash = ? WHERE name = 'legacy-op'",
+                      (new_hash,))
+            c.commit()
+            c.close()
+        return ok
+
+    monkeypatch.setattr(auth, 'verify_pin', verify_with_concurrent_reset)
+    result = auth.authenticate_operator(db_name, '9999')
+    assert result is not None  # the typed PIN was valid when verified
+
+    conn = sqlite3.connect(path)
+    stored = conn.execute(
+        "SELECT pin_hash FROM operators WHERE name = 'legacy-op'").fetchone()[0]
+    conn.close()
+    assert stored == new_hash, 'the concurrent reset must not be overwritten'
+
+
 def test_login_rate_limited(clean_db, client):
     db_name = clean_db
     for _ in range(10):
