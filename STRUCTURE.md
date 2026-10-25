@@ -35,7 +35,8 @@ posziona/
 │   │   │                         # (atomic publish via .tmp+rename; checkpoint_all() for shutdown)
 │   │   ├── printer_service.py    # ESC/POS raw (USB lp / serial termios), ASCII-safe, no deps
 │   │   ├── settings_service.py   # DEFAULT_SETTINGS + get_effective_settings()
-│   │   │                         # (device keys global in shared DB, party keys per DB)
+│   │   │                         # (device keys global in shared DB, party keys per DB;
+│   │   │                         #  WAL+busy_timeout conn, short-TTL device cache)
 │   │   └── auth_service.py       # PBKDF2 PIN hashing (+legacy upgrade), verification, audit log
 │   ├── ui/
 │   │   ├── templates/            # Jinja2 pages
@@ -58,20 +59,28 @@ posziona/
 │   │   ├── __init__.py
 │   │   ├── config.py             # HOST, PORT, DATA_DIR, PARTY_DB_DIR, per-install SECRET_KEY (frozen builds: DATA_DIR=~/.posziona, POSZIONA_DATA_DIR wins)
 │   │   ├── events.py             # SSE broadcaster: broadcast(), sse_response(), prune/heartbeat
+│   │   │                         # (yields OUTSIDE listener lock, idle listeners stay fresh)
+│   │   ├── session_lock.py       # Serializes cart/session writes per (party, operator):
+│   │   │                         # lock + re-center onto server truth (parallel adds never lost)
 │   │   ├── rate_limit.py         # In-memory fixed-window throttle (login endpoints)
 │   │   ├── instance_lock.py      # Single-server OS lock (split-brain guard)
-│   │   ├── discovery.py          # LAN UDP beacon (server) + discover() menu (client), opt-out POSZIONA_NO_BEACON
+│   │   ├── discovery.py          # LAN UDP beacon (server) + discover() (client) + default
+│   │   │                         # TCP /24 fallback scan (POSZIONA_NO_TCP_SCAN=1 opts out);
+│   │   │                         # opt-out POSZIONA_NO_BEACON
 │   │   └── logger.py             # Rotating logs → app/logs/pos.log (5MB × 4); frozen → DATA_DIR/logs
 │   ├── logs/                     # Runtime logs (pos.log; .gitkeep tracked)
 │   └── data/                     # Runtime data (gitignored): parties/*.db, templates.db, backups/
 ├── scripts/
 │   ├── run_pos.py                # Launcher (path bootstrap + parse_args from app.main)
 │   └── entry_point.py            # PyInstaller entry point (frozen path handling + parse_args)
-├── tests/                        # 176 tests, prune-hard: one behavior per test (see PLAN.md Phase R)
-│   ├── conftest.py               # app/client/clean_db fixtures (fresh test_party.db, wipe templates)
+├── tests/                        # 218 tests, prune-hard: one behavior per test (see PLAN.md Phase R)
+│   ├── conftest.py               # app/client/clean_db fixtures (fresh test_party.db, wipe templates
+│   │                             # + settings/session caches — module caches must not leak across tests)
 │   ├── unit/test_frozen_config.py  # frozen DATA_DIR default + POSZIONA_DATA_DIR override
-│   ├── unit/test_gui_fallback.py   # no-GUI: all→server-only, client→exit 1 (no traceback)
-│   ├── unit/test_discovery.py      # UDP beacon round-trip, menu pick, opt-outs
+│   ├── unit/test_gui_fallback.py   # lazy pywebview, Qt retry, --gui-check doctor, syswin auto-setup
+│   ├── unit/test_events.py         # SSE liveness: yield outside lock, idle heartbeat freshness
+│   ├── unit/test_discovery.py      # UDP beacon round-trip, menu pick, TCP /24 fallback scan, opt-outs
+│   ├── unit/test_admin_settings_ui.py  # settings scope grouping, no dead knobs, i18n keys
 │   ├── unit/test_printer.py        # ESC/POS bytes vs fake device file, API end-to-end
 │   ├── unit/test_startup_modes.py  # mode prompt, no silent servers, login identity
 │   ├── unit/test_login_template.py # login shell markers, node --check inline JS
