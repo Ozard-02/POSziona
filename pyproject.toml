@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "posziona"
@@ -12,6 +12,8 @@ dependencies = [
     "flask>=2.3.0",
     "pywebview>=4.0.0",
     "flask-cors>=4.0.0",
+    "pyserial>=3.5",
+    "pywin32>=300; sys_platform == 'win32'",
 ]
 license = {text = "MIT"}
 

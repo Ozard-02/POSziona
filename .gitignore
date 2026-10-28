@@ -21,8 +21,9 @@ data/
 !data/parties/.gitkeep
 !data/backups/.gitkeep
 
-# Logs
+# Logs (incl. rotated pos.log.1, .2, ...)
 app/logs/*.log
+app/logs/*.log.*
 
 # Database runtime data
 *.db
