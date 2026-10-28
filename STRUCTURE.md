@@ -12,8 +12,8 @@ posziona/
 │   │   ├── auth.py               # PIN login/logout (rate-limited), operator mgmt
 │   │   ├── products.py           # Products, sections, subsections, tags, CSV import/export
 │   │   ├── cart.py               # Session-based cart: add/remove/update/discount (discounts audited)
-│   │   ├── orders.py             # Atomic checkout, history, reports, delete (restores stock, audited)
-│   │   ├── printer.py            # Thermal print: text→ESC/POS→device, test ticket, baud detect, status
+│   │   ├── orders.py             # Atomic checkout (tab guest name), history, reports, delete (restores stock, audited)
+│   │   ├── printer.py            # Thermal print: text→ESC/POS→device, test ticket, baud detect (admin-only)
 │   │   ├── parties.py            # Party CRUD, duplicate (catalog only), backups/restore, date edit
 │   │   ├── settings.py           # Party settings get/set
 │   │   └── guard.py              # is_admin() + @require_admin (single admin-guard source)
@@ -28,7 +28,7 @@ posziona/
 │   ├── services/                 # Business logic + SQL
 │   │   ├── __init__.py
 │   │   ├── product_service.py    # Catalog, sections, tags, CSV, search (ALL-tags filter)
-│   │   ├── order_service.py      # checkout_order (atomic + idempotent), sales summaries, delete+restore
+│   │   ├── order_service.py      # checkout_order (atomic + idempotent, tab guest name), sales summaries/CSV, delete+restore
 │   │   ├── party_service.py      # Party create from template/empty, duplicate, delete (locked, guarded)
 │   │   │                         # (template-created parties get default operators: login-ready)
 │   │   ├── backup_service.py     # VACUUM INTO snapshots, prune/restore, background scheduler
@@ -74,7 +74,7 @@ posziona/
 ├── scripts/
 │   ├── run_pos.py                # Launcher (path bootstrap + parse_args from app.main)
 │   └── entry_point.py            # PyInstaller entry point (frozen path handling + parse_args)
-├── tests/                        # 249 tests, prune-hard: one behavior per test (see PLAN.md Phase R)
+├── tests/                        # 254 tests, prune-hard: one behavior per test (see PLAN.md Phase R)
 │   ├── conftest.py               # app/client/clean_db fixtures (fresh test_party.db, wipe templates
 │   │                             # + settings/session caches — module caches must not leak across tests)
 │   ├── unit/test_frozen_config.py  # frozen DATA_DIR default + POSZIONA_DATA_DIR override
@@ -82,7 +82,7 @@ posziona/
 │   ├── unit/test_events.py         # SSE liveness: yield outside lock, idle heartbeat freshness
 │   ├── unit/test_discovery.py      # UDP beacon round-trip, menu pick, TCP /24 fallback scan, opt-outs
 │   ├── unit/test_admin_settings_ui.py  # settings scope grouping, no dead knobs, i18n keys
-│   ├── unit/test_printer.py        # ESC/POS bytes vs fake device file, API end-to-end
+│   ├── unit/test_printer.py        # ESC/POS bytes vs fake device file, API end-to-end, admin-only detect
 │   ├── unit/test_startup_modes.py  # mode prompt, no silent servers, login identity
 │   ├── unit/test_login_template.py # login shell markers, node --check inline JS
 │   ├── integration/test_party_selection.py  # sale+login land in selected party DB only

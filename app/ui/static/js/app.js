@@ -1,5 +1,5 @@
 /* Main app JavaScript */
-const APP_VERSION = '0.2.0';
+const APP_VERSION = '0.2.1';
 const API_BASE = '/api';
 
 // Global app state (pages keep their own cart/sections; only the operator

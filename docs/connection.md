@@ -199,7 +199,7 @@ scan of the local /24 after 5 s of silence, disable that with
 
 ## C6 — 2-device live checklist (for the user, needs real LAN)
 
-Use the v0.2.0 release assets (GitHub Releases: `posziona` + `posziona.exe`).
+Use the v0.2.1 release assets (GitHub Releases: `posziona` + `posziona.exe`).
 
 1. Server box: `--mode server`, Admin → System → server
    name (e.g. `CASSA-1`); note the `Other devices on this network` URL.
