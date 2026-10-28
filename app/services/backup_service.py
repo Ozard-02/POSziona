@@ -127,19 +127,32 @@ def run_snapshots(keep=DEFAULT_KEEP_COUNT):
         if os.path.isdir(tmp_dir):
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
-        copied = []
+        sources = []
         if os.path.exists(TEMPLATES_DB):
-            _vacuum_into(TEMPLATES_DB, os.path.join(tmp_dir, 'templates.db'))
-            copied.append('templates.db')
-
+            sources.append((TEMPLATES_DB, 'templates.db'))
         for filename in sorted(os.listdir(PARTY_DB_DIR)):
-            if not filename.endswith('.db'):
-                continue
             src = os.path.join(PARTY_DB_DIR, filename)
-            if not os.path.isfile(src):
-                continue
-            _vacuum_into(src, os.path.join(tmp_dir, filename))
-            copied.append(filename)
+            if filename.endswith('.db') and os.path.isfile(src):
+                sources.append((src, filename))
+
+        # One unreadable DB (e.g. an old, corrupt party nobody opens any
+        # more) must not stop every other party from being backed up:
+        # skip it loudly and keep going.
+        copied = []
+        for src, filename in sources:
+            dst = os.path.join(tmp_dir, filename)
+            try:
+                _vacuum_into(src, dst)
+                copied.append(filename)
+            except Exception as e:
+                logger.error(f"Snapshot {name}: skipped {filename}: {e}")
+                try:
+                    os.remove(dst)
+                except OSError:
+                    pass
+        if not copied:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            raise RuntimeError('Snapshot failed: no database could be copied')
 
         os.rename(tmp_dir, dest_dir)
 
@@ -276,10 +289,12 @@ def restore_party_db(db_name, snapshot):
         finally:
             mark_deleting(dst, False)
 
-    # Force a fresh integrity verification on next open
+    # Force a fresh integrity verification and migration replay on next
+    # open: the snapshot may predate columns added since it was taken.
     from app.database import connection as _conn_mod
     with _conn_mod._checked_paths_lock:
         _conn_mod._checked_paths.discard(dst)
+        _conn_mod._migrated_paths.discard(dst)
 
     logger.info(f"Restored party '{db_name}' from snapshot '{snapshot}'")
     return db_name

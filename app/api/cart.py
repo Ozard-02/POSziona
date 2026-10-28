@@ -4,6 +4,7 @@ Manages the in-progress cart (session-based, not persisted to DB until checkout)
 """
 
 from flask import Blueprint, request, jsonify, session
+from app.services.order_service import discount_for_subtotal
 from app.services.product_service import get_product_by_id
 from app.utils.session_lock import session_write_lock
 
@@ -27,9 +28,19 @@ def _parse_quantity(raw):
 
 @cart_bp.route('/', methods=['GET'])
 def get_cart():
-    """Get the current cart from session."""
+    """Get the current cart (and any discount) from session.
+
+    The POS reloads this on page load so a refresh never hides items that
+    are still in the server-side cart.
+    """
     cart = session.get('cart', [])
-    return jsonify({'items': cart, 'total': _calculate_total(cart)})
+    discount = session.get('cart_discount')
+    return jsonify({
+        'items': cart,
+        'discount': ({'type': discount.get('type'), 'value': discount.get('value')}
+                     if discount else None),
+        'total': _calculate_total(cart),
+    })
 
 
 @cart_bp.route('/add', methods=['POST'])
@@ -49,6 +60,11 @@ def add_to_cart():
     product = get_product_by_id(db, product_id)
     if not product:
         return jsonify({'error': 'Product not found'}), 404
+
+    # A stale POS button can still point at a product an admin just
+    # disabled or archived: never let it into a sale.
+    if not product.get('is_active') or product.get('is_archived'):
+        return jsonify({'error': 'Product is not available'}), 400
 
     # Check stock
     if product.get('stock_count') is not None and product['stock_count'] <= 0:
@@ -132,6 +148,8 @@ def apply_discount():
     if data is None:
         return jsonify({'error': 'Request body is required'}), 400
     discount_type = data.get('type')  # 'percentage' or 'fixed'
+    if discount_type not in ('percentage', 'fixed'):
+        return jsonify({'error': "Discount type must be 'percentage' or 'fixed'"}), 400
     try:
         discount_value = float(data.get('value', 0))
     except (TypeError, ValueError):
@@ -140,20 +158,14 @@ def apply_discount():
         return jsonify({'error': 'Discount value must be non-negative'}), 400
 
     cart = session.get('cart', [])
-    subtotal = _calculate_total(cart)
+    subtotal = _calculate_subtotal(cart)
 
-    discount_amount = 0
-    if discount_type == 'percentage':
-        # Clamp to 100% to prevent negative totals from direct API calls
-        discount_amount = subtotal * (min(discount_value, 100) / 100)
-    elif discount_type == 'fixed':
-        discount_amount = min(discount_value, subtotal)
-
-    session['cart_discount'] = {
-        'type': discount_type,
-        'amount': discount_amount,
-        'value': discount_value
-    }
+    # Only type + value are stored: the amount is recomputed from the
+    # current subtotal on every read, so adding items after a percentage
+    # discount can never leave a stale amount for checkout.
+    discount = {'type': discount_type, 'value': discount_value}
+    discount_amount = discount_for_subtotal(subtotal, discount)
+    session['cart_discount'] = discount
 
     from app.services.auth_service import log_audit_event
     try:
@@ -180,7 +192,7 @@ def remove_discount():
     """Remove any applied discount."""
     session.pop('cart_discount', None)
     cart = session.get('cart', [])
-    subtotal = _calculate_total(cart)
+    subtotal = _calculate_subtotal(cart)
     return jsonify({'subtotal': subtotal, 'total': subtotal})
 
 
@@ -188,8 +200,12 @@ def remove_discount():
 # HELPER FUNCTIONS
 # ============================================================
 
+def _calculate_subtotal(cart):
+    """Sum of the cart lines, before any discount."""
+    return sum(item['line_total'] for item in cart)
+
+
 def _calculate_total(cart):
-    """Calculate total from cart items."""
-    subtotal = sum(item['line_total'] for item in cart)
-    discount = session.get('cart_discount', {}).get('amount', 0)
-    return subtotal - discount
+    """Cart total after the session discount (recomputed, never stored)."""
+    subtotal = _calculate_subtotal(cart)
+    return subtotal - discount_for_subtotal(subtotal, session.get('cart_discount'))

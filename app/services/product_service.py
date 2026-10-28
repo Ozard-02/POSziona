@@ -573,7 +573,9 @@ def import_products_from_csv(db_name, csv_rows):
                     "SELECT id FROM tags WHERE name = ?", (tag_name,),
                     "INSERT INTO tags (name, color, bg_color, text_color, is_active) "
                     "VALUES (?, ?, ?, ?, 1)",
-                    (tag_name, '#ffffff', '#3498db', '#000000'))
+                    # Same defaults as create_tag: a white badge colour
+                    # made imported tags invisible (badge text is white).
+                    (tag_name, '#3498db', None, None))
 
                 # Link tag to product
                 conn.execute(

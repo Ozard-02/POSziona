@@ -17,11 +17,24 @@ function formatCurrency(amount) {
     return `${currency}${safeAmount.toFixed(2)}`;
 }
 
+// Escape text for interpolation into innerHTML / attribute values.
+// Product, section and tag names are free text: a quote in `12" Pizza`
+// would otherwise cut an input's value short (and save it truncated),
+// and a `<` would be parsed as markup.
+function escapeHtml(value) {
+    return String(value === null || value === undefined ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 // --- Active party: which party DB the sales go to ---
 // Single source of truth, shared by pos/admin/dashboard/login.
 // localStorage: survives tab/browser restarts (like the 24 h login
 // cookie) so the shift setup is still there in the morning. Private
-// windows / pywebview private_mode may block it → default then.
+// browser windows may block it → default then.
 var ACTIVE_DB_KEY = 'posDb';
 
 function _storeGet(key) {

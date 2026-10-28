@@ -160,7 +160,9 @@ def test_json_error_responses(client):
     assert r.status_code == 404
     assert 'error' in r.get_json()
 
-    # Garbage limit → JSON 400
+    # Garbage limit → JSON 400 (order history is admin-only)
+    r = client.post('/api/auth/login/admin?db=default', json={'pin': '0000'})
+    assert r.status_code == 200
     r = client.get('/api/orders/recent?db=default&limit=abc')
     assert r.status_code == 400
     assert 'error' in r.get_json()

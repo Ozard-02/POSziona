@@ -6,6 +6,7 @@ contract pins that live nowhere else (server tag, logged-out auth shape).
 
 def test_server_name_setting_roundtrip(client, clean_db):
     """server_name survives the settings allowlist (device-global tag)."""
+    client.post('/api/auth/login/admin?db=test_party', json={'pin': '0000'})
     r = client.post('/api/settings/?db=test_party', json={'server_name': 'CASSA-1'})
     assert r.status_code == 200
     data = client.get('/api/settings/?db=test_party').get_json()

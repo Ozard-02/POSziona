@@ -44,13 +44,14 @@ posziona/
 │   │   │   ├── login.html        # PIN entry (root route /)
 │   │   │   ├── pos.html          # Sections sidebar + product grid + cart + bottom bar
 │   │   │   ├── admin.html        # Products, parties, operators, tags, settings
-│   │   │   └── dashboard.html    # Reports + print
+│   │   │   └── dashboard.html    # Reports (admin-only data) + till close (any operator) + print
 │   │   └── static/
 │   │       ├── css/style.css
 │   │       └── js/
-│   │           ├── app.js            # fetchJSON, formatCurrency, auth check, toasts, banner
+│   │           ├── app.js            # fetchJSON, formatCurrency, escapeHtml, auth check, toasts, banner
 │   │           │                   # + active-party helpers (get/set/switch, cart cleared on switch)
 │   │           ├── pos.js            # Sections/products/cart/checkout (idempotency key), SSE sync, Shift+L / Shift+Click
+│   │           │                   # + cart restored from the session on load
 │   │           │                   # + party switcher (uses active party, header shows it)
 │   │           ├── admin.js          # Dashboard, products, tags, parties (data-i18n)
 │   │           ├── dashboard.js      # Report generation, printing
@@ -73,7 +74,7 @@ posziona/
 ├── scripts/
 │   ├── run_pos.py                # Launcher (path bootstrap + parse_args from app.main)
 │   └── entry_point.py            # PyInstaller entry point (frozen path handling + parse_args)
-├── tests/                        # 218 tests, prune-hard: one behavior per test (see PLAN.md Phase R)
+├── tests/                        # 244 tests, prune-hard: one behavior per test (see PLAN.md Phase R)
 │   ├── conftest.py               # app/client/clean_db fixtures (fresh test_party.db, wipe templates
 │   │                             # + settings/session caches — module caches must not leak across tests)
 │   ├── unit/test_frozen_config.py  # frozen DATA_DIR default + POSZIONA_DATA_DIR override
@@ -91,7 +92,9 @@ posziona/
 │                                 # test_default_tags_and_zero_total, test_manual_party_and_products,
 │                                 # test_resilience, test_checkout_atomic, test_backups,
 │                                 # test_auth_hardening, test_schema_drift, test_ops_safety,
-│                                 # test_instance_lock, test_settings_scope
+│                                 # test_instance_lock, test_settings_scope,
+│                                 # test_review_fixes (admin-only settings/reports, live discount,
+│                                 # tendered validation, snapshot robustness)
 ├── docs/
 │   └── requirements.md           # Feature requirements + MVP scope + unicenta lessons
 ├── .github/                      # CI builds

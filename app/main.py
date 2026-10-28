@@ -481,8 +481,12 @@ def _start_window(view):
             else:
                 os.environ['PYWEBVIEW_GUI'] = backend
             try:
-                # debug=False: no inspector; private_mode=True: keep cookies
-                view.start(debug=False, private_mode=True)
+                # debug=False: no inspector. private_mode=False keeps
+                # cookies + localStorage across restarts (pywebview's
+                # default, True, wipes them on exit): the 24 h login,
+                # the active party and the recent-servers list must
+                # survive closing the window.
+                view.start(debug=False, private_mode=False)
                 return True, None
             except Exception as exc:
                 last_exc = exc

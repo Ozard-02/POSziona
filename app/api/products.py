@@ -178,12 +178,15 @@ def bulk_update_products_route():
     count = bulk_update_products(db, product_ids, updates)
     # Broadcast availability changes to POS clients
     if 'is_active' in updates or 'is_archived' in updates or 'stock' in updates or 'stock_count' in updates:
+        # 'in', not 'or': a stock of 0 is falsy but must still reach the
+        # POS screens, which trim carts holding now-unavailable items.
+        stock_count = updates['stock'] if 'stock' in updates else updates.get('stock_count')
         broadcast('bulk_product_update', {
             'product_ids': product_ids,
             'db': db,
             'is_active': updates.get('is_active'),
             'is_archived': updates.get('is_archived'),
-            'stock_count': updates.get('stock') or updates.get('stock_count')
+            'stock_count': stock_count
         })
     return jsonify({'message': f'Updated {count} products', 'count': count})
 

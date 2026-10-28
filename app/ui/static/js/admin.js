@@ -242,7 +242,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const tagsCell = row.insertCell(4);
                 if (p.tags && p.tags.length > 0) {
                     const tagsHtml = p.tags.map(t =>
-                        `<span class="tag-badge" style="background-color: ${t.color || '#3498db'}">${t.name}</span>`
+                        `<span class="tag-badge" style="background-color: ${escapeHtml(t.color || '#3498db')}">${escapeHtml(t.name)}</span>`
                     ).join('');
                     tagsCell.innerHTML = tagsHtml;
                 } else {
@@ -290,7 +290,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let subsectionOptions = '<option value="">Select Subsection</option>';
 
         sections.forEach(section => {
-            sectionOptions += `<option value="${section.id}" ${section.id == product.section_id ? 'selected' : ''}>${section.name}</option>`;
+            sectionOptions += `<option value="${section.id}" ${section.id == product.section_id ? 'selected' : ''}>${escapeHtml(section.name)}</option>`;
         });
 
         // Get subsections for the product's section
@@ -298,7 +298,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const matchingSection = sections.find(s => s.id == product.section_id);
             if (matchingSection && matchingSection.subsections) {
                 matchingSection.subsections.forEach(sub => {
-                    subsectionOptions += `<option value="${sub.id}" ${sub.id == product.subsection_id ? 'selected' : ''}>${sub.name}</option>`;
+                    subsectionOptions += `<option value="${sub.id}" ${sub.id == product.subsection_id ? 'selected' : ''}>${escapeHtml(sub.name)}</option>`;
                 });
             }
         }
@@ -306,7 +306,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const html = `
             <div class="form-group">
                 <label>Name:</label>
-                <input type="text" id="edit-product-name" value="${product.name}">
+                <input type="text" id="edit-product-name" value="${escapeHtml(product.name)}">
             </div>
             <div class="form-group">
                 <label>Price (€):</label>
@@ -322,7 +322,7 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
             <div class="form-group">
                 <label>SKU:</label>
-                <input type="text" id="edit-product-sku" value="${product.sku || ''}">
+                <input type="text" id="edit-product-sku" value="${escapeHtml(product.sku || '')}">
             </div>
             <div class="form-group">
                 <label>Stock (leave empty for unlimited):</label>
@@ -904,10 +904,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 div.className = 'tag-item';
                 div.dataset.tagId = tag.id;
                 div.innerHTML = `
-                    <div class="tag-color-preview" style="background-color: ${tag.color || '#3498db'};"></div>
-                    <span class="tag-name">${tag.name}</span>
+                    <div class="tag-color-preview" style="background-color: ${escapeHtml(tag.color || '#3498db')};"></div>
+                    <span class="tag-name">${escapeHtml(tag.name)}</span>
                     <span class="tag-bg-info">
-                        bg: ${tag.bg_color || 'none'} | text: ${tag.text_color || 'default'}
+                        bg: ${escapeHtml(tag.bg_color || 'none')} | text: ${escapeHtml(tag.text_color || 'default')}
                     </span>
                     <div class="tag-actions">
                         <button class="btn-sm" onclick="editTag(${tag.id})">Edit</button>
@@ -1032,7 +1032,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let sectionOptions = '<option value="">Select Section</option>';
         sectionOptions += '<option value="__new_section__">-- Create new section --</option>';
         sections.forEach(section => {
-            sectionOptions += `<option value="${section.id}">${section.name}</option>`;
+            sectionOptions += `<option value="${section.id}">${escapeHtml(section.name)}</option>`;
         });
         
         let subsectionOptions = '<option value="">Select Subsection</option>';
@@ -1225,7 +1225,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (section && section.subsections) {
             section.subsections.forEach(sub => {
                 const selected = sub.id == currentSubId ? ' selected' : '';
-                options += `<option value="${sub.id}"${selected}>${sub.name}</option>`;
+                options += `<option value="${sub.id}"${selected}>${escapeHtml(sub.name)}</option>`;
             });
         }
         subSelect.innerHTML = options;
@@ -1238,7 +1238,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let templateOptions = '<option value="__empty__">(No template — start empty)</option>';
         if (templates && templates.length > 0) {
             templates.forEach(t => {
-                templateOptions += `<option value="${t.id}">${t.name}</option>`;
+                templateOptions += `<option value="${t.id}">${escapeHtml(t.name)}</option>`;
             });
         }
         
@@ -1653,7 +1653,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         let sectionOptions = '<option value="">-- No Change --</option>';
         allSections.forEach(section => {
-            sectionOptions += `<option value="${section.id}">${section.name}</option>`;
+            sectionOptions += `<option value="${section.id}">${escapeHtml(section.name)}</option>`;
         });
 
         let subsectionOptions = '<option value="">-- No Change --</option>';
@@ -1686,7 +1686,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="form-group">
                 <label>Tags:</label>
                 <select id="bulk-tags" multiple class="form-control form-control-multiselect">
-                    ${allTags.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+                    ${allTags.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('')}
                 </select>
                 <p class="form-help-text">Hold Ctrl/Cmd to select multiple. Leave unselected to keep existing tags.</p>
             </div>
@@ -1740,7 +1740,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         await populateFilterDropdowns();
         const tagOptions = allTags.map(t =>
-            `<option value="${t.id}">${t.name}</option>`
+            `<option value="${t.id}">${escapeHtml(t.name)}</option>`
         ).join('');
 
         const html = `
@@ -1790,7 +1790,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 div.className = 'section-item';
                 div.draggable = true;
                 div.dataset.sectionId = section.id;
-                div.innerHTML = `<span class="drag-handle" style="margin-right:10px;cursor:move;">≡</span>${section.name} (${section.subsections ? section.subsections.length : 0} ${t('subsections')}) <span class="section-arrows" style="margin-left:auto;display:inline-flex;flex-direction:column;"><button type="button" class="section-move-up" title="Move up" style="border:none;background:none;cursor:pointer;font-size:14px;">▲</button><button type="button" class="section-move-down" title="Move down" style="border:none;background:none;cursor:pointer;font-size:14px;">▼</button></span>`;
+                div.innerHTML = `<span class="drag-handle" style="margin-right:10px;cursor:move;">≡</span>${escapeHtml(section.name)} (${section.subsections ? section.subsections.length : 0} ${t('subsections')}) <span class="section-arrows" style="margin-left:auto;display:inline-flex;flex-direction:column;"><button type="button" class="section-move-up" title="Move up" style="border:none;background:none;cursor:pointer;font-size:14px;">▲</button><button type="button" class="section-move-down" title="Move down" style="border:none;background:none;cursor:pointer;font-size:14px;">▼</button></span>`;
                 listEl.appendChild(div);
             });
             setupDragAndDrop();

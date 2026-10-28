@@ -207,6 +207,7 @@ def get_party_settings_route(db_name):
 
 
 @parties_bp.route('/<db_name>/settings', methods=['POST'])
+@require_admin
 def set_party_settings_route(db_name):
     """Update settings for a party."""
     data = request.get_json()

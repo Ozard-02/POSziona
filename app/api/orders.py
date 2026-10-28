@@ -8,6 +8,7 @@ from app.api.guard import require_admin
 from app.services.order_service import (
     build_recap_csv,
     checkout_order,
+    discount_for_subtotal,
     expected_cash_total,
     list_cash_counts,
     record_cash_count,
@@ -77,10 +78,12 @@ def checkout():
     if payment_method not in valid_methods:
         return jsonify({'error': f'Invalid payment method. Must be one of: {", ".join(valid_methods)}'}), 400
 
-    # Get discount info from session
-    cart_discount = session.get('cart_discount', {})
-    discount_amount = cart_discount.get('amount', 0.0)
-    discount_type = cart_discount.get('type')
+    # Discount: recomputed from the cart as it is NOW (items may have been
+    # added or removed since the discount was applied)
+    cart_discount = session.get('cart_discount') or {}
+    subtotal = sum(item['quantity'] * item['unit_price'] for item in cart)
+    discount_amount = discount_for_subtotal(subtotal, cart_discount)
+    discount_type = cart_discount.get('type') if discount_amount else None
 
     # Build cart items for order creation
     cart_items = []
@@ -146,6 +149,7 @@ def checkout():
 # ============================================================
 
 @orders_bp.route('/recent', methods=['GET'])
+@require_admin
 def recent_orders():
     """Get recent orders (admin only)."""
     db = request.args.get('db', 'default')
@@ -154,6 +158,7 @@ def recent_orders():
 
 
 @orders_bp.route('/<int:order_id>', methods=['GET'])
+@require_admin
 def order_details(order_id):
     """Get full details of an order (admin only)."""
     db = request.args.get('db', 'default')
@@ -186,17 +191,22 @@ def delete_order(order_id):
         logger.error(f"Order deletion error: {e}")
         return jsonify({'error': str(e)}), 500
 
+# Sales figures are admin-only: anyone on the LAN can reach the API, and
+# operators only need the till total (cash-counts/expected) to close.
+
 @orders_bp.route('/report/summary', methods=['GET'])
+@require_admin
 def sales_report():
-    """Get sales summary. Optional ?date=YYYY-MM-DD for daily filter."""
+    """Get sales summary (admin only). Optional ?date=YYYY-MM-DD."""
     db = request.args.get('db', 'default')
     date_filter = request.args.get('date')
     return jsonify(get_sales_summary(db, date_filter))
 
 
 @orders_bp.route('/report/items', methods=['GET'])
+@require_admin
 def items_report():
-    """Get recap of all items sold. Optional ?date=YYYY-MM-DD for daily filter."""
+    """Recap of all items sold (admin only). Optional ?date=YYYY-MM-DD."""
     db = request.args.get('db', 'default')
     date_filter = request.args.get('date')
     return jsonify(get_items_sold_summary(db, date_filter))
@@ -206,6 +216,10 @@ def items_report():
 def log_receipt():
     """Log a recovery receipt to server logs (always saved, regardless of
     whether it is displayed to the user)."""
+    # Logged-in operators only: an open endpoint let any LAN device write
+    # arbitrary text into the server log.
+    if not session.get('operator_id'):
+        return jsonify({'error': 'Operator not logged in'}), 403
     data = request.get_json() or {}
     order_id = data.get('order_id')
     receipt_text = data.get('receipt', '')
@@ -259,8 +273,9 @@ def add_cash_count():
 # EXPORT RECAP (Admin)
 # ============================================================
 @orders_bp.route('/report/export-csv', methods=['GET'])
+@require_admin
 def export_csv():
-    """Export items sold summary as CSV.
+    """Export items sold summary as CSV (admin only).
     Optional ?date=YYYY-MM-DD for daily filter.
     """
     db = request.args.get('db', 'default')

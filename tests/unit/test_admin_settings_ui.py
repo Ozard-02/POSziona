@@ -2,8 +2,9 @@
 Admin settings UI: scope grouping (I1 audit 2026-10-25).
 
 The settings screen must mirror the real two-tier model:
-- counter settings apply to EVERY party (device-global),
-- receipt/snapshot settings belong to the selected party.
+- counter settings apply to EVERY party (device-global, incl. snapshot
+  retention),
+- receipt/snapshot-interval settings belong to the selected party.
 
 Pin the structure so a future reshuffle cannot quietly move a
 device-global knob (e.g. printer_cut) back under the per-party block.
@@ -27,13 +28,14 @@ def test_settings_groups_follow_the_real_scope(client):
     # Device-global groups sit in the counter half
     for marker in ('data-i18n="group_pos"', 'data-i18n="group_printer"',
                    'name="server_name"', 'name="default_payment_method"',
-                   'name="printer_cut"'):
+                   'name="printer_cut"',
+                   # Retention covers every party's snapshots: device-global
+                   'name="snapshot_keep_count"'):
         assert counter_scope < html.index(marker) < party_scope, marker
 
     # Per-party groups sit in the party half
     for marker in ('data-i18n="group_receipt"', 'data-i18n="group_snapshots"',
-                   'name="receipt_header"', 'name="snapshot_interval_minutes"',
-                   'name="snapshot_keep_count"'):
+                   'name="receipt_header"', 'name="snapshot_interval_minutes"'):
         assert html.index(marker) > party_scope, marker
 
 

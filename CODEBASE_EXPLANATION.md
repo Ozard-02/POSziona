@@ -222,7 +222,7 @@ webview.start()  # Blocks — runs the pywebview event loop
 
 - **Login screen**: Prompts for a 4-digit PIN → `POST /api/auth/login` → stores operator info in Flask session
 - **POS screen** (`pos.html` + `pos.js`): Main ordering interface — product grid, cart sidebar, checkout button
-- **Dashboard** (`dashboard.html` + `dashboard.js`): Sales reports, recent orders, items sold
+- **Dashboard** (`dashboard.html` + `dashboard.js`): Sales reports and items sold (admin only), till close (any operator)
 - **Admin panel** (`admin.html` + `admin.js`): Product/tag/operator management, party settings, CSV import/export
 
 JS modules communicate with the Flask API via `fetch()`, and routing is handled client-side (simple page show/hide based on auth state and current view).
@@ -286,7 +286,8 @@ Browser (pos.js → checkout button)
   → fetch('POST /api/orders/checkout', {payment_method, tendered})
   ↓
 Flask orders.py:checkout()
-  → reads session cart + cart_discount
+  → reads session cart + cart_discount (type/value only: the amount is
+    recomputed from the current subtotal, so it can never go stale)
   → validates operator, payment method
   → calls order_service.create_order()
     → inserts orders row (subtotal, discount, total, method, operator_id)

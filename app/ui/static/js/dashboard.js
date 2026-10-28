@@ -20,9 +20,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const cashCloseBtn = document.getElementById('cash-close-btn');
     const tillBody = document.querySelector('#till-table tbody');
 
-    // Set default date to today
+    // Set default date to today — the LOCAL calendar day, like the
+    // server's ?date= filter (toISOString() is UTC: right after midnight
+    // it would still show yesterday).
     const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const todayStr = `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
     reportDate.value = todayStr;
 
     let currentReportData = null;
@@ -160,6 +163,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
             renderReport(currentReportData);
         } catch (e) {
+            // Sales reports are admin-only; operators still use this page
+            // to close the till, so explain instead of raising an error.
+            if (e.status === 403) {
+                currentReportData = null;
+                reportSummary.textContent = t('reports_admin_only');
+                reportTables.innerHTML = '';
+                return;
+            }
             console.error('Report generation failed:', e);
             showError(t('report_failed') + ': ' + (e.message || e));
         }
@@ -185,7 +196,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (data.items.length > 0) {
             html += '<table class="data-table"><thead><tr><th>' + t('product_col') + '</th><th>' + t('qty_col') + '</th><th>' + t('unit_price_col') + '</th><th>' + t('amount_col') + '</th></tr></thead><tbody>';
             data.items.forEach(item => {
-                html += '<tr><td>' + item.product_name + '</td><td>' + item.total_quantity + '</td><td>' + formatCurrency(item.current_price || 0) + '</td><td>' + formatCurrency(item.total_amount) + '</td></tr>';
+                html += '<tr><td>' + escapeHtml(item.product_name) + '</td><td>' + item.total_quantity + '</td><td>' + formatCurrency(item.current_price || 0) + '</td><td>' + formatCurrency(item.total_amount) + '</td></tr>';
             });
             html += '</tbody></table>';
         } else {

@@ -112,6 +112,10 @@ def _login(client, db_name):
 
 
 def _set_path(client, db_name, path):
+    # Settings writes are admin-only; the admin session is also a valid
+    # operator session for the print endpoints that follow.
+    r = client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
+    assert r.status_code == 200
     r = client.post(f'/api/settings/?db={db_name}', json={'printer_path': path})
     assert r.status_code == 200
 

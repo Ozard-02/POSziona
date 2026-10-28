@@ -6,6 +6,7 @@ Handles cart management, checkout, orders, and payments.
 import sqlite3
 import csv
 import io
+import math
 
 from app.database.connection import PartyDatabase
 from app.utils.logger import get_logger
@@ -16,6 +17,43 @@ logger = get_logger('services.orders')
 # ============================================================
 # ORDER CREATION & CHECKOUT
 # ============================================================
+
+def discount_for_subtotal(subtotal, discount):
+    """Discount amount for the CURRENT subtotal.
+
+    `discount` is the session's {'type', 'value'}. Percentages are capped
+    at 100% and fixed amounts at the subtotal, so a total can never go
+    negative. Mirrors the POS screen's own computation (pos.js).
+    """
+    if not discount:
+        return 0.0
+    try:
+        value = float(discount.get('value', 0))
+    except (TypeError, ValueError):
+        return 0.0
+    if value <= 0:
+        return 0.0
+    if discount.get('type') == 'percentage':
+        return subtotal * (min(value, 100) / 100)
+    if discount.get('type') == 'fixed':
+        return min(value, subtotal)
+    return 0.0
+
+
+def _parse_tendered(tendered):
+    """Validate the cash handed over (None = not given). Raises ValueError."""
+    if tendered is None:
+        return None
+    if isinstance(tendered, bool):
+        raise ValueError('Tendered amount must be a number')
+    try:
+        value = float(tendered)
+    except (TypeError, ValueError):
+        raise ValueError('Tendered amount must be a number')
+    if not math.isfinite(value) or value < 0:
+        raise ValueError('Tendered amount must be non-negative')
+    return value
+
 
 def checkout_order(db_name, cart_items, payment_method, operator_id,
                    discount_amount=0.0, discount_type=None,
@@ -38,6 +76,7 @@ def checkout_order(db_name, cart_items, payment_method, operator_id,
     """
     if not cart_items:
         raise ValueError('Cart is empty')
+    tendered = _parse_tendered(tendered)
 
     with PartyDatabase(db_name) as conn:
         if idempotency_key:
@@ -61,13 +100,13 @@ def checkout_order(db_name, cart_items, payment_method, operator_id,
 
         # Validate tendered before writing anything
         change_due = None
-        if tendered is not None:
-            if tendered < 0:
-                raise ValueError('Tendered amount must be non-negative')
-            if payment_method == 'cash' and tendered < total:
+        if tendered is not None and payment_method == 'cash':
+            # Compare in cents: the POS sends its own float total as the
+            # "exact amount" (e.g. 0.1 + 0.2), which must not be refused
+            # for a rounding hair below the server's float.
+            if round(tendered, 2) < round(total, 2):
                 raise ValueError('Tendered amount must be at least the total due')
-            if payment_method == 'cash':
-                change_due = tendered - total
+            change_due = max(0.0, tendered - total)
 
         # Create order
         conn.execute(
@@ -155,6 +194,11 @@ def checkout_order(db_name, cart_items, payment_method, operator_id,
 # REPORTING QUERIES
 # ============================================================
 
+# Date filters (?date=YYYY-MM-DD) are the venue's local calendar day:
+# timestamps are stored in UTC (CURRENT_TIMESTAMP), so a plain DATE()
+# would move every sale made after local midnight to the previous day,
+# exactly when a late-night party is busiest.
+
 def get_sales_summary(db_name, date_filter=None):
     """Get basic sales summary for the session."""
     with PartyDatabase(db_name) as conn:
@@ -163,7 +207,7 @@ def get_sales_summary(db_name, date_filter=None):
 
 def _sales_summary(conn, date_filter=None):
     """Sales summary on an EXISTING connection (shared snapshot, R18)."""
-    where_clause = "WHERE DATE(timestamp) = ?" if date_filter else ""
+    where_clause = "WHERE DATE(timestamp, 'localtime') = ?" if date_filter else ""
     params = [date_filter] if date_filter else []
 
     result = conn.execute(
@@ -192,7 +236,7 @@ def get_items_sold_summary(db_name, date_filter=None):
 
 def _items_sold_summary(conn, date_filter=None):
     """Items-sold rows on an EXISTING connection (shared snapshot, R18)."""
-    date_clause = "WHERE DATE(o.timestamp) = ?" if date_filter else ""
+    date_clause = "WHERE DATE(o.timestamp, 'localtime') = ?" if date_filter else ""
     params = [date_filter] if date_filter else []
 
     rows = conn.execute(
@@ -231,7 +275,7 @@ def get_recent_orders(db_name, limit=50, date_filter=None):
 
 def _recent_orders(conn, limit=50, date_filter=None):
     """Recent orders on an EXISTING connection (shared snapshot, R18)."""
-    date_clause = "WHERE DATE(o.timestamp) = ?" if date_filter else ""
+    date_clause = "WHERE DATE(o.timestamp, 'localtime') = ?" if date_filter else ""
     date_param = [date_filter] if date_filter else []
 
     rows = conn.execute(
@@ -409,7 +453,7 @@ def expected_cash_total(db_name, date_filter=None):
     """Cash sales total: SUM of cash payments (change already excluded —
     payments store the sale amount, tendered/change separately)."""
     with PartyDatabase(db_name) as conn:
-        where = "AND DATE(timestamp) = ?" if date_filter else ""
+        where = "AND DATE(timestamp, 'localtime') = ?" if date_filter else ""
         params = [date_filter] if date_filter else []
         row = conn.execute(
             f"""SELECT COALESCE(SUM(amount), 0) FROM payments
@@ -439,7 +483,7 @@ def record_cash_count(db_name, counted_cash, operator_id, note=None,
             # RESERVED lock first: no other writer can commit a payment
             # until our SUM+INSERT are both done.
             conn.execute('BEGIN IMMEDIATE')
-            where = "AND DATE(timestamp) = ?" if date_filter else ""
+            where = "AND DATE(timestamp, 'localtime') = ?" if date_filter else ""
             params = [date_filter] if date_filter else []
             row = conn.execute(
                 f"""SELECT COALESCE(SUM(amount), 0) FROM payments

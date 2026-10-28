@@ -4,6 +4,7 @@ Handles party-level settings like default payment method, currency, tax rate, et
 """
 
 from flask import Blueprint, request, jsonify
+from app.api.guard import require_admin
 from app.services.settings_service import (
     DEFAULT_SETTINGS, get_effective_settings, get_setting, update_setting)
 from app.utils.events import broadcast
@@ -20,6 +21,7 @@ def get_default_payment():
 
 
 @settings_bp.route('/default-payment', methods=['POST'])
+@require_admin
 def set_default_payment():
     """Set the default payment method for the active party."""
     db = request.args.get('db', 'default')
@@ -47,8 +49,14 @@ def get_settings():
 
 
 @settings_bp.route('/', methods=['POST'])
+@require_admin
 def update_settings():
-    """Update multiple settings at once."""
+    """Update multiple settings at once (admin only).
+
+    Admin-gated like every other mutating route: printer_path is opened
+    for writing by the print endpoints, so an open settings write would
+    let any device on the LAN point it at an arbitrary file.
+    """
     db = request.args.get('db', 'default')
     data = request.get_json() or {}
 

@@ -245,7 +245,7 @@ document.addEventListener('DOMContentLoaded', function() {
         sections.forEach(section => {
             const sectionDiv = document.createElement('div');
             sectionDiv.className = 'section';
-            sectionDiv.innerHTML = `<h3>${section.name}</h3>`;
+            sectionDiv.innerHTML = `<h3>${escapeHtml(section.name)}</h3>`;
             
             const subsectionsDiv = document.createElement('div');
             subsectionsDiv.className = 'subsections';
@@ -314,7 +314,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 // Build tag label badges
                 tagLabels = product.tags.map(t =>
-                    `<span class="tag-badge" style="background-color: ${t.color || '#3498db'};">${t.name}</span>`
+                    `<span class="tag-badge" style="background-color: ${escapeHtml(t.color || '#3498db')};">${escapeHtml(t.name)}</span>`
                 ).join('');
             }
             
@@ -335,7 +335,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             btn.innerHTML = `
                 ${availDot}
-                <div class="product-name">${product.name}</div>
+                <div class="product-name">${escapeHtml(product.name)}</div>
                 <div class="product-price">${formatCurrency(product.price)}</div>
                 ${stockText ? `<div class="product-stock-row">${stockText}</div>` : ''}
                 ${availText ? `<div class="product-avail-row">${availText}</div>` : ''}
@@ -399,7 +399,7 @@ document.addEventListener('DOMContentLoaded', function() {
             div.className = 'cart-item';
             div.innerHTML = `
                 <div class="item-info">
-                    <span class="item-name">${item.name}</span>
+                    <span class="item-name">${escapeHtml(item.name)}</span>
                     <span class="item-price">${formatCurrency(item.unit_price)} × ${item.quantity}</span>
                 </div>
                 <div class="item-controls">
@@ -827,12 +827,20 @@ document.addEventListener('DOMContentLoaded', function() {
         const tend = parseFloat(tenderInput.value) || 0;
         const total = getCartTotal();
 
-        // If no amount entered, use total as tendered (exact amount, no change)
+        // If no amount entered, use total as tendered (exact amount, no change).
+        // A typed amount BELOW the total is a typo or a short payment: refuse
+        // it instead of silently recording the full total as received.
         let tendered = tend;
         if (total === 0) {
             tendered = 0;
-        } else if (tend === 0 || tend < total) {
+        } else if (tend === 0) {
             tendered = total;
+        } else if (Math.round(tend * 100) < Math.round(total * 100)) {
+            window._completeCashSaleInProgress = false;
+            showError(t('amount_below_total'));
+            tenderInput.focus();
+            tenderInput.select();
+            return;
         }
 
         try {
@@ -883,8 +891,12 @@ document.addEventListener('DOMContentLoaded', function() {
             return lines.join('\n');
         }
         var subtotal = receiptItems.reduce((sum, item) => sum + item.line_total, 0);
+        var settings = AppState.settings || {};
         lines.push(separator);
         lines.push('           POSZIONA RECEIPT        ');
+        // Party receipt header (admin → Receipt), e.g. the venue name
+        var header = (settings.receipt_header || '').trim();
+        if (header) lines.push('  ' + header);
         lines.push(separator);
         lines.push(t('items'));
         receiptItems.forEach(item => {
@@ -906,7 +918,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         lines.push(t('order_num') + ' ' + orderData.order_id);
         lines.push(separator);
-        lines.push('  ' + t('thank_you') + '  ');
+        // Party receipt footer; the untouched English default falls back
+        // to the translated thank-you line so Italian receipts stay Italian.
+        var footer = (settings.receipt_footer || '').trim();
+        if (!footer || footer === 'Thank you for your purchase!') footer = t('thank_you');
+        lines.push('  ' + footer + '  ');
         lines.push(separator);
         return lines.join('\n');
     }
@@ -1268,11 +1284,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Bulk product update
         evtSource.addEventListener('bulk_product_update', function(event) {
             const payload = JSON.parse(event.data);
+            if (isOtherParty(payload)) return;
             // For bulk updates, reload the current subsection to pick up changes
-            const activeSub = document.querySelector('.subsection.active');
-            if (activeSub) {
-                loadProducts(activeSub.dataset.subsectionId);
-            }
+            reloadActiveSubsection();
             // Check if any cart items need trimming due to stock changes
             if (payload.stock_count !== undefined && payload.stock_count !== null) {
                 _trimCartForStock(payload.product_ids, payload.stock_count);
@@ -1281,7 +1295,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Settings update (e.g. default_payment_method, auto_checkout, etc.)
         evtSource.addEventListener('settings_update', function(event) {
-            const payload = JSON.parse(event.data);
+            // Not filtered by party: counter settings (payment method,
+            // printer...) are shared by every party on this machine.
             // Re-fetch settings so checkout logic picks up the new values
             loadSettings();
         });
@@ -1305,58 +1320,31 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Product ids are per party DB (every party has a product 1): events
+    // from a party this screen is not selling for must be ignored.
+    function isOtherParty(payload) {
+        return payload && payload.db && payload.db !== db;
+    }
+
+    function reloadActiveSubsection() {
+        const activeSub = document.querySelector('.subsection.active');
+        if (activeSub) {
+            loadProducts(activeSub.dataset.subsectionId);
+        }
+    }
+
     function handleProductUpdate(payload) {
-        const productBtn = productsGrid.querySelector(`[data-product-id="${payload.product_id}"]`);
-        if (!productBtn) {
-            // Product not on current screen — silently refresh the current
-            // subsection's products so updated stock/availability is reflected
-            // when the user navigates to that section. No user notification.
-            const activeSub = document.querySelector('.subsection.active');
-            if (activeSub) {
-                loadProducts(activeSub.dataset.subsectionId);
-            }
-            return;
-        }
+        if (isOtherParty(payload)) return;
 
-        // Deleted product — remove from grid
-        if (payload.deleted) {
-            productBtn.remove();
-            return;
-        }
-
-        // Update availability classes
-        if (payload.is_active !== undefined || payload.is_archived !== undefined) {
-            if (payload.is_active === 0 || payload.is_archived === 1) {
-                productBtn.classList.add('out-of-stock');
-                productBtn.onclick = function(e) { e.preventDefault(); };
-            } else {
-                productBtn.classList.remove('out-of-stock');
-                // Re-attach click handler for addToCart — re-fetch product
-                const productId = payload.product_id;
-                productBtn.onclick = function() {
-                    // Re-fetch the product to get fresh data
-                    fetchJSON(`${API_BASE}/products/products/${productId}?db=${db}`)
-                        .then(function(p) { addToCart(p); })
-                        .catch(function(e) { showError(e); });
-                };
-            }
-        }
-
-        // Update stock count display if provided
+        // If this product is in the cart and stock is now insufficient,
+        // trim the cart quantity to the new available stock (silent)
         if (payload.stock_count !== undefined && payload.stock_count !== null) {
-            const stockEl = productBtn.querySelector('.product-stock');
-            if (stockEl) {
-                stockEl.textContent = `${t('stock')}: ${payload.stock_count}`;
-            }
-            // Update out-of-stock class based on new stock count
-            if (payload.stock_count <= 0) {
-                productBtn.classList.add('out-of-stock');
-                productBtn.onclick = function(e) { e.preventDefault(); };
-            }
-            // If this product is in the cart and stock is now insufficient,
-            // trim the cart quantity to the new available stock (silent)
             _trimCartForStock([payload.product_id], payload.stock_count);
         }
+
+        // Re-render the grid from the server: every button then gets fresh
+        // availability and a single click handler built from current data.
+        reloadActiveSubsection();
     }
 
     // --- Live availability updates via SSE ---
@@ -1394,8 +1382,22 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // --- Restore the server-side cart (reload, language switch, crash) ---
+    // The cart lives in the session: without this a refreshed screen shows
+    // an empty cart while the server still holds the items.
+    async function loadCart() {
+        try {
+            const data = await fetchJSON(`${API_BASE}/cart/?db=${db}`);
+            cart = data.items || [];
+            discount = data.discount || null;
+            updateCartDisplay();
+        } catch (e) {
+            console.error('Failed to load cart:', e);
+        }
+    }
+
     // --- Init ---
-    loadSettings();
+    loadSettings().then(loadCart);
     loadSections();
     connectSSEEvents();
 

@@ -40,6 +40,9 @@ GLOBAL_KEYS = frozenset({
     'printer_cut',
     'auto_logout_minutes',
     'server_name',
+    # Snapshots cover every party at once, so retention is per machine
+    # (the backup scheduler reads it from the device tier).
+    'snapshot_keep_count',
 })
 
 
