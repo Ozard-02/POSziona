@@ -377,6 +377,8 @@ def test_auto_setup_creates_venv_and_reexecs(monkeypatch, tmp_path):
     (root / 'scripts').mkdir()
     (root / 'scripts' / 'run_pos.py').write_text('# stub\n')
     monkeypatch.setattr(main_mod, '_APP_ROOT', str(root))
+    # The G6 recipe is Linux-only: pin the platform so this runs anywhere
+    monkeypatch.setattr(main_mod.sys, 'platform', 'linux')
     for var in ('POSZIONA_NO_AUTO_WINDOW_SETUP',
                 'POSZIONA_AUTO_WINDOW_SETUP_TRIED'):
         monkeypatch.delenv(var, raising=False)
@@ -431,6 +433,8 @@ def test_auto_setup_installs_deps_when_probe_fails(monkeypatch, tmp_path):
     venv_bin.mkdir(parents=True)
     (venv_bin / 'python').write_text('')  # venv already exists
     monkeypatch.setattr(main_mod, '_APP_ROOT', str(root))
+    # The G6 recipe is Linux-only: pin the platform so this runs anywhere
+    monkeypatch.setattr(main_mod.sys, 'platform', 'linux')
     for var in ('POSZIONA_NO_AUTO_WINDOW_SETUP',
                 'POSZIONA_AUTO_WINDOW_SETUP_TRIED'):
         monkeypatch.delenv(var, raising=False)
@@ -472,6 +476,8 @@ def test_auto_setup_failure_falls_back_to_browser(monkeypatch, tmp_path, capsys)
     (root / 'scripts').mkdir()
     (root / 'scripts' / 'run_pos.py').write_text('# stub\n')
     monkeypatch.setattr(main_mod, '_APP_ROOT', str(root))
+    # The G6 recipe is Linux-only: pin the platform so this runs anywhere
+    monkeypatch.setattr(main_mod.sys, 'platform', 'linux')
     for var in ('POSZIONA_NO_AUTO_WINDOW_SETUP',
                 'POSZIONA_AUTO_WINDOW_SETUP_TRIED'):
         monkeypatch.delenv(var, raising=False)
