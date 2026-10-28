@@ -161,11 +161,16 @@ def test_print_guards(client, clean_db):
     assert r.status_code == 400
 
 
+def _login_admin(client, db_name):
+    r = client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
+    assert r.status_code == 200
+
+
 def test_detect_endpoint_finds_printer(client, clean_db):
     """Full stack: endpoint → serial probe → baud (fake printer on pty)."""
     import threading
     db_name = clean_db
-    _login(client, db_name)
+    _login_admin(client, db_name)
     master, slave = pty.openpty()
     stop = threading.Event()
     t = threading.Thread(target=_responder, args=(master, stop), daemon=True)
@@ -184,10 +189,18 @@ def test_detect_endpoint_finds_printer(client, clean_db):
 
 def test_detect_endpoint_silence(client, clean_db):
     db_name = clean_db
-    _login(client, db_name)
+    _login_admin(client, db_name)
     r = client.post(f'/api/printer/detect?db={db_name}',
                     json={'path': '/dev/ttyUSB99'})
     assert r.status_code in (400, 500), r.get_json()
+
+
+def test_detect_endpoint_is_admin_only(client, clean_db):
+    """It opens arbitrary serial paths read/write: operators can't."""
+    _login(client, clean_db)
+    r = client.post(f'/api/printer/detect?db={clean_db}',
+                    json={'path': '/dev/ttyUSB99'})
+    assert r.status_code == 403
 
 
 def test_network_print_loopback(monkeypatch):

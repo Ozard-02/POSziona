@@ -2,9 +2,12 @@
 Thermal printer API: push preformatted receipt text to ESC/POS device.
 
 The browser builds receipt text (pos.js buildReceipt); these endpoints
-only convert + send. Operator login required (paper costs money).
+only convert + send. Operator login required (paper costs money);
+port detection is admin-only.
 """
 from flask import Blueprint, request, jsonify, session
+
+from app.api.guard import require_admin
 
 from app.services.printer_service import (
     build_test_ticket, detect_serial, print_text,
@@ -58,15 +61,15 @@ def test_print():
 
 
 @printer_bp.route('/detect', methods=['POST'])
+@require_admin
 def detect_printer():
-    """Probe a serial path for an answering ESC/POS printer.
+    """Probe a serial path for an answering ESC/POS printer (admin only).
 
     Body: {"path": "/dev/ttyUSB0"}. Returns {"baud": N} or 400 when
     nothing answers (wrong cable, printer off, brltty holding the port).
+    Admin-only like the printer settings it feeds: it opens the given
+    path read/write and writes probe bytes to any serial device.
     """
-    denied = _require_operator()
-    if denied:
-        return denied
     data = request.get_json() or {}
     path = (data.get('path') or '').strip()
     if not path:
