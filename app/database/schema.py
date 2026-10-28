@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS orders (
     total REAL NOT NULL,
     payment_method TEXT NOT NULL,
     operator_id INTEGER,
+    guest_name TEXT,               -- tab sales: who the tab belongs to
     FOREIGN KEY (operator_id) REFERENCES operators(id)
 );
 

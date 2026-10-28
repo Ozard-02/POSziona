@@ -804,9 +804,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
+            const body = { payment_method: paymentMethod, idempotency_key: saleKey };
+            if (paymentMethod === 'tab') {
+                const guestInput = document.getElementById('tab-guest');
+                body.guest_name = guestInput ? guestInput.value.trim() : '';
+            }
             const data = await fetchJSON(`${API_BASE}/orders/checkout?db=${db}`, {
                 method: 'POST',
-                body: JSON.stringify({ payment_method: paymentMethod, idempotency_key: saleKey })
+                body: JSON.stringify(body)
             });
 
             showReceipt(data);
@@ -905,13 +910,17 @@ document.addEventListener('DOMContentLoaded', function() {
         lines.push('');
         lines.push(t('subtotal') + ' ' + formatCurrency(subtotal));
         if (discount) {
+            // Same caps as getCartTotal() and the server (max 100%)
             var discountAmt = discount.type === 'percentage'
-                ? subtotal * (discount.value / 100)
+                ? subtotal * (Math.min(discount.value, 100) / 100)
                 : Math.min(discount.value, subtotal);
             lines.push(t('discount') + ' -' + formatCurrency(discountAmt));
         }
         lines.push(t('total') + ' ' + formatCurrency(orderData.total));
         lines.push(t('payment') + ' ' + orderData.payment_method);
+        if (orderData.guest_name) {
+            lines.push(t('guest_name') + ' ' + orderData.guest_name);
+        }
         if (orderData.payment_method === 'cash' && orderData.change_due !== undefined) {
             lines.push(t('tendered') + ' ' + formatCurrency(orderData.tendered));
             lines.push(t('change') + ' ' + formatCurrency(orderData.change_due));

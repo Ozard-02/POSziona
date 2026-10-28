@@ -100,13 +100,23 @@ def checkout():
     idempotency_key = request.headers.get('X-Idempotency-Key') or data.get('idempotency_key')
     tendered = data.get('tendered')
 
+    # Tab sales are paid later: keep who the tab belongs to (the POS asked
+    # for it but used to drop it, leaving anonymous tabs nobody could settle).
+    guest_name = None
+    if payment_method == 'tab':
+        raw_guest = data.get('guest_name')
+        if raw_guest is not None and not isinstance(raw_guest, str):
+            return jsonify({'error': 'Guest name must be text'}), 400
+        guest_name = (raw_guest or '').strip()[:100] or None
+
     try:
         # Atomic checkout: order + items + stock + payment in ONE commit.
         # Either the whole sale lands or nothing does.
         order_id, total, updated_stocks, replayed = checkout_order(
             db, cart_items, payment_method, operator_id,
             discount_amount, discount_type,
-            tendered=tendered, idempotency_key=idempotency_key
+            tendered=tendered, idempotency_key=idempotency_key,
+            guest_name=guest_name
         )
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
@@ -140,6 +150,7 @@ def checkout():
         'order_id': order_id,
         'total': total,
         'payment_method': payment_method,
+        'guest_name': guest_name,
         'replayed': replayed
     }), 201
 

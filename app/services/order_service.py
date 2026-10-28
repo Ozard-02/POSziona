@@ -57,7 +57,7 @@ def _parse_tendered(tendered):
 
 def checkout_order(db_name, cart_items, payment_method, operator_id,
                    discount_amount=0.0, discount_type=None,
-                   tendered=None, idempotency_key=None):
+                   tendered=None, idempotency_key=None, guest_name=None):
     """
     Atomic, retry-safe checkout.
 
@@ -111,9 +111,10 @@ def checkout_order(db_name, cart_items, payment_method, operator_id,
         # Create order
         conn.execute(
             """INSERT INTO orders (subtotal, discount_amount, discount_type, total,
-               payment_method, operator_id)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (subtotal, discount_amount, discount_type, total, payment_method, operator_id)
+               payment_method, operator_id, guest_name)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (subtotal, discount_amount, discount_type, total, payment_method,
+             operator_id, guest_name)
         )
         order_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
@@ -282,7 +283,7 @@ def _recent_orders(conn, limit=50, date_filter=None):
         f"""
         SELECT
             o.id, o.timestamp, o.total, o.payment_method,
-            o.subtotal, o.discount_amount,
+            o.subtotal, o.discount_amount, o.guest_name,
             op.name as operator_name
         FROM orders o
         LEFT JOIN operators op ON o.operator_id = op.id

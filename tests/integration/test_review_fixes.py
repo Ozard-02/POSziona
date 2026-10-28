@@ -9,6 +9,7 @@ Regression tests for the 2026-10-28 review fixes.
 - Snapshot retention is a device-global setting the scheduler honours.
 - CSV-imported tags get a visible badge colour.
 - Bulk stock 0 still reaches the POS screens.
+- Tab sales keep the guest name the POS asks for.
 - One unreadable DB doesn't block the other parties' snapshots.
 """
 import os
@@ -138,6 +139,25 @@ def test_float_exact_tender_is_accepted(clean_db, client):
     r = client.post(f'/api/orders/checkout?db={db}',
                     json={'payment_method': 'cash', 'tendered': 0.3})
     assert r.status_code == 201, r.get_json()
+
+
+def test_tab_sale_keeps_guest_name(clean_db, client):
+    """The POS asks who a tab belongs to: the name must be stored."""
+    db = clean_db
+    pid = _product(client, db)
+    client.post(f'/api/cart/add?db={db}', json={'product_id': pid})
+    r = client.post(f'/api/orders/checkout?db={db}',
+                    json={'payment_method': 'tab', 'guest_name': '  Marco  '})
+    assert r.status_code == 201, r.get_json()
+    assert r.get_json()['guest_name'] == 'Marco'
+    recent = client.get(f'/api/orders/recent?db={db}').get_json()
+    assert recent[0]['guest_name'] == 'Marco'
+
+    # Ignored for non-tab sales
+    client.post(f'/api/cart/add?db={db}', json={'product_id': pid})
+    r = client.post(f'/api/orders/checkout?db={db}',
+                    json={'payment_method': 'card', 'guest_name': 'X'})
+    assert r.get_json()['guest_name'] is None
 
 
 # ---- unavailable products stay out of the cart ------------------------
