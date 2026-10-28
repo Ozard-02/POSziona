@@ -126,6 +126,7 @@ def test_all_mode_pywebview_missing_degrades(monkeypatch, capsys):
 def test_client_mode_pywebview_missing_exits_with_hint(monkeypatch, capsys):
     """No pywebview package in client mode: browser + exit(1) + recipe (G1)."""
     _no_webview_at_all(monkeypatch)
+    monkeypatch.setattr(main_mod.sys, 'platform', 'linux')  # Linux recipe
     opened = []
     monkeypatch.setattr('webbrowser.open',
                         lambda url, new=0: opened.append(url) or True)
@@ -142,10 +143,21 @@ def test_client_mode_pywebview_missing_exits_with_hint(monkeypatch, capsys):
 
 def test_gui_missing_message_has_source_recipe(monkeypatch, capsys):
     """Fallback prints the exact source-window recipe (copy-paste ready)."""
+    monkeypatch.setattr(main_mod.sys, 'platform', 'linux')
     main_mod._gui_missing_message(Exception('no GUI'), 'http://x:5000/')
     out = capsys.readouterr().out
     assert 'system-site-packages' in out
     assert 'scripts/run_pos.py' in out
+
+
+def test_gui_missing_message_on_macos_skips_linux_recipe(monkeypatch, capsys):
+    """apt/GTK/venv steps mean nothing on a Mac: point at pywebview."""
+    monkeypatch.setattr(main_mod.sys, 'platform', 'darwin')
+    main_mod._gui_missing_message(Exception('no GUI'), 'http://x:5000/')
+    out = capsys.readouterr().out
+    assert 'http://x:5000/' in out
+    assert 'pip install --upgrade pywebview' in out
+    assert 'apt install' not in out and 'system-site-packages' not in out
 
 
 def test_second_server_exits_on_lock(monkeypatch, capsys):
@@ -283,6 +295,7 @@ def test_gui_check_ok(capsys):
         'qt': [],
         'cef': False,
         'display': 'DISPLAY=:0',
+        'platform': 'linux',
     }
     assert main_mod.gui_check(state) == 0
     out = capsys.readouterr().out
@@ -301,6 +314,7 @@ def test_gui_check_no_backend_falls_back(capsys):
         'qt': [],
         'cef': False,
         'display': 'DISPLAY=:0',
+        'platform': 'linux',
     }
     assert main_mod.gui_check(state) == 1
     out = capsys.readouterr().out
@@ -317,11 +331,48 @@ def test_gui_check_missing_display(capsys):
         'qt': ['qtpy'],
         'cef': False,
         'display': None,
+        'platform': 'linux',
     }
     assert main_mod.gui_check(state) == 1
     out = capsys.readouterr().out
     assert 'MISSING (no DISPLAY/WAYLAND_DISPLAY)' in out
     assert 'fall back to the browser' in out
+
+
+def test_gui_check_macos_native_backend(capsys):
+    """macOS: pywebview's Cocoa backend counts — no GTK/Qt needed."""
+    state = {
+        'webview': '5.0',
+        'gtk': (False, 'PyGObject (python3-gi) not installed'),
+        'qt': [],
+        'cef': False,
+        'native': (True, 'Cocoa + WebKit (pyobjc)'),
+        'display': 'Darwin',
+        'platform': 'darwin',
+    }
+    assert main_mod.gui_check(state) == 0
+    out = capsys.readouterr().out
+    assert 'Native backend:  OK' in out
+    assert 'GTK backend' not in out
+    assert 'can open' in out
+
+
+def test_gui_check_windows_without_pythonnet(capsys):
+    """Windows hint names pywebview/WebView2, not apt or a Linux venv."""
+    state = {
+        'webview': '5.0',
+        'gtk': (False, 'PyGObject (python3-gi) not installed'),
+        'qt': [],
+        'cef': False,
+        'native': (False, 'pythonnet not installed'),
+        'display': 'Windows',
+        'platform': 'win32',
+    }
+    assert main_mod.gui_check(state) == 1
+    out = capsys.readouterr().out
+    assert 'not usable: pythonnet not installed' in out
+    assert 'WebView2' in out
+    assert 'system-site-packages' not in out
 
 
 def test_cli_gui_check_exits_with_doctor_code(monkeypatch):

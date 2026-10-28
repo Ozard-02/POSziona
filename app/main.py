@@ -219,6 +219,18 @@ def _gui_install_hint(os_release='/etc/os-release'):
           '  GTK+WebKit2GTK (or Qt) packages, then run from source.')
 
 
+def _native_install_hint(platform):
+    """How to get the window on macOS/Windows (pywebview's own backends)."""
+    if platform == 'darwin':
+        return ('  To enable the desktop window instead:\n'
+                '    pip install --upgrade pywebview\n'
+                '  (on macOS it pulls the pyobjc Cocoa/WebKit bindings)')
+    return ('  To enable the desktop window instead:\n'
+            '    pip install --upgrade pywebview\n'
+            '  (on Windows it pulls pythonnet; the Microsoft Edge WebView2\n'
+            '  Runtime must be installed — Windows 10/11 ship it)')
+
+
 def _gui_detect_state():
     """Probe this machine for the pieces the desktop window needs (G3).
 
@@ -227,7 +239,10 @@ def _gui_detect_state():
       gtk         (bool, detail) — GTK 3 + WebKit2 importable?
       qt          list of Qt bindings found (qtpy is what pywebview uses)
       cef         bool — cefpython3 importable?
+      native      (bool, detail) — macOS/Windows native backend usable?
+                  (None detail on Linux, where GTK/Qt are the backends)
       display     display description, or None when missing (Linux only)
+      platform    sys.platform
     """
     import importlib.util
     import platform
@@ -265,6 +280,19 @@ def _gui_detect_state():
     qt = [n for n in ('qtpy', 'PyQt5', 'PyQt6', 'PySide2', 'PySide6')
           if _spec(n)]
 
+    # macOS/Windows: pywebview's default backends are native — Cocoa via
+    # pyobjc, EdgeChromium/WinForms via pythonnet (`clr`) — not GTK/Qt.
+    # Without this the doctor said "NO desktop window" on every Mac/PC.
+    native = (False, None)
+    if sys.platform == 'darwin':
+        found = bool(_spec('AppKit') and _spec('WebKit'))
+        native = (found, 'Cocoa + WebKit (pyobjc)' if found
+                  else 'pyobjc Cocoa/WebKit bindings not installed')
+    elif sys.platform == 'win32':
+        found = bool(_spec('clr'))
+        native = (found, 'EdgeChromium/WinForms (pythonnet)' if found
+                  else 'pythonnet not installed')
+
     display = None
     if sys.platform.startswith('linux'):
         parts = []
@@ -281,7 +309,9 @@ def _gui_detect_state():
         'gtk': (gtk_ok, gtk_detail),
         'qt': qt,
         'cef': bool(_spec('cefpython3')),
+        'native': native,
         'display': display,
+        'platform': sys.platform,
     }
 
 
@@ -295,6 +325,7 @@ def gui_check(state=None):
     """
     if state is None:
         state = _gui_detect_state()
+    linux = state.get('platform', sys.platform).startswith('linux')
 
     lines = [f"Posziona GUI check — Python "
              f"{sys.version.split()[0]} ({sys.executable})"]
@@ -304,10 +335,17 @@ def gui_check(state=None):
     else:
         lines.append("  pywebview:       MISSING (pip install pywebview)")
 
+    native_ok, native_detail = state.get('native', (False, None))
+    if native_detail:
+        lines.append("  Native backend:  "
+                     + (f"OK ({native_detail})" if native_ok
+                        else f"not usable: {native_detail}"))
+
     gtk_ok, gtk_detail = state['gtk']
-    lines.append("  GTK backend:     "
-                 + (f"OK ({gtk_detail})" if gtk_ok
-                    else f"not usable: {gtk_detail}"))
+    if linux or gtk_ok:
+        lines.append("  GTK backend:     "
+                     + (f"OK ({gtk_detail})" if gtk_ok
+                        else f"not usable: {gtk_detail}"))
 
     qt = state['qt']
     lines.append("  Qt backend:      "
@@ -321,11 +359,14 @@ def gui_check(state=None):
     else:
         lines.append("  Display:         MISSING (no DISPLAY/WAYLAND_DISPLAY)")
 
-    has_backend = gtk_ok or bool(qt) or state['cef']
     ok = _window_possible(state)
 
     if ok:
         lines.append("  Result:          the desktop window can open on this machine.")
+    elif not linux:
+        lines.append("  Result:          NO desktop window here — POSziona will")
+        lines.append("                   fall back to the browser (it still works).")
+        lines.append(_native_install_hint(state.get('platform', sys.platform)))
     else:
         lines.append("  Result:          NO desktop window here — POSziona will")
         lines.append("                   fall back to the browser (it still works).")
@@ -355,7 +396,8 @@ def _window_possible(state=None):
     if state is None:
         state = _gui_detect_state()
     gtk_ok, _ = state['gtk']
-    return bool(state['webview']) and (gtk_ok or bool(state['qt'])
+    native_ok, _ = state.get('native', (False, None))
+    return bool(state['webview']) and (gtk_ok or native_ok or bool(state['qt'])
                                        or state['cef']) and bool(state['display'])
 
 
@@ -433,6 +475,11 @@ def _gui_missing_message(exc, server_url):
     # flush=True: frozen binaries are block-buffered on pipes/files —
     # failure messages must not die in the buffer on SIGKILL/timeout.
     print(f"\nWARNING: Desktop window unavailable ({exc}).", flush=True)
+    if not sys.platform.startswith('linux'):
+        # The GTK/apt/venv recipe below is Linux-only
+        print(f"  Open {server_url} in a browser instead.", flush=True)
+        print(_native_install_hint(sys.platform), flush=True)
+        return
     print("  pywebview needs GTK+WebKit2GTK (or Qt) system libraries,", flush=True)
     print("  which are not installed on this machine.", flush=True)
     print(f"  Open {server_url} in a browser instead.", flush=True)
