@@ -341,8 +341,8 @@ def gui_check(state=None):
                      + (f"OK ({native_detail})" if native_ok
                         else f"not usable: {native_detail}"))
 
-    gtk_ok, gtk_detail = state['gtk']
-    if linux or gtk_ok:
+    if linux:
+        gtk_ok, gtk_detail = state['gtk']
         lines.append("  GTK backend:     "
                      + (f"OK ({gtk_detail})" if gtk_ok
                         else f"not usable: {gtk_detail}"))
@@ -351,8 +351,9 @@ def gui_check(state=None):
     lines.append("  Qt backend:      "
                  + (f"OK ({', '.join(qt)})" if qt else 'not installed (optional)'))
 
-    lines.append("  CEF backend:     "
-                 + ('OK' if state['cef'] else 'not installed (optional)'))
+    if linux:
+        lines.append("  CEF backend:     "
+                     + ('OK' if state['cef'] else 'not installed (optional)'))
 
     if state['display']:
         lines.append(f"  Display:         {state['display']}")
@@ -392,13 +393,24 @@ _SYSWIN_DIR_NAME = 'syswin'
 
 
 def _window_possible(state=None):
-    """True when the desktop window can open with THIS Python."""
+    """True when the desktop window can open with THIS Python.
+
+    Only backends pywebview actually tries on the platform count:
+    Linux = GTK/Qt; macOS = Cocoa/Qt; Windows = WinForms/Qt (the app
+    retries with PYWEBVIEW_GUI=qt). GTK/CEF on macOS/Windows are
+    installed Python packages pywebview never uses there.
+    """
     if state is None:
         state = _gui_detect_state()
-    gtk_ok, _ = state['gtk']
-    native_ok, _ = state.get('native', (False, None))
-    return bool(state['webview']) and (gtk_ok or native_ok or bool(state['qt'])
-                                       or state['cef']) and bool(state['display'])
+    platform = state.get('platform', sys.platform)
+    qt_ok = bool(state['qt'])
+    if platform.startswith('linux'):
+        gtk_ok, _ = state['gtk']
+        backend_ok = gtk_ok or qt_ok
+    else:
+        native_ok, _ = state.get('native', (False, None))
+        backend_ok = native_ok or qt_ok
+    return bool(state['webview']) and backend_ok and bool(state['display'])
 
 
 def _running_inside_syswin():

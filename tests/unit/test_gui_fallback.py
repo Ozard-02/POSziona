@@ -375,6 +375,45 @@ def test_gui_check_windows_without_pythonnet(capsys):
     assert 'system-site-packages' not in out
 
 
+@pytest.mark.parametrize(
+    'platform, display', [('darwin', 'Darwin'), ('win32', 'Windows')])
+def test_gui_check_native_platforms_ignore_gtk_cef(capsys, platform, display):
+    """GTK/CEF are not pywebview backends on macOS/Windows (old false exit 0)."""
+    state = {
+        'webview': '5.0',
+        'gtk': (True, 'Gtk 3.0 + WebKit2 4.1'),
+        'qt': [],
+        'cef': True,
+        'native': (False, 'native backend missing'),
+        'display': display,
+        'platform': platform,
+    }
+    assert main_mod.gui_check(state) == 1
+    out = capsys.readouterr().out
+    assert 'GTK backend' not in out
+    assert 'CEF backend' not in out
+    assert 'fall back to the browser' in out
+
+
+@pytest.mark.parametrize(
+    'platform, display', [('darwin', 'Darwin'), ('win32', 'Windows')])
+def test_gui_check_native_platforms_accept_qt_fallback(capsys, platform, display):
+    """Qt is a real fallback on macOS/Windows (pywebview itself or our retry)."""
+    state = {
+        'webview': '5.0',
+        'gtk': (False, 'not installed'),
+        'qt': ['qtpy'],
+        'cef': False,
+        'native': (False, 'native backend missing'),
+        'display': display,
+        'platform': platform,
+    }
+    assert main_mod.gui_check(state) == 0
+    out = capsys.readouterr().out
+    assert 'Qt backend:      OK' in out
+    assert 'can open' in out
+
+
 def test_cli_gui_check_exits_with_doctor_code(monkeypatch):
     """--gui-check runs the doctor and exits with its code (G3)."""
     codes = []

@@ -12,6 +12,8 @@ Regression tests for the 2026-10-28 review fixes.
 - Tab sales keep the guest name the POS asks for.
 - One unreadable DB doesn't block the other parties' snapshots.
 """
+import csv
+import io
 import os
 
 import pytest
@@ -152,6 +154,15 @@ def test_tab_sale_keeps_guest_name(clean_db, client):
     assert r.get_json()['guest_name'] == 'Marco'
     recent = client.get(f'/api/orders/recent?db={db}').get_json()
     assert recent[0]['guest_name'] == 'Marco'
+
+    # The recap CSV is the only order-history export: the name must
+    # survive there too, not just in the API/receipt.
+    from app.services.order_service import build_recap_csv
+    rows = list(csv.reader(io.StringIO(build_recap_csv(db))))
+    header = next(r for r in rows if r and r[0] == 'Order ID')
+    assert header == ['Order ID', 'Timestamp', 'Operator', 'Guest',
+                      'Total', 'Discount', 'Payment Method']
+    assert any(r[3] == 'Marco' for r in rows if r and r[0].isdigit())
 
     # Ignored for non-tab sales
     client.post(f'/api/cart/add?db={db}', json={'product_id': pid})

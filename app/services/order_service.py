@@ -433,12 +433,14 @@ def build_recap_csv(db_name, date_filter=None):
 
     # Section 3: Recent Orders
     writer.writerow(['=== Recent Orders ==='])
-    writer.writerow(['Order ID', 'Timestamp', 'Operator', 'Total', 'Discount', 'Payment Method'])
+    writer.writerow(['Order ID', 'Timestamp', 'Operator', 'Guest',
+                     'Total', 'Discount', 'Payment Method'])
     for order in recent:
         writer.writerow([
             order.get('id', ''),
             order.get('timestamp', ''),
             order.get('operator_name', '') or 'N/A',
+            order.get('guest_name', '') or '',
             order.get('total', 0.0),
             order.get('discount_amount', 0.0),
             order.get('payment_method', '')

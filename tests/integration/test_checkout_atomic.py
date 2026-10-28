@@ -275,7 +275,7 @@ def test_recap_csv_sections_share_one_snapshot(clean_db, client, monkeypatch):
         'Total Amount', 'Current Price', 'Current Stock', 'Active'])
     assert rows[item_header + 1][4] == '1'        # same snapshot
     ridx = rows.index([
-        'Order ID', 'Timestamp', 'Operator', 'Total', 'Discount',
+        'Order ID', 'Timestamp', 'Operator', 'Guest', 'Total', 'Discount',
         'Payment Method'])
     assert len([r for r in rows[ridx + 1:] if r]) == 1
 
