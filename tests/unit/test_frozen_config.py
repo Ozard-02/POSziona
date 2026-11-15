@@ -39,11 +39,19 @@ def test_env_override_wins(monkeypatch, tmp_path):
         importlib.reload(config)
 
 
-def test_source_mode_unchanged():
-    """Dev/test runs still use <repo>/app/data (no override active)."""
-    if os.environ.get('POSZIONA_DATA_DIR'):
-        pytest.skip('POSZIONA_DATA_DIR override active')
-    assert config.DATA_DIR == os.path.join(config.BASE_DIR, 'data')
+def test_source_mode_unchanged(monkeypatch):
+    """Dev runs still use <repo>/app/data when no override is active.
+
+    The test session sets POSZIONA_DATA_DIR for isolation (see conftest),
+    so the override is removed just for this reload and put back after.
+    """
+    import importlib
+    monkeypatch.delenv('POSZIONA_DATA_DIR', raising=False)
+    try:
+        reloaded = importlib.reload(config)
+        assert reloaded.DATA_DIR == os.path.join(reloaded.BASE_DIR, 'data')
+    finally:
+        importlib.reload(config)  # restore the session's test override
 
 
 def test_secret_key_stable_and_owner_only(monkeypatch, tmp_path):

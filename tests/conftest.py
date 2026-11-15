@@ -1,11 +1,26 @@
 """
 Pytest configuration and fixtures for Posziona tests.
 """
+import atexit
 import os
 import sys
 import shutil
 import sqlite3
-import pytest
+import tempfile
+
+# Hermetic run: every party DB, snapshot, secret key and lock file for the
+# whole session goes to a throwaway directory. Without this the suite writes
+# into <repo>/app/data, and a party DB left behind by an earlier run can
+# make a test pass locally while the same test fails on a fresh checkout
+# (CI) — the false positive AGENTS.md explicitly bans. Must happen BEFORE
+# importing app.*, because config reads the override at import time.
+# An explicit POSZIONA_DATA_DIR in the environment still wins (debugging).
+if not os.environ.get('POSZIONA_DATA_DIR'):
+    _SESSION_DATA_DIR = tempfile.mkdtemp(prefix='posziona-tests-')
+    os.environ['POSZIONA_DATA_DIR'] = _SESSION_DATA_DIR
+    atexit.register(shutil.rmtree, _SESSION_DATA_DIR, True)
+
+import pytest  # noqa: E402
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

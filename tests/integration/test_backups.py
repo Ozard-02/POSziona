@@ -118,9 +118,25 @@ def test_db_param_traversal_rejected(client):
         assert r.status_code == 400, evil
         assert 'error' in r.get_json()
 
-    # Sane names still work (DB auto-created)
-    r = client.get('/api/products/?db=festa-2026_party')
-    assert r.status_code == 200
+    # A sane but unknown name is a clean 404: `?db=` is client supplied, so
+    # an unknown party is never created implicitly (it used to mint a fully
+    # seeded DB per request). Creating it explicitly still works.
+    name = 'festa-2026_party'
+    path = os.path.join(PARTY_DB_DIR, name + '.db')
+    for ext in ('', '-wal', '-shm'):  # never depend on a leftover file
+        if os.path.exists(path + ext):
+            os.remove(path + ext)
+    r = client.get(f'/api/products/?db={name}')
+    assert r.status_code == 404
+    assert 'error' in r.get_json()
+
+    from app.services.party_service import create_empty_party, delete_party
+    create_empty_party(name)
+    try:
+        r = client.get(f'/api/products/?db={name}')
+        assert r.status_code == 200
+    finally:
+        delete_party(name)
 
 
 def test_corrupt_db_quarantined_and_recreated(client):
