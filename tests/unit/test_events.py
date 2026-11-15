@@ -24,6 +24,8 @@ def test_broadcast_not_blocked_by_suspended_yield():
     """
     listener = _registered_listener()
     gen = events._event_stream(listener)
+    # The stream greets on connect (browser `open` fires on first bytes).
+    assert next(gen) == ': connected\n\n'
     listener['queue'].append('event: tick\ndata: {}\n\n')
 
     first = next(gen)  # pops the event, suspends at yield — outside the lock
@@ -57,6 +59,7 @@ def test_idle_listener_refreshes_activity_and_heartbeats(monkeypatch):
     gen = events._event_stream(listener)
 
     start = time.time()
+    assert next(gen) == ': connected\n\n'  # greeting, not a heartbeat
     msg = next(gen)  # idle → loops (refreshing last_active) → heartbeat
     assert msg == ': heartbeat\n\n'
     assert listener['last_active'] >= start

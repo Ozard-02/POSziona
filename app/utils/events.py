@@ -113,6 +113,11 @@ def _event_stream(listener):
     """
     last_heartbeat = time.time()
     try:
+        # Greet immediately. The browser's EventSource fires `open` on the
+        # first bytes; without this the connection looked dead until the
+        # first heartbeat (15 s), and the POS kept its offline banner and
+        # a disabled checkout up long after the network came back.
+        yield ': connected\n\n'
         while True:
             with listener['lock']:
                 msg = listener['queue'].pop(0) if listener['queue'] else None
