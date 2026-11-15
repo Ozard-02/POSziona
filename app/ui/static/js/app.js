@@ -151,6 +151,13 @@ function showBanner(message) {
     document.getElementById('alert-banner-text').textContent = message;
 }
 
+function hideBanner() {
+    // Clear a banner that no longer applies (e.g. the connection came
+    // back). The ✕ button removes it the same way.
+    const banner = document.getElementById('alert-banner');
+    if (banner) banner.remove();
+}
+
 function fetchJSON(url, options = {}) {
     const defaultHeaders = {
         'Content-Type': 'application/json',

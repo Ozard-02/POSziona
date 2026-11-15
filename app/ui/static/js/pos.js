@@ -566,6 +566,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function openCheckoutModal() {
+        if (!connected) {
+            // Nothing can be recorded right now: fail loudly instead of
+            // walking the operator through tender and a dead request.
+            showError(t('connection_lost'));
+            return;
+        }
         if (cart.length === 0) {
             showError('Add items to cart first');
             return;
@@ -1253,6 +1259,40 @@ document.addEventListener('DOMContentLoaded', function() {
     // Shift+Click directly opens the stock count editor.
     let availabilityToggleMode = false;
 
+    // --- Connection state (see connectSSEEvents) ---
+    let connected = true;
+    let offlineTimer = null;
+
+    // Debounced banner: an SSE blip reconnects in about a second, so the
+    // warning waits a moment; the checkout button goes dead at once
+    // (clicking it while offline could only fail after the PIN/tender).
+    function setConnected(isConnected) {
+        const wasOffline = !connected;
+        connected = isConnected;
+        if (isConnected) {
+            if (offlineTimer) {
+                clearTimeout(offlineTimer);
+                offlineTimer = null;
+            }
+            hideBanner();
+            if (wasOffline) {
+                // Adds that failed while offline never reached the server:
+                // adopt the server's cart instead of guessing what landed.
+                loadCart();
+            }
+        } else if (!offlineTimer) {
+            offlineTimer = setTimeout(function() {
+                offlineTimer = null;
+                showBanner(t('connection_lost'));
+            }, 3000);
+        }
+        if (checkoutBtn) {
+            checkoutBtn.disabled = !isConnected;
+            checkoutBtn.title = isConnected ? '' : t('connection_lost');
+        }
+        return isConnected;
+    }
+
     // --- Add keyboard shortcut before connectSSEEvents ---
     document.addEventListener('keydown', function(e) {
         // Shift+L: enter availability toggle mode
@@ -1279,9 +1319,17 @@ document.addEventListener('DOMContentLoaded', function() {
     function connectSSEEvents() {
         const evtSource = new EventSource(`${API_BASE}/events`);
 
+        // Live/offline state. The cart and every sale live on the server,
+        // so a dropped Wi-Fi must be visible: one toast per failed tap and
+        // a checkout button that still looks ready is how a busy operator
+        // keeps "selling" nothing for ten minutes.
+        evtSource.addEventListener('open', function() {
+            setConnected(true);
+        });
         evtSource.addEventListener('error', function() {
-            // Connection error — will auto-reconnect via EventSource
+            // EventSource retries by itself; keep the state honest meanwhile.
             console.warn('SSE connection error, will retry...');
+            setConnected(false);
         });
 
         // Single product update (toggled active/archived/deleted)
