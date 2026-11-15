@@ -216,7 +216,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Probe before navigating: a wrong address shows a friendly error
-    // instead of a dead page. Plain fetch (CORS is open server-side).
+    // instead of a dead page. Plain fetch: /api/status is the one
+    // endpoint that answers cross-origin (see create_app).
     function probeThenGo(origin) {
         if (remoteError) remoteError.classList.add('hidden');
         var done = false;

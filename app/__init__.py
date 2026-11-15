@@ -3,8 +3,7 @@ Flask application factory for Posziona.
 """
 import os
 
-from flask import Flask, jsonify, render_template
-from flask_cors import CORS
+from flask import Flask, jsonify, render_template, request
 
 from app.utils.logger import get_logger
 
@@ -24,10 +23,30 @@ def create_app():
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
     app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 hours
 
-    CORS(app)
+    # Cap the body size: without it any device on the LAN could make the
+    # server buffer an arbitrarily large JSON body in memory (the biggest
+    # legitimate upload is a product CSV, well under a megabyte).
+    app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024
+    app.config['MAX_FORM_MEMORY_SIZE'] = 8 * 1024 * 1024
+
+    # The only cross-origin call in the app is the login page's "is that
+    # other server alive?" probe (ui/templates/login.html). Everything
+    # else is same-origin, so the rest of the API stays closed to other
+    # websites instead of answering every Origin.
+    @app.after_request
+    def _allow_status_probe(response):
+        if request.path == '/api/status':
+            response.headers['Access-Control-Allow-Origin'] = '*'
+        return response
 
     # Validation errors (bad ?db= names, bad input) are client errors —
     # always JSON, never an HTML stack page the kiosk UI can't parse.
+    from app.database.connection import PartyNotFoundError
+
+    @app.errorhandler(PartyNotFoundError)
+    def handle_party_not_found(e):
+        return jsonify({'error': str(e)}), 404
+
     @app.errorhandler(ValueError)
     def handle_value_error(e):
         return jsonify({'error': str(e)}), 400
@@ -36,6 +55,14 @@ def create_app():
     def handle_bad_request(e):
         # Covers malformed JSON bodies (Flask raises BadRequest) etc.
         return jsonify({'error': 'Bad request'}), 400
+
+    @app.errorhandler(413)
+    def handle_too_large(e):
+        return jsonify({'error': 'Request body is too large'}), 413
+
+    @app.errorhandler(415)
+    def handle_unsupported_media(e):
+        return jsonify({'error': 'Unsupported content type — send JSON'}), 415
 
     @app.errorhandler(404)
     def handle_not_found(e):

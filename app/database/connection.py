@@ -62,6 +62,18 @@ def is_deleting(db_path):
         return db_path in _deleting
 
 
+class PartyNotFoundError(ValueError):
+    """The requested party database does not exist.
+
+    Parties are never created implicitly from a request: `?db=` is
+    client-supplied, so auto-creating let any device on the LAN mint
+    fully seeded databases (one file + two PBKDF2 hashes each) with a
+    single GET, until the disk filled. Only the documented `default`
+    fallback is created on demand, so a brand-new install still has a
+    database to log into.
+    """
+
+
 def validate_db_name(db_name):
     """Reject database names that could escape the party directory.
 
@@ -424,15 +436,23 @@ def _enable_wal(db_path):
 
 
 class PartyDatabase:
-    """Context manager for party database connections."""
+    """Context manager for party database connections.
 
-    def __init__(self, db_name):
+    `create=True` is for callers that own a brand-new database (party
+    creation, tests that exercise the first-open path). Everywhere else
+    an unknown name raises PartyNotFoundError instead of silently
+    creating a seeded party DB.
+    """
+
+    def __init__(self, db_name, create=False):
         self.db_name = db_name
+        self.create = create
         self.db_path = None
         self.conn = None
 
     def __enter__(self):
         self.db_path = _get_party_db_path(self.db_name)
+        base = self.db_name[:-3] if str(self.db_name).endswith('.db') else self.db_name
         # Create/verify + connect + count all under the lifecycle lock, so
         # a delete/restore (which holds the same lock) can never remove the
         # file between our ensure and our open, and a concurrent open can
@@ -441,6 +461,11 @@ class PartyDatabase:
             if is_deleting(self.db_path):
                 raise RuntimeError(
                     f'Party database is being deleted: {self.db_name}')
+            if not self.create and base != 'default' \
+                    and not os.path.exists(self.db_path):
+                raise PartyNotFoundError(
+                    f'Party "{self.db_name}" does not exist. '
+                    'Create it in Admin → Parties, then select it.')
             self.conn = sqlite3.connect(
                 _ensure_party_db_exists(self.db_name), check_same_thread=False)
             self.conn.row_factory = sqlite3.Row

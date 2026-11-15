@@ -20,7 +20,10 @@ def test_default_tags_seeded_and_assigned(client):
     """Fresh DBs get default tags, assigned to the default products."""
     db_name = 'tags_test_party'
     try:
-        # Login as admin (triggers DB auto-creation with seed products + tags)
+        # Parties are never created implicitly by a request: an explicit
+        # creation seeds the default tags/products this test is about.
+        from app.services.party_service import create_empty_party
+        create_empty_party('tags_test_party')
         client.post(f'/api/auth/login/admin?db={db_name}', json={'pin': '0000'})
 
         resp = client.get(f'/api/products/tags?db={db_name}')

@@ -28,7 +28,7 @@ def test_missing_tables_and_columns_are_recreated():
     db_name = 'drift_heal_test'
     _cleanup(db_name)
     try:
-        with PartyDatabase(db_name):
+        with PartyDatabase(db_name, create=True):
             pass
         path = _get_party_db_path(db_name)
 

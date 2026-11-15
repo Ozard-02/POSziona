@@ -129,7 +129,7 @@ def test_corrupt_db_quarantined_and_recreated(client):
     from app.database import connection as conn_mod
 
     db_name = 'corrupt_recovery_test'
-    with PartyDatabase(db_name):
+    with PartyDatabase(db_name, create=True):
         pass
     path = _get_party_db_path(db_name)
     assert os.path.exists(path)

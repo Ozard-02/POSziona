@@ -134,7 +134,7 @@ from app.database.connection import PartyDatabase
 from app.services.order_service import checkout_order
 
 # Seed one product (unlimited stock keeps the math exact)
-with PartyDatabase('kill9_test') as conn:
+with PartyDatabase('kill9_test', create=True) as conn:
     conn.execute("INSERT OR IGNORE INTO sections (id, name) VALUES (1, 'S')")
     conn.execute("INSERT OR IGNORE INTO subsections (id, name, section_id) VALUES (1, 'SS', 1)")
     conn.execute("INSERT OR IGNORE INTO products (id, name, price, section_id, subsection_id) VALUES (1, 'P', 2.5, 1, 1)")

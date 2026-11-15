@@ -375,7 +375,7 @@ def gui_check(state=None):
         lines.append("  One-time window setup from source (the system Python")
         lines.append("  sees distro GUI packages; the frozen binary may not):")
         lines.append("    python3 -m venv --system-site-packages syswin")
-        lines.append("    syswin/bin/pip install flask pywebview flask-cors")
+        lines.append("    syswin/bin/pip install flask pywebview")
         lines.append("    syswin/bin/python scripts/run_pos.py")
 
     print('\n'.join(lines))
@@ -469,7 +469,7 @@ def _maybe_auto_setup_window():
         if probe.returncode != 0:
             print("    installing flask + pywebview (one time)...", flush=True)
             subprocess.run([venv_python, '-m', 'pip', 'install', '--quiet',
-                            'flask', 'pywebview', 'flask-cors'],
+                            'flask', 'pywebview'],
                            check=True, timeout=600)
     except Exception as exc:
         print(f"  Window setup failed ({exc}) — using the browser instead.",
@@ -500,7 +500,7 @@ def _gui_missing_message(exc, server_url):
     print("  which can see the distro GTK packages — the frozen binary", flush=True)
     print("  cannot). One time setup, then a real window:", flush=True)
     print("    python3 -m venv --system-site-packages syswin", flush=True)
-    print("    syswin/bin/pip install flask pywebview flask-cors", flush=True)
+    print("    syswin/bin/pip install flask pywebview", flush=True)
     print("    syswin/bin/python scripts/run_pos.py", flush=True)
 
 

@@ -106,7 +106,7 @@ def test_concurrent_first_opens_seed_once(clean_db):
     def _open():
         try:
             barrier.wait(timeout=5)
-            with PartyDatabase(db_name) as conn:
+            with PartyDatabase(db_name, create=True) as conn:
                 conn.execute("SELECT COUNT(*) FROM products").fetchone()
         except Exception as e:  # noqa: BLE001 — collect, assert below
             failures.append(e)

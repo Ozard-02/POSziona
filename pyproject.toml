@@ -11,7 +11,6 @@ requires-python = ">=3.8"
 dependencies = [
     "flask>=2.3.0",
     "pywebview>=4.0.0",
-    "flask-cors>=4.0.0",
     "pyserial>=3.5",
     "pywin32>=300; sys_platform == 'win32'",
 ]
