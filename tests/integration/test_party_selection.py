@@ -75,6 +75,10 @@ def test_sale_lands_in_selected_party_only(client, clean_db):
         mine = client.get(f'/api/orders/report/summary?db={PARTY}').get_json()
         assert mine['total_orders'] == 1
 
+        # Look at the other party the way an admin really would: select
+        # it (log in on it) and read its report.
+        assert client.post('/api/auth/login/admin?db=default',
+                           json={'pin': '0000'}).status_code == 200
         others = client.get('/api/orders/report/summary?db=default').get_json()
         assert others['total_orders'] == 0
     finally:

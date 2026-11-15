@@ -24,7 +24,11 @@ def test_create_empty_party(clean_db, client, dates):
     assert data['db_name'] == 'Manual Party'
     assert data['party_name'] == 'Manual Party'
 
-    # Verify the party DB was created and has default products
+    # Verify the party DB was created and has default products.
+    # A session belongs to ONE party: selecting the new party means
+    # logging in on it (same as the UI's party switcher).
+    assert client.post('/api/auth/login/admin?db=Manual Party',
+                       json={'pin': '0000'}).status_code == 200
     resp = client.get(f'/api/products/?db=Manual Party')
     sections = resp.get_json()
     assert len(sections) > 0  # Should have default seed sections

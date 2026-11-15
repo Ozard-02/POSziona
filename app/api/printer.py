@@ -7,7 +7,7 @@ port detection is admin-only.
 """
 from flask import Blueprint, request, jsonify, session
 
-from app.api.guard import require_admin
+from app.api.guard import require_admin, require_operator
 
 from app.services.printer_service import (
     build_test_ticket, detect_serial, print_text,
@@ -17,18 +17,10 @@ from app.services.printer_service import (
 printer_bp = Blueprint('printer', __name__)
 
 
-def _require_operator():
-    if not session.get('operator_id'):
-        return jsonify({'error': 'Operator not logged in'}), 403
-    return None
-
-
 @printer_bp.route('/print', methods=['POST'])
+@require_operator
 def print_receipt():
     """Print client-formatted receipt text on the configured printer."""
-    denied = _require_operator()
-    if denied:
-        return denied
     db = request.args.get('db', 'default')
     data = request.get_json() or {}
     try:
@@ -41,11 +33,9 @@ def print_receipt():
 
 
 @printer_bp.route('/test', methods=['POST'])
+@require_operator
 def test_print():
     """Print a sample ticket (admin settings 'test print' button)."""
-    denied = _require_operator()
-    if denied:
-        return denied
     db = request.args.get('db', 'default')
     try:
         _, _, cols, _ = resolve_device(db)

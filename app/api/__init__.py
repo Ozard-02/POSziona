@@ -3,7 +3,7 @@ API blueprint for Posziona.
 Registers all sub-blueprints, SSE events endpoint, and health check.
 """
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request, session
 
 api_bp = Blueprint('api', __name__)
 
@@ -27,6 +27,38 @@ api_bp.register_blueprint(parties_bp, url_prefix='/parties')
 api_bp.register_blueprint(auth_bp, url_prefix='/auth')
 api_bp.register_blueprint(settings_bp, url_prefix='/settings')
 api_bp.register_blueprint(printer_bp, url_prefix='/printer')
+
+
+@api_bp.before_request
+def _enforce_party_binding():
+    """A session is authenticated for exactly ONE party database.
+
+    Operator ids (and PINs) are per-party, and `?db=` is client-supplied.
+    Without this check a login on party A authorised sales on party B:
+    the order was attributed to whoever happens to share that id there,
+    and when the id did not exist the sale failed with an opaque 500
+    (FOREIGN KEY) that could never succeed on retry.
+
+    Login/logout are exempt — logging in on another party is how an
+    operator switches shift. Requests without `?db=` (party list, status,
+    SSE) are untouched.
+    """
+    if not session.get('operator_id'):
+        return None
+    # Nested blueprints report the full chain ("api.auth"): compare the
+    # leaf, not the parent.
+    if (request.blueprint or '').split('.')[-1] == 'auth':
+        return None
+    requested = request.args.get('db')
+    if requested is None:
+        return None
+    if requested != session.get('auth_db'):
+        return jsonify({
+            'error': 'You are logged in to a different party. '
+                     'Log in again to switch party.',
+            'code': 'party_mismatch',
+        }), 403
+    return None
 
 
 @api_bp.route('/events')

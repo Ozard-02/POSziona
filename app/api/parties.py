@@ -319,9 +319,14 @@ def restore_party(db_name):
 # PARTY RECAP EXPORT
 # ============================================================
 @parties_bp.route('/<db_name>/recap', methods=['GET'])
+@require_admin
 def export_party_recap(db_name):
     """Export a party's sales recap as CSV.
     Optional ?date=YYYY-MM-DD for daily filter.
+
+    Admin-only like every other sales figure: anyone on the LAN can reach
+    the API, and this CSV carries revenue, per-product totals and the
+    operator/guest names of every sale.
     """
     date_filter = request.args.get('date')
 

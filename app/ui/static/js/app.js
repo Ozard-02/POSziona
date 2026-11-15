@@ -82,8 +82,10 @@ function loadPartyOptions(selectEl, selected) {
 }
 
 // Switch working party mid-shift: drop the session cart (it belongs to
-// the old party's sale — the Flask session cart is not per-db), store
-// the new party, reload so every screen re-reads it.
+// the old party's sale — the Flask session cart is not per-db), store the
+// new party, then go back to the PIN screen: a login is bound to ONE
+// party (operator ids and PINs are per-party), so the operator must
+// authenticate again for the new one. The picker preselects it.
 function switchActiveParty(newDb, oldDb) {
     oldDb = oldDb || getActiveDb();
     if (!newDb || newDb === oldDb) return Promise.resolve(false);
@@ -91,7 +93,7 @@ function switchActiveParty(newDb, oldDb) {
         .catch(function() {})
         .then(function() {
             setActiveDb(newDb);
-            window.location.reload();
+            window.location.href = '/?mode=local';
             return true;
         });
 }
@@ -162,10 +164,19 @@ function fetchJSON(url, options = {}) {
     };
     return fetch(url, config).then(r => {
         if (!r.ok) {
-            return r.json().then(data => {
+            // Non-JSON error pages (a bare 413/415 from the server) must not
+            // surface as "Unexpected token '<'" to the operator.
+            return r.json().catch(function() {
+                return { error: `HTTP ${r.status}` };
+            }).then(data => {
                 const err = new Error(data.error || `HTTP ${r.status}`);
                 err.status = r.status;
                 err.data = data;
+                if (data.code === 'party_mismatch') {
+                    // The session was opened on another party: back to the
+                    // PIN screen, where the picker preselects the active one.
+                    window.location.href = '/?mode=local';
+                }
                 throw err;
             });
         }

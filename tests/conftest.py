@@ -130,3 +130,11 @@ def _cleanup_test_templates():
             _sl._locks.clear()
     except Exception:
         pass
+    # Login throttle counters are process-global too: one test spending
+    # the budget must not lock the next test's login out (or hide a bug
+    # behind a 429 that has nothing to do with the test).
+    try:
+        from app.utils import rate_limit as _rl
+        _rl.reset()
+    except Exception:
+        pass

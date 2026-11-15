@@ -125,10 +125,10 @@ def authenticate_admin(db_name, pin):
 # ============================================================
 
 def get_all_operators(db_name):
-    """Get all operators."""
+    """Get all operators (never the PIN hash — it is not needed by the UI)."""
     with PartyDatabase(db_name) as conn:
         rows = conn.execute(
-            "SELECT id, name, role, is_active, pin_hash FROM operators ORDER BY role, name"
+            "SELECT id, name, role, is_active FROM operators ORDER BY role, name"
         ).fetchall()
         return [dict(row) for row in rows]
 

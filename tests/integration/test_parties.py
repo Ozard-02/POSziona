@@ -43,7 +43,12 @@ def test_create_party_from_template(clean_db, client):
     new_party = resp.get_json()
     # db_name may have been sanitized
     new_db = new_party['db_name']
-    
+
+    # A session belongs to ONE party: selecting the new party means
+    # logging in on it (that is what the UI's switcher does).
+    assert client.post(f'/api/auth/login/admin?db={new_db}',
+                       json={'pin': '0000'}).status_code == 200
+
     # Verify products were copied
     resp = client.get(f'/api/products/?db={new_db}')
     sections = resp.get_json()
@@ -93,6 +98,10 @@ def test_duplicate_party_excludes_sales_history(clean_db, client):
     resp = client.post(f'/api/parties/{db_name}/duplicate', json={'name': 'Copy'})
     assert resp.status_code == 200
     new_db = resp.get_json().get('new_name', 'Copy')
+
+    # Re-login on the duplicate (a session is bound to one party).
+    assert client.post(f'/api/auth/login/admin?db={new_db}',
+                       json={'pin': '0000'}).status_code == 200
 
     # Verify the duplicated party has the same products
     resp = client.get(f'/api/products/?db={new_db}')

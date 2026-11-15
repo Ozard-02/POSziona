@@ -4,7 +4,7 @@ Handles checkout, order history, and order details.
 """
 
 from flask import Blueprint, request, jsonify, session, Response
-from app.api.guard import require_admin
+from app.api.guard import require_admin, require_operator
 from app.services.order_service import (
     build_recap_csv,
     checkout_order,
@@ -224,13 +224,12 @@ def items_report():
 
 
 @orders_bp.route('/log-receipt', methods=['POST'])
+@require_operator
 def log_receipt():
     """Log a recovery receipt to server logs (always saved, regardless of
     whether it is displayed to the user)."""
     # Logged-in operators only: an open endpoint let any LAN device write
     # arbitrary text into the server log.
-    if not session.get('operator_id'):
-        return jsonify({'error': 'Operator not logged in'}), 403
     data = request.get_json() or {}
     order_id = data.get('order_id')
     receipt_text = data.get('receipt', '')
@@ -242,30 +241,27 @@ def log_receipt():
 # CASH COUNTS (till reconciliation, any logged-in operator)
 # ============================================================
 @orders_bp.route('/cash-counts', methods=['GET'])
+@require_operator
 def get_cash_counts():
     """Past till counts, newest first."""
     db = request.args.get('db', 'default')
-    if not session.get('operator_id'):
-        return jsonify({'error': 'Operator not logged in'}), 403
     return jsonify(list_cash_counts(db))
 
 
 @orders_bp.route('/cash-counts/expected', methods=['GET'])
+@require_operator
 def get_expected_cash():
     """Cash sales total awaiting count. Optional ?date=YYYY-MM-DD."""
     db = request.args.get('db', 'default')
-    if not session.get('operator_id'):
-        return jsonify({'error': 'Operator not logged in'}), 403
     return jsonify({'expected_cash': expected_cash_total(db, request.args.get('date'))})
 
 
 @orders_bp.route('/cash-counts', methods=['POST'])
+@require_operator
 def add_cash_count():
     """Close the till: body {"counted": <drawer cash>, "note"?, "date"?}."""
     db = request.args.get('db', 'default')
     operator_id = session.get('operator_id')
-    if not operator_id:
-        return jsonify({'error': 'Operator not logged in'}), 403
     data = request.get_json() or {}
     if 'counted' not in data:
         return jsonify({'error': 'counted is required'}), 400

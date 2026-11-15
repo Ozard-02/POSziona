@@ -22,16 +22,18 @@ logger = get_logger('api.auth')
 
 auth_bp = Blueprint('auth', __name__)
 
-# 4-digit PINs fall fast to unlimited guessing: throttle FAILED logins per
-# IP. Only failures consume budget (a success resets it), so legitimate
-# operators who mistype occasionally are never locked out, while sustained
-# guessing hits the wall.
+# 4-digit PINs fall fast to unlimited guessing: throttle login ATTEMPTS
+# per IP. The check happens BEFORE the PIN is verified (and a success
+# resets the budget), so a correct PIN is also refused once the window is
+# spent — otherwise the limiter would only decorate the response while
+# every guess still got a full PBKDF2 verification (i.e. unlimited
+# brute force at hashing speed).
 _LOGIN_LIMIT = 10
 _LOGIN_WINDOW_SECONDS = 60
 
 
-def _login_failed():
-    """Record a failed login; returns a 429 response when throttled, else None."""
+def _login_attempt_allowed():
+    """Consume one attempt; returns a 429 response when throttled, else None."""
     key = f"login:{request.remote_addr}"
     if not _rate_check(key, _LOGIN_LIMIT, _LOGIN_WINDOW_SECONDS):
         logger.warning(f"Login rate limit exceeded for {request.remote_addr}")
@@ -40,7 +42,7 @@ def _login_failed():
 
 
 def _login_succeeded():
-    """Forgive past failures for this IP after a successful login."""
+    """Forgive past attempts for this IP after a successful login."""
     from app.utils.rate_limit import reset as _rate_reset
     _rate_reset(f"login:{request.remote_addr}")
 
@@ -62,19 +64,24 @@ def login():
     if not pin:
         return jsonify({'error': 'PIN is required'}), 400
 
+    throttled = _login_attempt_allowed()
+    if throttled:
+        return throttled
+
     operator = authenticate_operator(db, pin)
     if not operator:
-        throttled = _login_failed()
-        if throttled:
-            return throttled
         return jsonify({'error': 'Invalid PIN'}), 403
 
     _login_succeeded()
 
-    # Store operator info in session
+    # Store operator info in session. The party DB is part of the login:
+    # operator ids are per-party, so a session that is not bound to the
+    # party it authenticated against would sell on an unrelated DB under
+    # someone else's id (see api/__init__._enforce_party_binding).
     session['operator_id'] = operator['id']
     session['operator_name'] = operator['name']
     session['operator_role'] = operator['role']
+    session['auth_db'] = db
     # Persistent cookie (24 h per PERMANENT_SESSION_LIFETIME): closing the
     # browser/client must not wipe the login — or the unsent cart with it.
     session.permanent = True
@@ -105,11 +112,12 @@ def login_admin():
     if not pin:
         return jsonify({'error': 'PIN is required'}), 400
 
+    throttled = _login_attempt_allowed()
+    if throttled:
+        return throttled
+
     operator = authenticate_admin(db, pin)
     if not operator:
-        throttled = _login_failed()
-        if throttled:
-            return throttled
         return jsonify({'error': 'Invalid admin PIN'}), 403
 
     _login_succeeded()
@@ -117,6 +125,7 @@ def login_admin():
     session['operator_id'] = operator['id']
     session['operator_name'] = operator['name']
     session['operator_role'] = operator['role']
+    session['auth_db'] = db
     # Persistent cookie (see operator login above).
     session.permanent = True
 
