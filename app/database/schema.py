@@ -173,6 +173,11 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
 CREATE INDEX IF NOT EXISTS idx_products_section ON products(section_id);
 CREATE INDEX IF NOT EXISTS idx_products_subsection ON products(subsection_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+-- Void (stock restore) and "has this product ever been sold?" look up by
+-- product_id; payments are read per order by the till count and the
+-- recap.
+CREATE INDEX IF NOT EXISTS idx_order_items_product ON order_items(product_id);
+CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
 CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);
 """
 

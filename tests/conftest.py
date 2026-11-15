@@ -138,3 +138,13 @@ def _cleanup_test_templates():
         _rl.reset()
     except Exception:
         pass
+    # Backup scheduler state: a cached interval / last-snapshot stamp from
+    # a previous test would decide this test's schedule.
+    try:
+        from app.services import backup_service as _bs
+        with _bs._scheduler_lock:
+            _bs._interval_cache.clear()
+            _bs._last_snapshot.clear()
+        _bs._last_prune = 0.0
+    except Exception:
+        pass

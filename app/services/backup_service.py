@@ -86,18 +86,28 @@ def _vacuum_into(src_path, dst_path):
         conn.execute(f"VACUUM INTO '{safe_dst}'")
     finally:
         conn.close()
-    # Verify the snapshot itself is healthy; delete + fail loudly otherwise
+    # Verify the snapshot itself is readable. `quick_check` (not the full
+    # `integrity_check`): the file was just written by SQLite's own VACUUM,
+    # so the question is "did the bytes land intact", not "is every index
+    # consistent with every row" — and the full check re-reads the whole
+    # database a second time, which on a low-end box doubles the cost of
+    # every snapshot (every 5 minutes, by default).
     check = sqlite3.connect(dst_path)
     try:
-        row = check.execute("PRAGMA integrity_check").fetchone()
+        row = check.execute("PRAGMA quick_check").fetchone()
         if not row or row[0] != 'ok':
             raise RuntimeError(f'Snapshot failed integrity check: {dst_path}')
     finally:
         check.close()
 
 
-def run_snapshots(keep=DEFAULT_KEEP_COUNT):
-    """Snapshot all party DBs + templates DB into a timestamped directory.
+def run_snapshots(keep=DEFAULT_KEEP_COUNT, only=None):
+    """Snapshot party DBs + templates DB into a timestamped directory.
+
+    `only` limits the copy to those database filenames (the scheduler
+    snapshots just the parties whose interval elapsed; the shared
+    templates DB is tiny and always rides along). `only=None` copies
+    everything, for manual/admin snapshots where a full set is wanted.
 
     Returns the snapshot name. Prunes older snapshots beyond `keep`.
 
@@ -127,12 +137,16 @@ def run_snapshots(keep=DEFAULT_KEEP_COUNT):
         if os.path.isdir(tmp_dir):
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
+        def _wanted(filename):
+            return only is None or filename in only or filename == 'templates.db'
+
         sources = []
-        if os.path.exists(TEMPLATES_DB):
+        if os.path.exists(TEMPLATES_DB) and _wanted('templates.db'):
             sources.append((TEMPLATES_DB, 'templates.db'))
         for filename in sorted(os.listdir(PARTY_DB_DIR)):
             src = os.path.join(PARTY_DB_DIR, filename)
-            if filename.endswith('.db') and os.path.isfile(src):
+            if filename.endswith('.db') and os.path.isfile(src) \
+                    and _wanted(filename):
                 sources.append((src, filename))
 
         # One unreadable DB (e.g. an old, corrupt party nobody opens any
@@ -309,16 +323,36 @@ _scheduler_stop = threading.Event()
 _last_snapshot = {}  # db filename -> epoch of last snapshot
 _scheduler_lock = threading.Lock()
 
+# Keys/old snapshots are pruned once an hour, not on every 60 s tick:
+# _prune_idempotency_keys opens every party DB and runs a DELETE, which
+# on a low-end box (SD card) was a constant write wake-up for nothing.
+_PRUNE_INTERVAL = 3600
+_last_prune = 0.0  # guarded by _scheduler_lock
+
+# snapshot_interval_minutes lives in each party DB: reading it opened a
+# connection per party per tick. A short cache keeps the schedule honest
+# (a change applies within minutes) without the churn.
+_INTERVAL_TTL = 300
+_interval_cache = {}  # db_name -> (epoch, minutes)
+
 
 def _interval_minutes(db_name):
     """Per-party snapshot interval (0/None/invalid = disabled)."""
+    now = time.time()
+    with _scheduler_lock:
+        cached = _interval_cache.get(db_name)
+        if cached and now - cached[0] < _INTERVAL_TTL:
+            return cached[1]
     try:
         from app.services.party_service import get_party_settings
         raw = get_party_settings(db_name).get('snapshot_interval_minutes', 5)
         minutes = float(raw)
-        return minutes if minutes > 0 else 0
+        minutes = minutes if minutes > 0 else 0
     except Exception:
         return 0
+    with _scheduler_lock:
+        _interval_cache[db_name] = (now, minutes)
+    return minutes
 
 
 def _keep_count():
@@ -342,14 +376,18 @@ def scheduler_tick(now=None):
     Always includes templates.db when anything is due. Called every minute
     by the background thread; also directly callable in tests.
     """
+    global _last_prune
     now = now if now is not None else time.time()
     # Prune here (not in the checkout hot path): keeps latency variance
-    # out of sales and the tables tiny on low-end machines.
-    try:
-        prune_snapshots(_keep_count())
-        _prune_idempotency_keys()
-    except Exception as e:
-        logger.warning(f"Scheduler prune failed: {e}")
+    # out of sales and the tables tiny on low-end machines. Hourly — every
+    # tick opened every party DB for nothing.
+    if _last_prune == 0.0 or now - _last_prune >= _PRUNE_INTERVAL:
+        try:
+            prune_snapshots(_keep_count())
+            _prune_idempotency_keys()
+        except Exception as e:
+            logger.warning(f"Scheduler prune failed: {e}")
+        _last_prune = now
 
     if not os.path.isdir(PARTY_DB_DIR):
         return None
@@ -366,7 +404,10 @@ def scheduler_tick(now=None):
     if not due:
         return None
 
-    name = run_snapshots(keep=_keep_count())
+    # Copy ONLY the parties that are due (plus templates.db): snapshotting
+    # every party because one interval elapsed rewrote the whole data dir
+    # over and over on boxes with several old parties.
+    name = run_snapshots(keep=_keep_count(), only=due)
     with _scheduler_lock:
         for filename in due:
             _last_snapshot[filename] = now

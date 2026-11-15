@@ -26,6 +26,15 @@ _listeners_lock = threading.Lock()
 # Prevents unbounded memory growth when clients are slow or disconnected.
 _MAX_QUEUE_SIZE = 100
 
+# Maximum listeners overall. Each one is a Werkzeug thread that wakes up
+# 10 times a second, so an open /api/events from a random device on the
+# LAN is a thread + polling cost. A party has a handful of screens.
+_MAX_LISTENERS = 50
+
+
+class ListenerLimitError(RuntimeError):
+    """Too many SSE listeners connected (screens)."""
+
 # Listener is considered stale if no client activity (loop advancing)
 # for this many seconds. Prevents zombie SSE connections from leaking
 # memory over long-running multi-hour sessions.
@@ -47,6 +56,9 @@ def _new_listener():
         'last_active': time.time(),
     }
     with _listeners_lock:
+        if len(_listeners) >= _MAX_LISTENERS:
+            raise ListenerLimitError(
+                f'too many screens connected ({_MAX_LISTENERS})')
         _listeners.append(listener)
     return listener
 
@@ -131,9 +143,12 @@ def sse_response():
     The listener is automatically removed when the client disconnects
     (via the generator's finally block).
     """
-    from flask import Response  # late import to avoid circular deps
+    from flask import Response, jsonify  # late import to avoid circular deps
 
-    listener = _new_listener()
+    try:
+        listener = _new_listener()
+    except ListenerLimitError as e:
+        return jsonify({'error': f'Streaming unavailable: {e}'}), 503
     return Response(
         _event_stream(listener),
         mimetype='text/event-stream',
