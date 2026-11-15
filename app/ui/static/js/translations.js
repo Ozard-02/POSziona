@@ -178,8 +178,13 @@ const translations = {
 
         // Auth
         login: 'Login',
-        admin_login: 'Admin Login',
         log_out_confirm: 'Log out?',
+        operator: 'Operator',
+        select_operator: 'Who are you?',
+        no_operators: 'No active operator in this party — create one in Admin → Operators',
+        invalid_pin: 'Wrong PIN',
+        ambiguous_pin: 'That PIN belongs to more than one operator — choose your name first',
+        too_many_attempts: 'Too many attempts, wait a minute and try again',
 
         // Settings
         currency_label: 'Currency:',
@@ -382,8 +387,13 @@ const translations = {
 
         // Auth
         login: 'Accedi',
-        admin_login: 'Accesso Admin',
         log_out_confirm: 'Uscire?',
+        operator: 'Operatore',
+        select_operator: 'Chi sei?',
+        no_operators: 'Nessun operatore attivo in questa festa — crealo in Admin → Operatori',
+        invalid_pin: 'PIN errato',
+        ambiguous_pin: 'Questo PIN è usato da più operatori — scegli prima il tuo nome',
+        too_many_attempts: 'Troppi tentativi, aspetta un minuto e riprova',
 
         // Settings
         currency_label: 'Valuta:',
@@ -471,6 +481,9 @@ function translateLoginPage() {
     var loginBtn = document.getElementById('login-btn');
     if (loginBtn) loginBtn.textContent = t('login');
 
-    var adminBtn = document.getElementById('admin-login-btn');
-    if (adminBtn) adminBtn.textContent = t('admin_login');
+    var partySelect = document.getElementById('party-select');
+    if (partySelect) partySelect.setAttribute('aria-label', t('select_party'));
+
+    var operatorSelect = document.getElementById('operator-select');
+    if (operatorSelect) operatorSelect.setAttribute('aria-label', t('operator'));
 }

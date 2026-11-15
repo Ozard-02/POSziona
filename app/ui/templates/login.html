@@ -42,10 +42,14 @@
     <div id="login-form-container" class="login-form-container hidden">
         <div class="login-form">
             <select id="party-select" aria-label="Party"></select>
-            <input type="password" id="pin-input" placeholder="PIN" maxlength="4" autocomplete="off">
+            <!-- Which operator: chosen, not guessed from the PIN. Hidden
+                 when the party has a single active operator. -->
+            <select id="operator-select" class="hidden" aria-label="Operator"></select>
+            <input type="password" id="pin-input" placeholder="PIN" maxlength="4"
+                   autocomplete="off" inputmode="numeric" aria-label="PIN">
+            <p id="no-operators" class="error hidden"></p>
             <p id="login-error" class="error hidden"></p>
             <button id="login-btn" class="btn-primary">Login</button>
-            <button id="admin-login-btn" class="btn-secondary">Admin Login</button>
         </div>
     </div>
 </div>
@@ -68,8 +72,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var pinInput = document.getElementById('pin-input');
     var loginBtn = document.getElementById('login-btn');
-    var adminBtn = document.getElementById('admin-login-btn');
     var partySelect = document.getElementById('party-select');
+    var operatorSelect = document.getElementById('operator-select');
+    var noOperators = document.getElementById('no-operators');
 
     // Party dropdown: which party DB this login (and the whole shift)
     // works against. PINs are per-party, so the db travels with login.
@@ -80,16 +85,72 @@ document.addEventListener('DOMContentLoaded', function() {
         loginFormContainer.classList.remove('hidden');
         if (!partiesLoaded) {
             partiesLoaded = true;
-            loadPartyOptions(partySelect, getActiveDb()).catch(function() {
-                // Server unreachable? Leave a single fallback option.
-                partySelect.innerHTML = '';
-                var opt = document.createElement('option');
-                opt.value = 'default';
-                opt.textContent = 'default';
-                partySelect.appendChild(opt);
-            });
+            loadPartyOptions(partySelect, getActiveDb())
+                .catch(function() {
+                    // Server unreachable? Leave a single fallback option.
+                    partySelect.innerHTML = '';
+                    var opt = document.createElement('option');
+                    opt.value = 'default';
+                    opt.textContent = 'default';
+                    partySelect.appendChild(opt);
+                })
+                .then(function() {
+                    return loadOperators();
+                });
+        } else {
+            focusFirstField();
         }
-        pinInput.focus();
+    }
+
+    function currentParty() {
+        return (partySelect && partySelect.value) || getActiveDb();
+    }
+
+    // Operators of the selected party (the login picker). Keyboard flow:
+    // with one operator nothing is asked and the focus lands on the PIN —
+    // exactly the number of keystrokes the old PIN-only form needed.
+    //
+    // `stealFocus` is false when the party changes: arrow-keys through the
+    // party list must not jump the focus to the next field on every step.
+    // The sequence number drops out-of-order replies (two quick changes).
+    var rosterSeq = 0;
+    function loadOperators(stealFocus) {
+        if (!operatorSelect) return Promise.resolve([]);
+        var seq = ++rosterSeq;
+        return loadOperatorOptions(operatorSelect, currentParty()).then(function(roster) {
+            if (seq !== rosterSeq) return roster;  // a newer request won
+            var empty = roster.length === 0;
+            if (noOperators) noOperators.classList.toggle('hidden', !empty);
+            if (loginBtn) loginBtn.disabled = empty;
+            if (pinInput) pinInput.disabled = empty;
+            operatorSelect.classList.toggle('hidden', roster.length <= 1);
+            if (stealFocus !== false) focusFirstField();
+            return roster;
+        }).catch(function() {
+            // Roster unavailable (server going down): the PIN still can be
+            // typed and the login request reports the real failure.
+            operatorSelect.classList.add('hidden');
+            if (noOperators) noOperators.classList.add('hidden');
+            if (loginBtn) loginBtn.disabled = false;
+            if (pinInput) pinInput.disabled = false;
+            if (stealFocus !== false) focusFirstField();
+            return [];
+        });
+    }
+
+    // First thing worth looking at: the operator list when there is a
+    // choice, otherwise the PIN. Shift+Tab reaches the party.
+    function focusFirstField() {
+        if (operatorSelect && !operatorSelect.classList.contains('hidden')
+                && operatorSelect.options.length > 1) {
+            operatorSelect.focus();
+        } else if (pinInput && !pinInput.disabled) {
+            pinInput.focus();
+        }
+    }
+
+    if (partySelect) {
+        partySelect.addEventListener('change', function() { loadOperators(false); });
     }
 
     // --- Recent servers: one-tap reconnect (localStorage, max 5) ---
@@ -287,7 +348,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.key === 'Enter') connectBtn.click();
     });
 
-    function attemptLogin(isAdmin) {
+    function attemptLogin() {
         if (loginError) loginError.classList.add('hidden');
         var pin = pinInput.value.trim();
         if (!pin || pin.length < 4) {
@@ -295,17 +356,24 @@ document.addEventListener('DOMContentLoaded', function() {
             pinInput.focus();
             return;
         }
-        var party = (partySelect && partySelect.value) || getActiveDb();
+        var party = currentParty();
 
-        fetch('/api/auth/login' + (isAdmin ? '/admin' : '') + '?db=' + encodeURIComponent(party), {
+        var body = {pin: pin};
+        if (operatorSelect && !operatorSelect.classList.contains('hidden')
+                && operatorSelect.value) {
+            body.operator_id = Number(operatorSelect.value);
+        }
+
+        fetch('/api/auth/login?db=' + encodeURIComponent(party), {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({pin: pin})
+            body: JSON.stringify(body)
         })
-        .then(r => r.json())
-        .then(data => {
+        .then(r => r.json().then(function(data) { return {status: r.status, data: data}; }))
+        .then(function(res) {
+            var data = res.data;
             if (data.error) {
-                showLoginError(data.error);
+                showLoginError(loginErrorMessage(data, res.status));
                 pinInput.value = '';
                 pinInput.focus();
             } else if (data.must_change_pin) {
@@ -316,6 +384,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.location.href = '/admin';
             } else {
                 setActiveDb(party);
+                // Everyone starts on the POS; an admin reaches /admin from
+                // the header button. One login, one screen to begin selling.
                 window.location.href = '/pos';
             }
         })
@@ -326,10 +396,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    loginBtn.addEventListener('click', () => attemptLogin(false));
-    adminBtn.addEventListener('click', () => attemptLogin(true));
+    // Server messages are English (and shared with API clients): map the
+    // codes the operator actually sees to the active language, fall back
+    // to whatever the server said.
+    function loginErrorMessage(data, status) {
+        if (data.code === 'invalid_pin') return t('invalid_pin');
+        if (data.code === 'ambiguous_pin') return t('ambiguous_pin');
+        if (status === 429) return t('too_many_attempts');
+        return data.error;
+    }
+
+    loginBtn.addEventListener('click', function() { attemptLogin(); });
     pinInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') attemptLogin(false);
+        if (e.key === 'Enter') attemptLogin();
     });
 });
 </script>

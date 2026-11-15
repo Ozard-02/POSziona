@@ -76,3 +76,35 @@ def test_inline_login_js_parses():
                            capture_output=True, timeout=30)
         finally:
             os.unlink(tmp)
+
+
+def test_login_asks_for_the_operator(client):
+    """The identity is chosen, not guessed from the PIN (one PIN shared by
+    two operators used to bill the first one alphabetically)."""
+    html = client.get('/').get_data(as_text=True)
+    assert 'id="operator-select"' in html
+    assert 'id="no-operators"' in html
+    assert 'loadOperatorOptions' in html      # roster fetch, shared helper
+    assert 'focusFirstField' in html
+    assert 'operator_id' in html              # sent in the login body
+    assert 'admin-login-btn' not in html      # one login; role decides access
+    assert 'aria-label="PIN"' in html
+    # Single active operator → the picker hides and the PIN is focused:
+    # the keyboard flow keeps today's 4 keys + Enter.
+    assert 'options.length > 1' in html
+    assert "classList.toggle('hidden', roster.length <= 1)" in html
+
+
+def test_operator_name_is_visible_after_login():
+    """The header used to show only the party: on a shared till nobody
+    could tell who was selling."""
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))
+    for page in ('pos.html', 'admin.html', 'dashboard.html'):
+        with open(os.path.join(root, 'app', 'ui', 'templates', page)) as f:
+            assert 'data-operator-identity' in f.read(), page
+    with open(os.path.join(root, 'app', 'ui', 'static', 'js', 'app.js')) as f:
+        app_js = f.read()
+    assert 'function renderOperatorIdentity()' in app_js
+    assert "auth/operators/roster" in app_js

@@ -6,11 +6,14 @@ Handles operator login (PIN-based) and admin access.
 from flask import Blueprint, request, jsonify, session
 from app.api.guard import require_admin
 from app.services.auth_service import (
+    AmbiguousPinError,
     authenticate_operator,
+    authenticate_operator_by_id,
     authenticate_admin,
     is_factory_pin,
     log_audit_event,
     get_all_operators,
+    get_operator_roster,
     create_operator as _create_operator,
     update_operator_pin as _update_operator_pin,
 )
@@ -37,7 +40,10 @@ def _login_attempt_allowed():
     key = f"login:{request.remote_addr}"
     if not _rate_check(key, _LOGIN_LIMIT, _LOGIN_WINDOW_SECONDS):
         logger.warning(f"Login rate limit exceeded for {request.remote_addr}")
-        return jsonify({'error': 'Too many login attempts, try again in a minute'}), 429
+        return jsonify({
+            'error': 'Too many login attempts, try again in a minute',
+            'code': 'throttled',
+        }), 429
     return None
 
 
@@ -47,49 +53,59 @@ def _login_succeeded():
     _rate_reset(f"login:{request.remote_addr}")
 
 
+def _operator_id_from(data):
+    """Parse the optional operator id from the body. Raises ValueError."""
+    raw = data.get('operator_id')
+    if raw is None or raw == '':
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        raise ValueError('operator_id must be a number')
+
+
+def _authenticate(db, pin, operator_id, admin_only):
+    """Run the right verification. Returns (operator or None, error or None).
+
+    With an operator id the PIN is checked against that one account (one
+    PBKDF2, explicit identity). Without it we fall back to the legacy
+    PIN-only scan, which must report ambiguity instead of guessing.
+    """
+    try:
+        if admin_only:
+            return authenticate_admin(db, pin, operator_id=operator_id), None
+        if operator_id is not None:
+            return authenticate_operator_by_id(db, operator_id, pin), None
+        return authenticate_operator(db, pin), None
+    except AmbiguousPinError as e:
+        return None, (jsonify({'error': str(e), 'code': 'ambiguous_pin'}), 400)
+
+
 # ============================================================
 # LOGIN / LOGOUT
 # ============================================================
 
-@auth_bp.route('/login', methods=['POST'])
-def login():
+def _establish_session(db, operator):
+    """Store the authenticated identity, bound to the party it came from.
+
+    The party DB is part of the login: operator ids are per-party, so a
+    session not bound to the party it authenticated against would sell on
+    an unrelated DB under someone else's id (see api/__init__.py
+    `_enforce_party_binding`). The cookie is permanent (24 h) so closing
+    the browser/client never wipes the login — or the unsent cart.
     """
-    Authenticate an operator using PIN.
-    Returns the operator info if successful.
-    """
-    db = request.args.get('db', 'default')
-    data = request.get_json() or {}
-    pin = data.get('pin', '').strip()
-
-    if not pin:
-        return jsonify({'error': 'PIN is required'}), 400
-
-    throttled = _login_attempt_allowed()
-    if throttled:
-        return throttled
-
-    operator = authenticate_operator(db, pin)
-    if not operator:
-        return jsonify({'error': 'Invalid PIN'}), 403
-
-    _login_succeeded()
-
-    # Store operator info in session. The party DB is part of the login:
-    # operator ids are per-party, so a session that is not bound to the
-    # party it authenticated against would sell on an unrelated DB under
-    # someone else's id (see api/__init__._enforce_party_binding).
     session['operator_id'] = operator['id']
     session['operator_name'] = operator['name']
     session['operator_role'] = operator['role']
     session['auth_db'] = db
-    # Persistent cookie (24 h per PERMANENT_SESSION_LIFETIME): closing the
-    # browser/client must not wipe the login — or the unsent cart with it.
     session.permanent = True
 
-    log_audit_event(db, 'operator_login', f"Operator '{operator['name']}' logged in", operator['id'])
 
+def _login_response(db, operator, pin, message):
     return jsonify({
-        'message': 'Login successful',
+        'message': message,
+        # Factory PIN: the UI sends the operator to the admin panel to
+        # change it before the shift starts.
         'must_change_pin': is_factory_pin(pin),
         'operator': {
             'id': operator['id'],
@@ -97,49 +113,88 @@ def login():
             'role': operator['role']
         }
     })
+
+
+@auth_bp.route('/login', methods=['POST'])
+def login():
+    """Authenticate an operator: body {pin} and optionally {operator_id}.
+
+    The UI always sends operator_id (its picker makes the identity
+    explicit). {pin} alone still works for API clients, but an ambiguous
+    PIN is refused instead of attributed to whoever sorts first.
+    """
+    db = request.args.get('db', 'default')
+    data = request.get_json() or {}
+    pin = str(data.get('pin', '')).strip()
+
+    if not pin:
+        return jsonify({'error': 'PIN is required'}), 400
+    try:
+        operator_id = _operator_id_from(data)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    throttled = _login_attempt_allowed()
+    if throttled:
+        return throttled
+
+    operator, error = _authenticate(db, pin, operator_id, admin_only=False)
+    if error:
+        return error
+    if not operator:
+        return jsonify({'error': 'Invalid PIN', 'code': 'invalid_pin'}), 403
+
+    _login_succeeded()
+    _establish_session(db, operator)
+    log_audit_event(db, 'operator_login',
+                    f"Operator '{operator['name']}' logged in", operator['id'])
+    return _login_response(db, operator, pin, 'Login successful')
 
 
 @auth_bp.route('/login/admin', methods=['POST'])
 def login_admin():
-    """
-    Authenticate an admin using PIN.
-    Returns the operator info if successful admin.
+    """Authenticate an admin (body {pin}, optionally {operator_id}).
+
+    Kept for scripts/older clients; the UI uses /login and routes by the
+    role it gets back.
     """
     db = request.args.get('db', 'default')
     data = request.get_json() or {}
-    pin = data.get('pin', '').strip()
+    pin = str(data.get('pin', '')).strip()
 
     if not pin:
         return jsonify({'error': 'PIN is required'}), 400
+    try:
+        operator_id = _operator_id_from(data)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
 
     throttled = _login_attempt_allowed()
     if throttled:
         return throttled
 
-    operator = authenticate_admin(db, pin)
+    operator, error = _authenticate(db, pin, operator_id, admin_only=True)
+    if error:
+        return error
     if not operator:
-        return jsonify({'error': 'Invalid admin PIN'}), 403
+        return jsonify({'error': 'Invalid admin PIN', 'code': 'invalid_pin'}), 403
 
     _login_succeeded()
+    _establish_session(db, operator)
+    log_audit_event(db, 'admin_login',
+                    f"Admin '{operator['name']}' logged in", operator['id'])
+    return _login_response(db, operator, pin, 'Admin login successful')
 
-    session['operator_id'] = operator['id']
-    session['operator_name'] = operator['name']
-    session['operator_role'] = operator['role']
-    session['auth_db'] = db
-    # Persistent cookie (see operator login above).
-    session.permanent = True
 
-    log_audit_event(db, 'admin_login', f"Admin '{operator['name']}' logged in", operator['id'])
+@auth_bp.route('/operators/roster', methods=['GET'])
+def operator_roster():
+    """Active operators of a party, for the login picker.
 
-    return jsonify({
-        'message': 'Admin login successful',
-        'must_change_pin': is_factory_pin(pin),
-        'operator': {
-            'id': operator['id'],
-            'name': operator['name'],
-            'role': operator['role']
-        }
-    })
+    Public by necessity (the login screen has no session yet) and minimal:
+    id, name, role. No PIN hashes, no inactive accounts.
+    """
+    db = request.args.get('db', 'default')
+    return jsonify(get_operator_roster(db))
 
 
 @auth_bp.route('/logout', methods=['POST'])

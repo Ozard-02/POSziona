@@ -75,46 +75,87 @@ def is_factory_pin(pin):
 # OPERATOR AUTHENTICATION
 # ============================================================
 
-def authenticate_operator(db_name, pin):
+class AmbiguousPinError(ValueError):
+    """A PIN matches more than one active operator.
+
+    Only reachable through the PIN-only login (the UI sends the operator
+    id). Answering with the first match in `ORDER BY role, name` silently
+    attributed the sale — and the audit trail — to the wrong person.
     """
-    Authenticate an operator using their PIN.
-    Returns the operator dict if valid, None otherwise.
+
+
+def _upgrade_legacy_hash(conn, row, pin):
+    """Rewrite a legacy unsalted hash after a successful verification.
+
+    Conditional on the exact hash we verified: if an admin PIN reset
+    committed between our SELECT and this UPDATE, the reset wins (R10)
+    instead of being silently overwritten by the old PIN's hash.
+    """
+    if not needs_upgrade(row['pin_hash']):
+        return
+    cur = conn.execute(
+        "UPDATE operators SET pin_hash = ? WHERE id = ? AND pin_hash = ?",
+        (hash_pin(pin), row['id'], row['pin_hash'])
+    )
+    conn.commit()
+    if cur.rowcount:
+        logger.info(f"Upgraded legacy PIN hash for '{row['name']}'")
+
+
+def authenticate_operator_by_id(db_name, operator_id, pin):
+    """Verify a PIN against ONE operator (what the login picker sends).
+
+    One PBKDF2 per attempt instead of one per active operator, and the
+    identity is explicit: a PIN shared by two operators can no longer
+    land on whoever happens to sort first. Returns None for unknown,
+    inactive, or wrong PIN (no information about which).
+    """
+    if not pin:
+        return None
+    with PartyDatabase(db_name) as conn:
+        row = conn.execute(
+            "SELECT * FROM operators WHERE id = ? AND is_active = 1",
+            (operator_id,)
+        ).fetchone()
+        if not row or not verify_pin(pin, row['pin_hash']):
+            return None
+        _upgrade_legacy_hash(conn, row, pin)
+        logger.info(f"Operator '{row['name']}' authenticated by id "
+                    f"(role={row['role']})")
+        return dict(row)
+
+
+def authenticate_operator(db_name, pin):
+    """Authenticate by PIN alone (legacy API path; the UI sends the id).
 
     Hashes are salted, so matching means verifying the PIN against each
-    active operator (tiny table — negligible cost). A successful login
-    with a legacy unsalted hash transparently upgrades it to PBKDF2.
+    active operator (tiny table). More than one match is an ERROR, not a
+    pick: raise AmbiguousPinError so the caller can ask for the name
+    instead of writing the sale under someone else's identity.
     """
+    if not pin:
+        return None
     with PartyDatabase(db_name) as conn:
         rows = conn.execute(
             "SELECT * FROM operators WHERE is_active = 1"
         ).fetchall()
-
-        for row in rows:
-            if verify_pin(pin, row['pin_hash']):
-                if needs_upgrade(row['pin_hash']):
-                    # Conditional upgrade: only rewrite the exact hash we
-                    # verified. If an admin PIN reset committed between our
-                    # SELECT and this UPDATE, the reset wins (R10) instead
-                    # of being silently overwritten by the old PIN's hash.
-                    cur = conn.execute(
-                        "UPDATE operators SET pin_hash = ? "
-                        "WHERE id = ? AND pin_hash = ?",
-                        (hash_pin(pin), row['id'], row['pin_hash'])
-                    )
-                    conn.commit()
-                    if cur.rowcount:
-                        logger.info(f"Upgraded legacy PIN hash for '{row['name']}'")
-                logger.info(f"Operator '{row['name']}' authenticated (role={row['role']})")
-                return dict(row)
-        return None
+        matches = [row for row in rows if verify_pin(pin, row['pin_hash'])]
+        if len(matches) > 1:
+            raise AmbiguousPinError(
+                'That PIN is used by more than one operator — '
+                'choose your name and try again')
+        if not matches:
+            return None
+        row = matches[0]
+        _upgrade_legacy_hash(conn, row, pin)
+        logger.info(f"Operator '{row['name']}' authenticated (role={row['role']})")
+        return dict(row)
 
 
-def authenticate_admin(db_name, pin):
-    """
-    Authenticate an admin using their PIN.
-    Returns the operator dict if valid admin, None otherwise.
-    """
-    operator = authenticate_operator(db_name, pin)
+def authenticate_admin(db_name, pin, operator_id=None):
+    """Authenticate an admin, by pin-only or by id. None when not admin."""
+    operator = (authenticate_operator_by_id(db_name, operator_id, pin)
+                if operator_id is not None else authenticate_operator(db_name, pin))
     if operator and operator['role'] == 'admin':
         return operator
     return None
@@ -133,9 +174,31 @@ def get_all_operators(db_name):
         return [dict(row) for row in rows]
 
 
-def create_operator(db_name, name, pin, role='operator'):
-    """Create a new operator."""
+def get_operator_roster(db_name):
+    """Active operators for the login picker (id + name + role only).
+
+    Deliberately public (the login screen needs it before anyone is
+    authenticated) and deliberately minimal: no hashes, no inactive
+    accounts, no timestamps.
+    """
     with PartyDatabase(db_name) as conn:
+        rows = conn.execute(
+            "SELECT id, name, role FROM operators "
+            "WHERE is_active = 1 ORDER BY name COLLATE NOCASE"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+def create_operator(db_name, name, pin, role='operator'):
+    """Create a new operator (names are unique per party, case-insensitive)."""
+    with PartyDatabase(db_name) as conn:
+        clash = conn.execute(
+            "SELECT 1 FROM operators WHERE name = ? COLLATE NOCASE", (name,)
+        ).fetchone()
+        if clash:
+            # Two "Mario" would make the login picker and the audit trail
+            # ambiguous — the whole point of showing the name.
+            raise ValueError(f'An operator named "{name}" already exists')
         conn.execute(
             "INSERT INTO operators (name, pin_hash, role, is_active) VALUES (?, ?, ?, 1)",
             (name, hash_pin(pin), role)

@@ -46,6 +46,17 @@ body {
     box-sizing: border-box;
 }
 
+/* Who is at the till (operator picked at login). */
+.operator-identity {
+    font-size: 12px;
+    opacity: 0.75;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 45%;
+    flex-shrink: 1;
+}
+
 .party-header h2 {
     font-size: 20px;
     flex: 1;
@@ -657,12 +668,20 @@ body {
     width: 300px;
 }
 
-.login-form input {
+.login-form input,
+.login-form select {
     padding: 10px;
     font-size: 16px;
     border: none;
     border-radius: 5px;
     text-align: center;
+    /* Touch target without making the picker dominate the card. */
+    min-height: 44px;
+}
+
+.login-form input:disabled,
+.login-form select:disabled {
+    opacity: 0.6;
 }
 
 .login-form .btn-primary,

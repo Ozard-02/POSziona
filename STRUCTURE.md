@@ -11,7 +11,9 @@ posziona/
 │   ├── api/                      # REST API (Flask blueprints, thin)
 │   │   ├── __init__.py           # Registers sub-blueprints + GET /api/events (SSE) + /api/status (health)
 │   │   │                         # + before_request: session is bound to ONE party (?db= mismatch → 403)
-│   │   ├── auth.py               # PIN login/logout (throttle checked BEFORE verification), operator mgmt
+│   │   ├── auth.py               # PIN login/logout by operator id (picker; PIN-only legacy path
+│   │   │                         # refuses ambiguous PINs), roster for the login screen,
+│   │   │                         # operator mgmt (throttle checked BEFORE verification)
 │   │   ├── products.py           # Products, sections, subsections, tags, CSV import/export
 │   │   ├── cart.py               # Session-based cart: add/remove/update/discount (discounts audited)
 │   │   ├── orders.py             # Atomic checkout (tab guest name), history, reports, delete (restores stock, audited)
@@ -43,11 +45,12 @@ posziona/
 │   │   ├── settings_service.py   # DEFAULT_SETTINGS + get_effective_settings()
 │   │   │                         # (device keys global in shared DB, party keys per DB;
 │   │   │                         #  WAL+busy_timeout conn, short-TTL device cache)
-│   │   └── auth_service.py       # PBKDF2 PIN hashing (+legacy upgrade), verification, audit log
+│   │   └── auth_service.py       # PBKDF2 PIN hashing (+legacy upgrade), verification by id,
+│   │   │                         # ambiguous-PIN refusal, unique operator names, audit log
 │   ├── ui/
 │   │   ├── templates/            # Jinja2 pages
 │   │   │   ├── base.html
-│   │   │   ├── login.html        # PIN entry (root route /)
+│   │   │   ├── login.html        # party + operator picker + PIN (root route /), keyboard-first
 │   │   │   ├── pos.html          # Sections sidebar + product grid + cart + bottom bar
 │   │   │   ├── admin.html        # Products, parties, operators, tags, settings
 │   │   │   └── dashboard.html    # Reports (admin-only data) + till close (any operator) + print

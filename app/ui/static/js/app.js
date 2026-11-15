@@ -75,10 +75,46 @@ function loadPartyOptions(selectEl, selected) {
             opt.textContent = p.name;
             selectEl.appendChild(opt);
         });
+        if (!selectEl.options.length) {
+            // First run: no party exists yet. The `default` fallback is
+            // the one the server creates on demand, so show it instead of
+            // an empty dropdown.
+            var fallback = document.createElement('option');
+            fallback.value = 'default';
+            fallback.textContent = 'default';
+            selectEl.appendChild(fallback);
+        }
         if (selected) selectEl.value = selected;
         if (!selectEl.value && selectEl.options.length) selectEl.selectedIndex = 0;
         return (parties || []).map(function(p) { return p.name; });
     });
+}
+
+// Fill a <select> with the party's ACTIVE operators (login picker).
+// The identity is chosen, never guessed from the PIN: two operators who
+// share a PIN used to attribute the sale to whoever sorted first.
+function loadOperatorOptions(selectEl, party) {
+    return fetchJSON(API_BASE + '/auth/operators/roster?db=' + encodeURIComponent(party))
+        .then(function(roster) {
+            selectEl.innerHTML = '';
+            (roster || []).forEach(function(op) {
+                var opt = document.createElement('option');
+                opt.value = op.id;
+                opt.textContent = op.name;
+                selectEl.appendChild(opt);
+            });
+            return roster || [];
+        });
+}
+
+// Show who is at the till (the header used to show only the party, so on
+// a shared screen nobody could tell which operator was selling).
+function renderOperatorIdentity() {
+    var nodes = document.querySelectorAll('[data-operator-identity]');
+    var op = AppState.operator;
+    if (!nodes.length || !op) return;
+    var label = op.name + (op.role === 'admin' ? ' · admin' : '');
+    nodes.forEach(function(el) { el.textContent = label; });
 }
 
 // Switch working party mid-shift: drop the session cart (it belongs to
@@ -217,6 +253,7 @@ async function checkAuth() {
             window.location.href = '/';
         } else {
             AppState.operator = data.operator;
+            renderOperatorIdentity();
         }
     } catch (e) {
         // Don't redirect on error — the API being temporarily unavailable
