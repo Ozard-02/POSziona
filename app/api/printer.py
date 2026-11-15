@@ -5,7 +5,7 @@ The browser builds receipt text (pos.js buildReceipt); these endpoints
 only convert + send. Operator login required (paper costs money);
 port detection is admin-only.
 """
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify
 
 from app.api.guard import require_admin, require_operator
 

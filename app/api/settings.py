@@ -4,7 +4,7 @@ Handles party-level settings like default payment method, currency, tax rate, et
 """
 
 from flask import Blueprint, request, jsonify
-from app.api.guard import require_admin
+from app.api.guard import require_admin, require_operator
 from app.services.settings_service import (
     DEFAULT_SETTINGS, get_effective_settings, get_setting, update_setting)
 from app.utils.events import broadcast
@@ -42,8 +42,13 @@ def set_default_payment():
 
 
 @settings_bp.route('/', methods=['GET'])
+@require_operator
 def get_settings():
-    """Get all effective settings for the active party."""
+    """Get all effective settings for the active party.
+
+    Logged-in screens only: this carries the printer device path and the
+    venue configuration, which the login page never needs.
+    """
     db = request.args.get('db', 'default')
     return jsonify(get_effective_settings(db))
 

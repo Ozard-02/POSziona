@@ -59,3 +59,19 @@ def test_non_json_post_gets_json_not_an_html_page(client):
     r = client.post('/api/cart/add?db=default', data='product_id=1')
     assert r.status_code == 415
     assert r.is_json
+
+
+def test_party_configuration_is_not_public(clean_db, client):
+    """Printer path, receipt text and the snapshot list belong to the
+    admin panel; the login page never asks for them."""
+    assert client.get(f'/api/parties/{clean_db}/settings').status_code == 403
+    assert client.get('/api/parties/backups').status_code == 403
+    assert client.get(f'/api/settings/?db={clean_db}').status_code == 403
+
+
+def test_settings_are_available_to_a_logged_in_screen(clean_db, client):
+    assert client.post(f'/api/auth/login?db={clean_db}',
+                       json={'pin': '1234'}).status_code == 200
+    r = client.get(f'/api/settings/?db={clean_db}')
+    assert r.status_code == 200
+    assert 'currency' in r.get_json()

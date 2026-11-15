@@ -201,8 +201,9 @@ def duplicate(db_name):
 
 
 @parties_bp.route('/<db_name>/settings', methods=['GET'])
+@require_admin
 def get_party_settings_route(db_name):
-    """Get settings for a party."""
+    """Get settings for a party (admin panel only, like the write side)."""
     return jsonify(get_party_settings(db_name))
 
 
@@ -261,8 +262,9 @@ def assign_template_product_tag(template_id, product_id):
 # ============================================================
 
 @parties_bp.route('/backups', methods=['GET'])
+@require_admin
 def get_backups():
-    """List snapshot backups, newest first."""
+    """List snapshot backups, newest first (admin panel only)."""
     return jsonify(list_snapshots())
 
 
