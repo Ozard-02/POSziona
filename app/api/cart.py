@@ -4,6 +4,8 @@ Manages the in-progress cart (session-based, not persisted to DB until checkout)
 """
 
 from flask import Blueprint, request, jsonify, session
+import math
+
 from app.services.order_service import discount_for_subtotal
 from app.services.product_service import get_product_by_id
 from app.utils.session_lock import session_write_lock
@@ -153,6 +155,12 @@ def apply_discount():
     try:
         discount_value = float(data.get('value', 0))
     except (TypeError, ValueError):
+        return jsonify({'error': 'Discount value must be a number'}), 400
+    # NaN/Infinity parse fine (and Python's json accepts the literals) but
+    # would be stored in the session and serialized back as `NaN`, which is
+    # not valid JSON: every later cart read would fail to parse in the
+    # browser until the discount was removed.
+    if not math.isfinite(discount_value):
         return jsonify({'error': 'Discount value must be a number'}), 400
     if discount_value < 0:
         return jsonify({'error': 'Discount value must be non-negative'}), 400

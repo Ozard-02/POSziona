@@ -5,6 +5,8 @@ Products API endpoints.
 import csv
 import io
 import math
+import sqlite3
+
 from flask import Blueprint, request, jsonify
 from app.services.product_service import (
     get_all_sections_with_subsections,
@@ -274,6 +276,9 @@ def add_product():
             'created': True
         })
         return jsonify({'message': 'Product created', 'id': product_id}), 201
+    except sqlite3.IntegrityError:
+        return jsonify({'error': 'That section or subsection does not exist '
+                                 'any more — refresh the page and retry'}), 400
     except Exception as e:
         logger.error(f"Error creating product: {e}")
         return jsonify({'error': str(e)}), 400
@@ -309,6 +314,9 @@ def edit_product(product_id):
                 'stock_count': data.get('stock')
             })
         return jsonify({'message': 'Product updated'})
+    except sqlite3.IntegrityError:
+        return jsonify({'error': 'That section or subsection does not exist '
+                                 'any more — refresh the page and retry'}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 

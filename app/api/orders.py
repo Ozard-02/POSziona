@@ -29,6 +29,10 @@ logger = get_logger('api.orders')
 
 orders_bp = Blueprint('orders', __name__)
 
+# Server-log cap for a recovery receipt (the client builds a few KB; the
+# cap only stops a broken/hostile client filling the log file).
+_MAX_LOGGED_RECEIPT = 8000
+
 
 def _parse_limit(raw, default=50, maximum=500):
     """Parse a ?limit= value defensively (garbage → ValueError → 400)."""
@@ -230,9 +234,18 @@ def log_receipt():
     whether it is displayed to the user)."""
     # Logged-in operators only: an open endpoint let any LAN device write
     # arbitrary text into the server log.
+    if not session.get('operator_id'):
+        return jsonify({'error': 'Operator not logged in'}), 403
     data = request.get_json() or {}
     order_id = data.get('order_id')
     receipt_text = data.get('receipt', '')
+    if not isinstance(receipt_text, str):
+        return jsonify({'error': 'receipt must be text'}), 400
+    # A receipt is a few KB. Truncating (with a marker) beats refusing:
+    # the recovery copy must never be lost because a client misbehaved.
+    if len(receipt_text) > _MAX_LOGGED_RECEIPT:
+        receipt_text = (receipt_text[:_MAX_LOGGED_RECEIPT]
+                        + f'\n[receipt truncated at {_MAX_LOGGED_RECEIPT} characters]')
     logger.info(f"Recovery receipt saved — order_id={order_id}\n{receipt_text}")
     return jsonify({'message': 'Receipt logged'}), 200
 

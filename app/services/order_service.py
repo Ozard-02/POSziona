@@ -31,7 +31,7 @@ def discount_for_subtotal(subtotal, discount):
         value = float(discount.get('value', 0))
     except (TypeError, ValueError):
         return 0.0
-    if value <= 0:
+    if not math.isfinite(value) or value <= 0:
         return 0.0
     if discount.get('type') == 'percentage':
         return subtotal * (min(value, 100) / 100)
@@ -53,6 +53,17 @@ def _parse_tendered(tendered):
     if not math.isfinite(value) or value < 0:
         raise ValueError('Tendered amount must be non-negative')
     return value
+
+
+def _money(value):
+    """Round an amount to the 2 decimals a receipt can show.
+
+    Money is stored in REAL columns: without this a 3 x 1.10 sale stored
+    `3.3000000000000003`, the recap CSV printed that noise verbatim and
+    SUM() over a party accumulated it. Rounding at the write boundary
+    keeps every stored/reported amount identical to the printed one.
+    """
+    return round(float(value) + 0.0, 2)
 
 
 def checkout_order(db_name, cart_items, payment_method, operator_id,
@@ -92,11 +103,12 @@ def checkout_order(db_name, cart_items, payment_method, operator_id,
 
         # Calculate totals server-side (single source of truth — the
         # payment record must match the order, never the session cart)
-        subtotal = sum(item['quantity'] * item['unit_price'] for item in cart_items)
+        subtotal = _money(sum(item['quantity'] * item['unit_price']
+                              for item in cart_items))
         # Clamp discount to subtotal to prevent negative totals from
         # direct API calls that bypass the frontend's Math.min guard
-        discount_amount = min(discount_amount, subtotal)
-        total = subtotal - discount_amount
+        discount_amount = _money(min(discount_amount, subtotal))
+        total = _money(subtotal - discount_amount)
 
         # Validate tendered before writing anything
         change_due = None
@@ -106,7 +118,7 @@ def checkout_order(db_name, cart_items, payment_method, operator_id,
             # for a rounding hair below the server's float.
             if round(tendered, 2) < round(total, 2):
                 raise ValueError('Tendered amount must be at least the total due')
-            change_due = max(0.0, tendered - total)
+            change_due = _money(max(0.0, tendered - total))
 
         # Create order
         conn.execute(
@@ -123,7 +135,8 @@ def checkout_order(db_name, cart_items, payment_method, operator_id,
             conn.execute(
                 """INSERT INTO order_items (order_id, product_id, quantity, unit_price)
                    VALUES (?, ?, ?, ?)""",
-                (order_id, item['product_id'], item['quantity'], item['unit_price'])
+                (order_id, item['product_id'], item['quantity'],
+                 _money(item['unit_price']))
             )
 
             # Guarded atomic decrement: never oversell the last unit.
@@ -220,11 +233,17 @@ def _sales_summary(conn, date_filter=None):
         params
     ).fetchone()
 
-    return dict(result) if result else {
-        'total_orders': 0,
-        'total_revenue': 0.0,
-        'total_discounts': 0.0
-    }
+    if not result:
+        return {
+            'total_orders': 0,
+            'total_revenue': 0.0,
+            'total_discounts': 0.0
+        }
+    summary = dict(result)
+    # SUM() over REAL columns carries float noise into the CSV/dashboard.
+    summary['total_revenue'] = _money(summary['total_revenue'])
+    summary['total_discounts'] = _money(summary['total_discounts'])
+    return summary
 
 
 def get_items_sold_summary(db_name, date_filter=None):
@@ -265,7 +284,12 @@ def _items_sold_summary(conn, date_filter=None):
         params
     ).fetchall()
 
-    return [dict(row) for row in rows]
+    items = [dict(row) for row in rows]
+    # Rounded here (not only in the UI): the recap CSV prints these raw.
+    for item in items:
+        item['total_amount'] = _money(item.get('total_amount') or 0)
+        item['current_price'] = _money(item.get('current_price') or 0)
+    return items
 
 
 def get_recent_orders(db_name, limit=50, date_filter=None):
@@ -463,7 +487,7 @@ def expected_cash_total(db_name, date_filter=None):
                 WHERE method = 'cash' {where}""",
             params
         ).fetchone()
-        return row[0] if row else 0.0
+        return _money(row[0]) if row else 0.0
 
 
 def record_cash_count(db_name, counted_cash, operator_id, note=None,
@@ -478,8 +502,11 @@ def record_cash_count(db_name, counted_cash, operator_id, note=None,
         counted = float(counted_cash)
     except (TypeError, ValueError):
         raise ValueError('Counted cash must be a valid number')
+    if not math.isfinite(counted):
+        raise ValueError('Counted cash must be a valid number')
     if counted < 0:
         raise ValueError('Counted cash must be non-negative')
+    counted = _money(counted)
 
     with PartyDatabase(db_name) as conn:
         try:
@@ -493,8 +520,8 @@ def record_cash_count(db_name, counted_cash, operator_id, note=None,
                     WHERE method = 'cash' {where}""",
                 params
             ).fetchone()
-            expected = row[0] if row else 0.0
-            difference = counted - expected
+            expected = _money(row[0] if row else 0.0)
+            difference = _money(counted - expected)
 
             cur = conn.execute(
                 """INSERT INTO cash_counts

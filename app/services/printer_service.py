@@ -38,6 +38,10 @@ DEFAULT_COLS = 42
 DEFAULT_BAUD = 9600
 VALID_BAUDS = (1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200)
 
+# Upper bound for one print job (see print_text): a receipt plus a few
+# kitchen slips is well under this.
+MAX_RECEIPT_CHARS = 8000
+
 # Beyond ASCII + a few printable symbols, map to safe replacements.
 _ACCENTS = {
     'à': 'a', 'á': 'a', 'â': 'a', 'ä': 'a',
@@ -472,8 +476,16 @@ def print_text(db_name, text, cut=None):
     path, baud, cols, cfg_cut = resolve_device(db_name)
     if cut is None:
         cut = cfg_cut
-    if not str(text).strip():
+    text = str(text)
+    if not text.strip():
         raise ValueError('Nothing to print')
+    if len(text) > MAX_RECEIPT_CHARS:
+        # A real receipt is a few KB. Anything bigger is a broken client;
+        # refusing beats pushing megabytes at a thermal printer (it jams
+        # and the paper is gone).
+        raise ValueError(
+            f'Receipt text is too long ({len(text)} characters, '
+            f'max {MAX_RECEIPT_CHARS})')
     data = build_bytes(text, cols=cols, cut=cut)
     try:
         with _open_device(path, baud) as fh:
