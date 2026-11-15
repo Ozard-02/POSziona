@@ -62,6 +62,84 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // === Open tabs (guest tabs charged during the party) ===
+    // Settling records the payment and turns the order into a real sale:
+    // before this, a tab could never be closed and its money never showed
+    // up in the till or in the payment report.
+    const tabsBody = document.querySelector('#tabs-table tbody');
+    const noTabs = document.getElementById('no-open-tabs');
+
+    async function loadOpenTabs() {
+        if (!tabsBody) return;
+        try {
+            const tabs = await fetchJSON(`${API_BASE}/orders/tabs?db=${db}`);
+            tabsBody.innerHTML = '';
+            if (noTabs) noTabs.classList.toggle('hidden', tabs.length > 0);
+            tabs.forEach(function(tab) {
+                const tr = document.createElement('tr');
+                const guest = document.createElement('td');
+                guest.textContent = tab.guest_name || ('#' + tab.id);
+                const when = document.createElement('td');
+                when.textContent = (tab.timestamp || '').slice(0, 16).replace('T', ' ');
+                const op = document.createElement('td');
+                op.textContent = tab.operator_name || '';
+                const total = document.createElement('td');
+                total.textContent = formatCurrency(tab.total);
+
+                const action = document.createElement('td');
+                const method = document.createElement('select');
+                ['cash', 'card', 'wallet'].forEach(function(m) {
+                    const opt = document.createElement('option');
+                    opt.value = m;
+                    opt.textContent = t(m);
+                    method.appendChild(opt);
+                });
+                const btn = document.createElement('button');
+                btn.className = 'btn-sm btn-primary';
+                btn.textContent = t('settle');
+                btn.addEventListener('click', function() {
+                    settleTab(tab, method.value);
+                });
+                action.appendChild(method);
+                action.appendChild(btn);
+
+                [guest, when, op, total, action].forEach(function(td) {
+                    tr.appendChild(td);
+                });
+                tabsBody.appendChild(tr);
+            });
+        } catch (e) {
+            console.error('Open tabs load failed:', e);
+        }
+    }
+
+    async function settleTab(tab, method) {
+        const body = {payment_method: method};
+        if (method === 'cash') {
+            // Same prompt pattern as the till count: exact amount by
+            // default, change is computed and shown.
+            const raw = prompt(
+                t('tendered') + ' (' + formatCurrency(tab.total) + '):',
+                String(tab.total));
+            if (raw === null) return;
+            body.tendered = raw;
+        }
+        try {
+            const res = await fetchJSON(`${API_BASE}/orders/${tab.id}/settle?db=${db}`, {
+                method: 'POST',
+                body: JSON.stringify(body)
+            });
+            let msg = t('tab_settled') + ': ' + formatCurrency(res.total);
+            if (res.change_due !== null && res.change_due !== undefined) {
+                msg += ' · ' + t('change') + ' ' + formatCurrency(res.change_due);
+            }
+            showSuccess(msg);
+            loadOpenTabs();
+        } catch (e) {
+            showError(e.message || e);
+        }
+    }
+
     // === Till counts (cash close) ===
     async function loadTillHistory() {
         if (!tillBody) return;
@@ -244,5 +322,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- Init ---
     loadSettings();
     generateReport();
+    loadOpenTabs();
     loadTillHistory();
 });

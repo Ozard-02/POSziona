@@ -6,6 +6,7 @@ Handles checkout, order history, and order details.
 from flask import Blueprint, request, jsonify, session, Response
 from app.api.guard import require_admin, require_operator
 from app.services.order_service import (
+    PAYMENT_METHODS,
     build_recap_csv,
     checkout_order,
     discount_for_subtotal,
@@ -17,6 +18,8 @@ from app.services.order_service import (
     get_sales_summary,
     get_items_sold_summary,
     delete_order_by_id,
+    list_open_tabs,
+    settle_tab,
 )
 from app.services.product_service import get_product_by_id
 from app.services.settings_service import get_default_payment_method
@@ -78,9 +81,8 @@ def checkout():
             return jsonify({'error': 'Payment method required'}), 400
 
     # Validate payment method
-    valid_methods = ['cash', 'card', 'wallet', 'tab']
-    if payment_method not in valid_methods:
-        return jsonify({'error': f'Invalid payment method. Must be one of: {", ".join(valid_methods)}'}), 400
+    if payment_method not in PAYMENT_METHODS:
+        return jsonify({'error': f'Invalid payment method. Must be one of: {", ".join(PAYMENT_METHODS)}'}), 400
 
     # Discount: recomputed from the cart as it is NOW (items may have been
     # added or removed since the discount was applied)
@@ -248,6 +250,47 @@ def log_receipt():
                         + f'\n[receipt truncated at {_MAX_LOGGED_RECEIPT} characters]')
     logger.info(f"Recovery receipt saved — order_id={order_id}\n{receipt_text}")
     return jsonify({'message': 'Receipt logged'}), 200
+
+
+# ============================================================
+# OPEN TABS (guest tabs charged during the party)
+# ============================================================
+# Tabs were written as `payment_method='tab'` with no way to close them:
+# the money was never collected in the app and the payment totals were
+# short. Settling records the payment and flips the method to what was
+# actually collected.
+
+@orders_bp.route('/tabs', methods=['GET'])
+@require_operator
+def open_tabs():
+    """Tabs not settled yet (guest, total, time, operator)."""
+    db = request.args.get('db', 'default')
+    return jsonify(list_open_tabs(db))
+
+
+@orders_bp.route('/<int:order_id>/settle', methods=['POST'])
+@require_operator
+def settle_tab_order(order_id):
+    """Settle an open tab: body {"payment_method": ..., "tendered"?}.
+
+    Operator level: whoever is at the till closes the bill; the audit log
+    records who did it.
+    """
+    db = request.args.get('db', 'default')
+    data = request.get_json() or {}
+    try:
+        result = settle_tab(db, order_id, data.get('payment_method'),
+                            data.get('tendered'), session.get('operator_id'))
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    details = (f"Tab order {order_id} settled: {result['payment_method']} "
+               f"{result['total']}")
+    if result['tendered'] is not None:
+        details += (f" (tendered {result['tendered']}, "
+                    f"change {result['change_due']})")
+    log_audit_event(db, 'tab_settled', details, session.get('operator_id'))
+    return jsonify(result)
 
 
 # ============================================================

@@ -355,6 +355,96 @@ def get_order_details(db_name, order_id):
 # ORDER MANAGEMENT
 # ============================================================
 
+PAYMENT_METHODS = ('cash', 'card', 'wallet', 'tab')
+# What a tab can be settled with (another tab would never be paid).
+SETTLE_METHODS = ('cash', 'card', 'wallet')
+
+
+def list_open_tabs(db_name):
+    """Tabs that were charged to a guest and not paid yet.
+
+    A tab is an order whose payment_method is still 'tab': settling it
+    (below) records the payment and flips the method, so this list is
+    simply "what the venue has not collected".
+    """
+    with PartyDatabase(db_name) as conn:
+        rows = conn.execute(
+            """SELECT o.id, o.timestamp, o.total, o.guest_name,
+                      op.name AS operator_name
+               FROM orders o
+               LEFT JOIN operators op ON o.operator_id = op.id
+               WHERE o.payment_method = 'tab'
+               ORDER BY o.timestamp, o.id"""
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+def settle_tab(db_name, order_id, payment_method, tendered=None,
+               operator_id=None):
+    """Close an open tab: record the payment and make it a real sale.
+
+    One BEGIN IMMEDIATE: the order is read, checked and flipped under the
+    same write lock, so a double tap (or two operators) cannot settle the
+    same tab twice or leave it with two payments. Returns the settled
+    amounts (the dashboard shows the change due).
+
+    Raises ValueError for client errors (unknown order, not a tab, bad
+    tendered). Full settlement only — partial payments are not a feature
+    of a party till.
+    """
+    if payment_method not in SETTLE_METHODS:
+        raise ValueError(
+            'Payment method must be one of: ' + ', '.join(SETTLE_METHODS))
+    tendered = _parse_tendered(tendered)
+
+    with PartyDatabase(db_name) as conn:
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute(
+                "SELECT * FROM orders WHERE id = ?", (order_id,)
+            ).fetchone()
+            if not row:
+                raise ValueError(f'Order {order_id} not found')
+            if row['payment_method'] != 'tab':
+                raise ValueError(
+                    f'Order {order_id} is not an open tab '
+                    f'(already settled as {row["payment_method"]})')
+
+            total = _money(row['total'])
+            change_due = None
+            if payment_method == 'cash' and tendered is not None:
+                if round(tendered, 2) < round(total, 2):
+                    raise ValueError(
+                        'Tendered amount must be at least the total due')
+                change_due = _money(max(0.0, tendered - total))
+
+            conn.execute(
+                """INSERT INTO payments (order_id, method, amount, tendered, change_due)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (order_id, payment_method, total, tendered, change_due))
+            # Flip the method: the sale stops being an open tab and the
+            # reports (and the cash expected in the drawer) now say what
+            # was actually collected.
+            conn.execute(
+                "UPDATE orders SET payment_method = ? WHERE id = ?",
+                (payment_method, order_id))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+        logger.info(f"Tab settled: order={order_id}, total={total}, "
+                    f"method={payment_method}, by operator={operator_id}")
+        return {
+            'order_id': order_id,
+            'total': total,
+            'payment_method': payment_method,
+            'tendered': tendered,
+            'change_due': change_due,
+            'guest_name': row['guest_name'],
+        }
+
+
 def delete_order_by_id(db_name, order_id):
     """Delete or revoke an order.
     Restores stock for products that have a stock count.

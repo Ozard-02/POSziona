@@ -16,7 +16,8 @@ posziona/
 │   │   │                         # operator mgmt (throttle checked BEFORE verification)
 │   │   ├── products.py           # Products, sections, subsections, tags, CSV import/export
 │   │   ├── cart.py               # Session-based cart: add/remove/update/discount (discounts audited)
-│   │   ├── orders.py             # Atomic checkout (tab guest name), history, reports, delete (restores stock, audited)
+│   │   ├── orders.py             # Atomic checkout (tab guest name), history, reports, delete (restores stock,
+│   │   │                         # audited), open tabs + settle (operator level)
 │   │   ├── printer.py            # Thermal print: text→ESC/POS→device, test ticket, baud detect (admin-only)
 │   │   ├── parties.py            # Party CRUD, duplicate (catalog only), backups/restore, date edit,
 │   │   │                         # recap CSV (admin-only, like every sales figure)
@@ -35,7 +36,8 @@ posziona/
 │   │   ├── __init__.py
 │   │   ├── product_service.py    # Catalog, sections, tags, CSV, search (ALL-tags filter)
 │   │   ├── order_service.py      # checkout_order (atomic + idempotent, tab guest name, money rounded to
-│   │   │                         # 2 decimals at the write boundary), sales summaries/CSV, delete+restore
+│   │   │                         # 2 decimals at the write boundary), list_open_tabs + settle_tab
+│   │   │                         # (BEGIN IMMEDIATE, flips the method, records the payment), summaries/CSV, delete+restore
 │   │   ├── party_service.py      # Party create from template/empty, duplicate, delete (locked, guarded)
 │   │   │                         # (template-created parties get default operators: login-ready)
 │   │   ├── backup_service.py     # VACUUM INTO snapshots (quick_check, due parties only), prune/restore,
