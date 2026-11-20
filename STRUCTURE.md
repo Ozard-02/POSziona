@@ -87,7 +87,7 @@ posziona/
 ├── scripts/
 │   ├── run_pos.py                # Launcher (path bootstrap + parse_args from app.main)
 │   └── entry_point.py            # PyInstaller entry point (frozen path handling + parse_args)
-├── tests/                        # 309 tests, prune-hard: one behavior per test (see PLAN.md Phase R)
+├── tests/                        # 311 tests, prune-hard: one behavior per test (see PLAN.md Phase R)
 │   ├── conftest.py               # app/client/clean_db fixtures (fresh test_party.db, wipe templates
 │   │                             # + settings/session caches — module caches must not leak across tests)
 │   ├── unit/test_frozen_config.py  # frozen DATA_DIR default + POSZIONA_DATA_DIR override

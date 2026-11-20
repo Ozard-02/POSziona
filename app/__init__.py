@@ -101,4 +101,23 @@ def create_app():
     def dashboard():
         return render_template('dashboard.html')
 
+    @app.context_processor
+    def _inject_ui_language():
+        """Language for the first paint.
+
+        The login/home page has no AppState or /api/settings call (that
+        endpoint is operator-only), so the device language is injected
+        into the template. A broken/unreadable settings DB must never
+        keep the login page from rendering: fall back to the default.
+        """
+        from app.services.settings_service import DEFAULT_SETTINGS, get_device_settings
+        try:
+            language = get_device_settings().get(
+                'language', DEFAULT_SETTINGS['language'])
+        except Exception:
+            language = DEFAULT_SETTINGS['language']
+        if language not in ('en', 'it'):
+            language = DEFAULT_SETTINGS['language']
+        return {'ui_language': language}
+
     return app

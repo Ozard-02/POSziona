@@ -56,7 +56,7 @@ DEFAULT_SETTINGS = {
     'default_payment_method': 'cash',  # None to skip, or a method name
     'skip_cash_tender': '0',  # Skip cash tender screen, auto-accept exact amount
     'auto_checkout': '0',  # When both skip_cash_tender and auto_checkout are set, checkout goes straight to receipt
-    'language': 'en',  # Supported: en, it
+    'language': 'it',  # Supported: en, it
     'default_operator_id': None,
     'printer_model': None,
     'printer_path': '',  # '' = disabled (browser print); 'auto' or device path

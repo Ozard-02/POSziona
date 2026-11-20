@@ -565,12 +565,16 @@ const translations = {
     },
 };
 
-// Get current language from AppState settings or default to 'en'
+// Get current language from AppState settings, the server-injected first
+// paint value (login/home), or the Italian default.
 function getLang() {
     if (typeof AppState !== 'undefined' && AppState.settings && AppState.settings.language) {
         return AppState.settings.language;
     }
-    return 'en';
+    if (typeof window !== 'undefined' && window.POSZIONA_UI_LANG) {
+        return window.POSZIONA_UI_LANG;
+    }
+    return 'it';
 }
 
 // Translation function

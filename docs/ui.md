@@ -73,7 +73,9 @@ Palette: canvas `#f6f5f1`, surface `#ffffff`, ink `#1b1e1c`, accent
   Checkout. Empty states for products and cart.
 - **Login**: brand mark, one question ("Where are you selling?"), two mode
   rows, then party/operator/PIN with visible labels. The one-operator case
-  hides the operator field, not just the select.
+  hides the operator field, not just the select. The home follows the device
+  language (Italian is the default): `create_app()` injects `ui_language`
+  for the first paint, because `/api/settings` is operator-only.
 - **Reports**: toolbar, three stat cards, open tabs, items sold, till counts.
   Open tabs is above the sales report because it is money still to collect.
 - **Admin**: ACTIVE nav item is real (`aria-current="page"`), page header =

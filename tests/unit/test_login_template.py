@@ -108,3 +108,20 @@ def test_operator_name_is_visible_after_login():
         app_js = f.read()
     assert 'function renderOperatorIdentity()' in app_js
     assert "auth/operators/roster" in app_js
+
+
+def test_login_defaults_to_italian(client, clean_db):
+    """Fresh installs and the first paint use the Italian default."""
+    html = client.get('/').get_data(as_text=True)
+    assert '<html lang="it"' in html
+    assert 'window.POSZIONA_UI_LANG = "it";' in html
+
+
+def test_login_follows_configured_language(client, clean_db):
+    """The home follows the device language (it was always 'en' before)."""
+    from app.services.settings_service import update_device_setting
+
+    update_device_setting('language', 'en')
+    html = client.get('/').get_data(as_text=True)
+    assert '<html lang="en"' in html
+    assert 'window.POSZIONA_UI_LANG = "en";' in html
