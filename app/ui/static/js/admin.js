@@ -1,6 +1,9 @@
 /* Admin panel JavaScript */
 document.addEventListener('DOMContentLoaded', function() {
     const db = getActiveDb();
+    document.querySelectorAll('[data-active-party]').forEach(function(el) {
+        el.textContent = db;
+    });
 
     // Factory-PIN enforcement: logins with 0000/1234 land here with a flag
     // that raises a persistent banner pointing at the Operators section.
@@ -21,6 +24,13 @@ document.addEventListener('DOMContentLoaded', function() {
         link.addEventListener('click', function(e) {
             e.preventDefault();
             const target = this.dataset.section;
+
+            navLinks.forEach(l => {
+                l.classList.remove('active');
+                l.removeAttribute('aria-current');
+            });
+            this.classList.add('active');
+            this.setAttribute('aria-current', 'page');
             
             // Hide all sections
             sections.forEach(s => s.classList.remove('active'));
@@ -64,20 +74,31 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const items = await fetchJSON(`${API_BASE}/orders/report/items?db=${db}`);
             const tbody = document.querySelector('#items-sold-table tbody');
+            const itemsWrap = document.querySelector('#items-sold-table').closest('.table-wrap');
+            const noItems = document.getElementById('no-items-sold');
             tbody.innerHTML = '';
+            if (noItems) noItems.classList.toggle('hidden', items.length > 0);
+            if (itemsWrap) itemsWrap.classList.toggle('hidden', items.length === 0);
             items.forEach(item => {
                 const row = tbody.insertRow();
                 row.dataset.productId = item.product_id;
                 row.insertCell(0).textContent = item.product_name;
-                row.insertCell(1).textContent = item.total_quantity;
-                row.insertCell(2).textContent = formatCurrency(item.total_amount);
-                row.insertCell(3).textContent = formatCurrency(item.current_price);
-                const stock = item.stock_count === null ? 'Unlimited' : String(item.stock_count);
-                row.insertCell(4).textContent = stock;
+                const qtyCell = row.insertCell(1);
+                qtyCell.className = 'num';
+                qtyCell.textContent = item.total_quantity;
+                const amountCell = row.insertCell(2);
+                amountCell.className = 'num';
+                amountCell.textContent = formatCurrency(item.total_amount);
+                const priceCell = row.insertCell(3);
+                priceCell.className = 'num';
+                priceCell.textContent = formatCurrency(item.current_price);
+                const stock = item.stock_count === null ? t('unlimited') : String(item.stock_count);
+                const stockCell = row.insertCell(4);
+                stockCell.className = 'num';
+                stockCell.textContent = stock;
                 const availCell = row.insertCell(5);
-                availCell.textContent = item.is_active ? 'Yes' : 'No';
-                availCell.style.color = item.is_active ? '#27ae60' : '#e74c3c';
-                availCell.style.fontWeight = 'bold';
+                availCell.textContent = item.is_active ? t('yes') : t('no');
+                availCell.classList.add(item.is_active ? 'status-active' : 'status-inactive');
             });
 
             // Right-click context menu on dashboard item rows
@@ -179,7 +200,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({ is_active: available ? 1 : 0 })
             });
             const availCell = row.cells[5];
-            availCell.textContent = available ? 'Yes' : 'No';
+            availCell.textContent = available ? t('yes') : t('no');
             availCell.className = available ? 'status-active' : 'status-inactive';
         } catch (e) {
             showError('Failed to update availability: ' + (e.message || e));
@@ -235,24 +256,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 checkboxCell.appendChild(cb);
 
                 row.insertCell(1).textContent = p.name;
-                row.insertCell(2).textContent = formatCurrency(p.price);
+                const priceCell = row.insertCell(2);
+                priceCell.className = 'num';
+                priceCell.textContent = formatCurrency(p.price);
                 row.insertCell(3).textContent = `${p.section_name} > ${p.subsection_name}`;
 
                 // Tags cell
                 const tagsCell = row.insertCell(4);
                 if (p.tags && p.tags.length > 0) {
-                    const tagsHtml = p.tags.map(t =>
-                        `<span class="tag-badge" style="background-color: ${escapeHtml(t.color || '#3498db')}">${escapeHtml(t.name)}</span>`
+                    const tagsHtml = p.tags.map(tag =>
+                        `<span class="tag-badge" style="background-color: ${escapeHtml(tag.color || '#136f55')};color: ${readableTextColor(tag.color || '#136f55')}">${escapeHtml(tag.name)}</span>`
                     ).join('');
                     tagsCell.innerHTML = tagsHtml;
                 } else {
-                    tagsCell.textContent = 'No tags';
+                    tagsCell.textContent = t('no_tags');
                     tagsCell.classList.add('muted-text');
                 }
 
-                row.insertCell(5).textContent = p.stock_count === null ? 'Unlimited' : p.stock_count;
+                const stockCell = row.insertCell(5);
+                stockCell.className = 'num';
+                stockCell.textContent = p.stock_count === null ? t('unlimited') : p.stock_count;
                 const statusCell = row.insertCell(6);
-                statusCell.textContent = p.is_active ? 'Active' : 'Inactive';
+                statusCell.textContent = p.is_active ? t('active') : t('inactive');
                 statusCell.classList.add(p.is_active ? 'status-active' : 'status-inactive');
 
                 const actionsCell = row.insertCell(7);
@@ -261,14 +286,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 actionsCell.appendChild(actionsDiv);
                 
                 const editBtn = document.createElement('button');
-                editBtn.textContent = 'Edit';
-                editBtn.className = 'btn-sm';
+                editBtn.textContent = t('edit');
+                editBtn.className = 'btn-secondary btn-sm';
+                editBtn.type = 'button';
                 editBtn.onclick = () => editProduct(p);
                 actionsDiv.appendChild(editBtn);
 
                 const delBtn = document.createElement('button');
-                delBtn.textContent = 'Delete';
-                delBtn.className = 'btn-sm btn-secondary';
+                delBtn.textContent = t('delete');
+                delBtn.className = 'btn-ghost-danger btn-sm';
+                delBtn.type = 'button';
                 delBtn.onclick = () => deleteProduct(p.id, p.name);
                 actionsDiv.appendChild(delBtn);
             });
@@ -397,17 +424,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const dialog = document.createElement('div');
         dialog.className = 'dialog-content';
+        dialog.setAttribute('role', 'dialog');
+        dialog.setAttribute('aria-modal', 'true');
         dialog.innerHTML = `
             <h3>${title}</h3>
             <div id="dialog-content">${htmlContent}</div>
             <div class="dialog-buttons">
-                <button id="dialog-cancel" class="btn-secondary btn-sm">Cancel</button>
-                <button id="dialog-confirm" class="btn-primary btn-sm">${confirmBtnText}</button>
+                <button id="dialog-cancel" class="btn-secondary btn-sm" type="button">${t('cancel')}</button>
+                <button id="dialog-confirm" class="btn-primary btn-sm" type="button">${confirmBtnText}</button>
             </div>
         `;
 
         overlay.appendChild(dialog);
         document.body.appendChild(overlay);
+
+        // Keyboard-first: put the caret in the first field of the dialog.
+        const firstField = dialog.querySelector('input, select, textarea');
+        if (firstField) {
+            setTimeout(function() { firstField.focus(); }, 0);
+        }
 
         return new Promise((resolve) => {
             document.getElementById('dialog-cancel').onclick = () => {
@@ -660,15 +695,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // Duplicate button
                 const dupBtn = document.createElement('button');
-                dupBtn.textContent = 'Duplicate';
-                dupBtn.className = 'btn-sm';
+                dupBtn.textContent = t('duplicate');
+                dupBtn.className = 'btn-secondary btn-sm';
+                dupBtn.type = 'button';
                 dupBtn.onclick = () => duplicateParty(p.name);
                 actionsDiv.appendChild(dupBtn);
 
                 // Delete button
                 const delBtn = document.createElement('button');
-                delBtn.textContent = 'Delete';
-                delBtn.className = 'btn-sm btn-secondary';
+                delBtn.textContent = t('delete');
+                delBtn.className = 'btn-ghost-danger btn-sm';
+                delBtn.type = 'button';
                 delBtn.onclick = () => deleteParty(p.name);
                 actionsDiv.appendChild(delBtn);
 
@@ -822,8 +859,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 row.insertCell(2).textContent = '****';
                 const actionsCell = row.insertCell(3);
                 const resetBtn = document.createElement('button');
-                resetBtn.textContent = 'Reset PIN';
-                resetBtn.className = 'btn-sm btn-secondary';
+                resetBtn.textContent = t('reset_pin');
+                resetBtn.className = 'btn-secondary btn-sm';
+                resetBtn.type = 'button';
                 resetBtn.onclick = () => resetOperatorPin(op.id);
                 actionsCell.appendChild(resetBtn);
             });
@@ -910,8 +948,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         bg: ${escapeHtml(tag.bg_color || 'none')} | text: ${escapeHtml(tag.text_color || 'default')}
                     </span>
                     <div class="tag-actions">
-                        <button class="btn-sm" onclick="editTag(${tag.id})">Edit</button>
-                        <button class="btn-sm btn-secondary" onclick="deleteTag(${tag.id})">Delete</button>
+                        <button class="btn-secondary btn-sm" type="button" onclick="editTag(${tag.id})">${t('edit')}</button>
+                        <button class="btn-ghost-danger btn-sm" type="button" onclick="deleteTag(${tag.id})">${t('delete')}</button>
                     </div>
                 `;
                 tagList.appendChild(div);
@@ -964,19 +1002,22 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             const productTags = await fetchJSON(`${API_BASE}/products/${productId}/tags?db=${db}`);
             const display = document.getElementById('product-tags-display');
-            display.innerHTML = '<h5>Current Tags:</h5>';
+            display.innerHTML = '<h3>' + t('current_tags') + '</h3>';
             if (productTags.length === 0) {
-                display.innerHTML += '<p class="muted-text">No tags assigned</p>';
+                display.innerHTML += '<p class="muted-text">' + t('no_tags_assigned') + '</p>';
             } else {
-                productTags.forEach(t => {
+                productTags.forEach(tag => {
                     const span = document.createElement('span');
                     span.className = 'tag-badge';
-                    span.style.backgroundColor = t.color || '#3498db';
-                    span.textContent = t.name;
+                    span.style.backgroundColor = tag.color || '#136f55';
+                    span.style.color = readableTextColor(tag.color || '#136f55');
+                    span.textContent = tag.name;
                     const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
                     removeBtn.textContent = '×';
-                    removeBtn.style.cssText = 'margin-left:5px; padding:0 4px; font-size:12px;';
-                    removeBtn.onclick = () => removeProductTag(productId, t.id);
+                    removeBtn.className = 'tag-remove';
+                    removeBtn.setAttribute('aria-label', t('delete'));
+                    removeBtn.onclick = () => removeProductTag(productId, tag.id);
                     span.appendChild(removeBtn);
                     display.appendChild(span);
                 });
@@ -1360,7 +1401,15 @@ document.addEventListener('DOMContentLoaded', function() {
             // Go back to dashboard after saving
             sections.forEach(s => s.classList.remove('active'));
             document.getElementById('admin-dashboard').classList.add('active');
-            navLinks.forEach(l => l.classList.remove('active'));
+            navLinks.forEach(l => {
+                l.classList.remove('active');
+                l.removeAttribute('aria-current');
+            });
+            const dashboardLink = document.querySelector('.admin-nav a[data-section="dashboard"]');
+            if (dashboardLink) {
+                dashboardLink.classList.add('active');
+                dashboardLink.setAttribute('aria-current', 'page');
+            }
         }).catch(err => {
             showError('Failed to save settings: ' + err);
         });
@@ -1554,8 +1603,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const checkboxes = document.querySelectorAll('.product-checkbox:checked');
         selectedProductIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
         const count = selectedProductIds.length;
-        document.getElementById('bulk-selected-count').textContent = `${count} selected`;
-        document.getElementById('bulk-edit-bar').style.display = count > 0 ? 'block' : 'none';
+        document.getElementById('bulk-selected-count').textContent = `${count} ${t('selected')}`;
+        document.getElementById('bulk-edit-bar').style.display = count > 0 ? 'flex' : 'none';
     }
 
     // Clear selection button
@@ -1790,7 +1839,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 div.className = 'section-item';
                 div.draggable = true;
                 div.dataset.sectionId = section.id;
-                div.innerHTML = `<span class="drag-handle" style="margin-right:10px;cursor:move;">≡</span>${escapeHtml(section.name)} (${section.subsections ? section.subsections.length : 0} ${t('subsections')}) <span class="section-arrows" style="margin-left:auto;display:inline-flex;flex-direction:column;"><button type="button" class="section-move-up" title="Move up" style="border:none;background:none;cursor:pointer;font-size:14px;">▲</button><button type="button" class="section-move-down" title="Move down" style="border:none;background:none;cursor:pointer;font-size:14px;">▼</button></span>`;
+                div.innerHTML = `
+                    <span class="drag-handle" aria-hidden="true">≡</span>
+                    <span class="section-name">${escapeHtml(section.name)}</span>
+                    <span class="section-meta">${section.subsections ? section.subsections.length : 0} ${t('subsections')}</span>
+                    <span class="section-arrows">
+                        <button type="button" class="section-move-up" title="${t('move_up')}" aria-label="${t('move_up')}">▲</button>
+                        <button type="button" class="section-move-down" title="${t('move_down')}" aria-label="${t('move_down')}">▼</button>
+                    </span>`;
                 listEl.appendChild(div);
             });
             setupDragAndDrop();
@@ -1810,16 +1866,19 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadBackups() {
         const tbody = document.querySelector('#backups-table tbody');
         const hint = document.getElementById('no-snapshots-hint');
+        const tableWrap = tbody ? tbody.closest('.table-wrap') : null;
         try {
             const snaps = await fetchJSON(`${API_BASE}/parties/backups`);
             tbody.innerHTML = '';
-            if (hint) hint.style.display = snaps.length ? 'none' : '';
+            if (hint) hint.classList.toggle('hidden', snaps.length > 0);
+            if (tableWrap) tableWrap.classList.toggle('hidden', snaps.length === 0);
             snaps.forEach(function(s) {
                 const tr = document.createElement('tr');
                 const files = (s.files || []).length;
-                tr.innerHTML = `<td>${s.name}</td><td>${fmtSize(s.size)} · ${files} files</td><td></td>`;
+                tr.innerHTML = `<td>${s.name}</td><td>${fmtSize(s.size)} · ${files} ${t('files')}</td><td></td>`;
                 const btn = document.createElement('button');
                 btn.className = 'btn-danger btn-sm';
+                btn.type = 'button';
                 btn.textContent = t('restore');
                 btn.addEventListener('click', function() { restoreBackup(s.name); });
                 tr.lastChild.appendChild(btn);
@@ -1964,6 +2023,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function translatePage() {
         document.querySelectorAll('[data-i18n]').forEach(function(el) {
             el.textContent = t(el.dataset.i18n);
+        });
+        document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el) {
+            el.placeholder = t(el.dataset.i18nPlaceholder);
         });
     }
 

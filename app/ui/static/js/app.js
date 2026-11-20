@@ -30,6 +30,24 @@ function escapeHtml(value) {
         .replace(/'/g, '&#39;');
 }
 
+// Pick ink or white for text on a client-chosen tag colour. Tag colours are
+// free text from the admin UI: a light yellow with white text was invisible.
+function readableTextColor(hex) {
+    var value = String(hex || '').replace('#', '');
+    if (value.length === 3) {
+        value = value[0] + value[0] + value[1] + value[1] + value[2] + value[2];
+    }
+    if (!/^[0-9a-f]{6}$/i.test(value)) return '#ffffff';
+    function channel(c) {
+        var v = parseInt(c, 16) / 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    }
+    var luminance = 0.2126 * channel(value.slice(0, 2)) +
+        0.7152 * channel(value.slice(2, 4)) +
+        0.0722 * channel(value.slice(4, 6));
+    return luminance > 0.55 ? '#1b1e1c' : '#ffffff';
+}
+
 // --- Active party: which party DB the sales go to ---
 // Single source of truth, shared by pos/admin/dashboard/login.
 // localStorage: survives tab/browser restarts (like the 24 h login
@@ -114,7 +132,11 @@ function renderOperatorIdentity() {
     var op = AppState.operator;
     if (!nodes.length || !op) return;
     var label = op.name + (op.role === 'admin' ? ' · admin' : '');
-    nodes.forEach(function(el) { el.textContent = label; });
+    var initial = String(op.name || '?').trim().charAt(0).toUpperCase();
+    nodes.forEach(function(el) {
+        el.textContent = label;
+        el.dataset.initial = initial;
+    });
 }
 
 // Switch working party mid-shift: drop the session cart (it belongs to
@@ -147,6 +169,7 @@ function showToast(message, kind) {
     const toast = document.createElement('div');
     toast.className = 'toast toast-' + kind;
     toast.textContent = message;
+    toast.setAttribute('role', 'status');
     toast.addEventListener('click', () => toast.remove());
     container.appendChild(toast);
     while (container.children.length > 5) {
@@ -173,6 +196,7 @@ function showBanner(message) {
     if (!banner) {
         banner = document.createElement('div');
         banner.id = 'alert-banner';
+        banner.setAttribute('role', 'alert');
         const close = document.createElement('button');
         close.id = 'alert-banner-close';
         close.textContent = '✕';

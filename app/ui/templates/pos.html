@@ -3,68 +3,102 @@
 {% block title %}Posziona - {{ party_name or 'POS' }}{% endblock %}
 
 {% block content %}
-<div class="pos-layout">
-    <!-- Left Sidebar: Sections -->
-    <div class="sidebar-left">
-        <div class="party-header">
-            <h2 id="party-name" class="party-name-click" title="">Party</h2>
-            <div class="party-status"></div>
-            <div class="operator-identity" data-operator-identity></div>
+<div class="app-shell pos-shell">
+    <header class="app-topbar">
+        <div class="topbar-left">
+            <div class="party-block">
+                <span class="party-block-label" data-i18n="group_party">Party</span>
+                <button id="party-name" class="party-switch" type="button" title="Switch party">Party</button>
+            </div>
+            <span id="conn-pill" class="conn-pill" data-state="online" role="status" aria-live="polite">
+                <span class="conn-dot" aria-hidden="true"></span>
+                <span id="conn-label">Online</span>
+            </span>
         </div>
-        <div class="sections-tree" id="sections-tree">
-            <!-- Sections will be populated here -->
+        <div class="topbar-right">
+            <span class="operator-chip" data-operator-identity></span>
+            <nav class="topbar-nav" aria-label="Till">
+                <button id="dashboard-btn" class="btn-ghost btn-sm" type="button">Reports</button>
+                <button id="admin-btn" class="btn-ghost btn-sm" type="button">Admin</button>
+                <button id="op-settings-btn" class="btn-ghost btn-sm btn-icon" type="button" aria-label="Settings" title="Settings">
+                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/></svg>
+                </button>
+                <button id="logout-btn" class="btn-ghost btn-sm" type="button">Logout</button>
+            </nav>
         </div>
-    </div>
+    </header>
 
-    <!-- Central Grid: Products -->
-    <div class="main-content">
-        <div class="products-grid" id="products-grid">
-            <!-- Products will be populated here -->
-        </div>
-    </div>
+    <div class="pos-layout">
+        <!-- Left rail: sections -->
+        <aside class="pos-rail" aria-label="Menu">
+            <div class="rail-heading" data-i18n="menu">Menu</div>
+            <div class="sections-tree" id="sections-tree">
+                <!-- Sections will be populated here -->
+            </div>
+        </aside>
 
-    <!-- Right Sidebar: Cart -->
-    <div class="sidebar-right">
-        <div class="order-summary">
-            <h3>Current Order</h3>
-            <div class="cart-scroll">
-                <div class="cart-items" id="cart-items"></div>
-                <div class="cart-totals">
-                    <div class="total-row">
-                        <span>Subtotal:</span>
-                        <span id="cart-subtotal">€0.00</span>
+        <!-- Central grid: products -->
+        <main class="pos-main">
+            <div class="pos-main-head">
+                <h2 id="pos-section-title" class="pos-section-title"></h2>
+            </div>
+            <div class="products-grid" id="products-grid">
+                <!-- Products will be populated here -->
+            </div>
+            <div id="products-empty" class="empty-state">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+                <strong data-i18n="no_products">No products in this section</strong>
+                <p data-i18n="no_products_hint">Choose another section or add products in Admin.</p>
+            </div>
+        </main>
+
+        <!-- Right panel: current order -->
+        <aside class="pos-cart" aria-label="Current order">
+            <div class="order-summary">
+                <div class="cart-head">
+                    <h3>Current Order</h3>
+                    <span id="cart-count" class="cart-count">0</span>
+                </div>
+                <div class="cart-scroll">
+                    <div class="cart-items" id="cart-items"></div>
+                    <div id="cart-empty" class="cart-empty">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 7h12l-1 13H7L6 7z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg>
+                        <p data-i18n="cart_empty_state">No items yet</p>
+                        <span data-i18n="cart_empty_hint">Tap a product to add it.</span>
                     </div>
-                    <div class="total-row" id="discount-row" style="display:none;">
-                        <span>Discount:</span>
-                        <span id="cart-discount">-€0.00</span>
+                    <div class="cart-totals">
+                        <div class="total-row">
+                            <span>Subtotal:</span>
+                            <span id="cart-subtotal">€0.00</span>
+                        </div>
+                        <div class="total-row" id="discount-row" style="display:none;">
+                            <span>Discount:</span>
+                            <span id="cart-discount">-€0.00</span>
+                        </div>
+                        <div class="total-row grand-total">
+                            <span>Total:</span>
+                            <span id="cart-total">€0.00</span>
+                        </div>
                     </div>
-                    <div class="total-row grand-total">
-                        <span>Total:</span>
-                        <span id="cart-total">€0.00</span>
+                    <div class="action-buttons">
+                        <div class="secondary-actions">
+                            <button id="discount-btn" class="btn-secondary" type="button">Discount</button>
+                            <button id="clear-btn" class="btn-secondary" type="button">Clear</button>
+                        </div>
+                        <button id="checkout-btn" class="btn-primary btn-large" type="button">Checkout</button>
                     </div>
                 </div>
-                <div class="action-buttons">
-                    <div class="secondary-actions">
-                        <button id="discount-btn" class="btn-secondary">Discount</button>
-                        <button id="clear-btn" class="btn-secondary">Clear</button>
-                    </div>
-                    <button id="checkout-btn" class="btn-primary btn-large">Checkout</button>
-                </div>
             </div>
-            <div class="nav-buttons">
-                <button id="dashboard-btn" class="btn-sm btn-secondary">Reports</button>
-                <button id="admin-btn" class="btn-sm btn-secondary">Admin</button>
-                <button id="op-settings-btn" class="btn-sm btn-secondary" aria-label="Settings">⚙</button>
-                <button id="logout-btn" class="btn-sm btn-secondary">Logout</button>
-            </div>
-        </div>
+        </aside>
     </div>
 </div>
 
 <!-- Checkout Modal -->
-<div id="checkout-modal" class="modal hidden">
+<div id="checkout-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="checkout-title">
     <div class="modal-content">
-        <h3>Checkout</h3>
+        <div class="modal-header">
+            <h3 id="checkout-title">Checkout</h3>
+        </div>
         <div class="checkout-totals">
             <div class="total-row">
                 <span>Subtotal:</span>
@@ -83,15 +117,17 @@
             <!-- Payment methods will be shown here -->
         </div>
         <div class="modal-buttons">
-            <button id="cancel-checkout" class="btn-secondary">Cancel</button>
+            <button id="cancel-checkout" class="btn-secondary" type="button">Cancel</button>
         </div>
     </div>
 </div>
 
 <!-- Cash Tender Modal -->
-<div id="cash-tender-modal" class="modal hidden">
+<div id="cash-tender-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="cash-title">
     <div class="modal-content">
-        <h3>Cash Payment</h3>
+        <div class="modal-header">
+            <h3 id="cash-title">Cash Payment</h3>
+        </div>
         <div class="tender-amount">
             <div class="total-row grand-total">
                 <span>Total Due:</span>
@@ -107,29 +143,34 @@
             </div>
         </div>
         <div class="modal-buttons">
-            <button id="cancel-tender" class="btn-secondary" onclick="window.cancelTender()">Cancel</button>
-            <button id="complete-cash-sale" class="btn-primary" onclick="window.completeCashSale()">Complete Sale</button>
+            <button id="cancel-tender" class="btn-secondary" type="button" onclick="window.cancelTender()">Cancel</button>
+            <button id="complete-cash-sale" class="btn-primary" type="button" onclick="window.completeCashSale()">Complete Sale</button>
         </div>
     </div>
 </div>
 
 <!-- Receipt Modal -->
-<div id="receipt-modal" class="modal hidden">
+<div id="receipt-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="receipt-title">
     <div class="modal-content">
-        <h3>Receipt</h3>
+        <div class="modal-header">
+            <h3 id="receipt-title">Receipt</h3>
+        </div>
         <pre id="receipt-content" class="receipt"></pre>
         <div class="modal-buttons">
-            <button id="print-receipt" class="btn-primary">Print Receipt</button>
-            <button id="close-receipt" class="btn-secondary">Done</button>
+            <button id="print-receipt" class="btn-primary" type="button">Print Receipt</button>
+            <button id="close-receipt" class="btn-secondary" type="button">Done</button>
         </div>
     </div>
 </div>
+
 <!-- Operator settings modal -->
-<div id="op-settings" class="modal hidden">
+<div id="op-settings" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="op-settings-title">
     <div class="modal-content">
         <div class="modal-header">
             <h3 id="op-settings-title">Settings</h3>
-            <button id="op-settings-close" class="modal-x" aria-label="Close">✕</button>
+            <button id="op-settings-close" class="modal-x" type="button" aria-label="Close">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
         </div>
         <div class="form-group">
             <label for="op-lang" data-i18n="language_label">Language:</label>
@@ -150,12 +191,15 @@
         </div>
     </div>
 </div>
+
 <!-- Party switcher modal -->
-<div id="party-menu" class="modal hidden">
+<div id="party-menu" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="party-menu-title">
     <div class="modal-content">
         <div class="modal-header">
             <h3 id="party-menu-title">Select party</h3>
-            <button id="party-menu-close" class="modal-x" aria-label="Close">✕</button>
+            <button id="party-menu-close" class="modal-x" type="button" aria-label="Close">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
         </div>
         <div id="party-menu-list"></div>
     </div>

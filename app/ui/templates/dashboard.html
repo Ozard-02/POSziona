@@ -3,96 +3,107 @@
 {% block title %}Posziona - Reports{% endblock %}
 
 {% block content %}
-<div class="pos-layout">
-    <!-- Left Sidebar -->
-    <div class="sidebar-left">
-        <div class="party-header">
-            <h2 data-i18n="reports">Reports</h2>
-            <div class="operator-identity" data-operator-identity></div>
-            <div class="header-actions">
-                <button id="back-to-pos" class="btn-sm btn-secondary" data-i18n="back_to_pos">← Back</button>
-                <button id="print-receipt-btn" class="btn-sm btn-secondary" data-i18n="print">Print</button>
-            </div>
+<div class="app-shell">
+    <header class="app-topbar">
+        <div class="topbar-left">
+            <button id="back-to-pos" class="btn-ghost btn-sm" type="button" data-i18n="back_to_pos">← Back to POS</button>
+            <h1 class="topbar-title" data-i18n="reports">Reports</h1>
+            <span class="party-chip" data-active-party>default</span>
+            <span class="operator-chip" data-operator-identity></span>
         </div>
-        <div class="sections-tree">
-            <div class="report-filters">
-                <div class="form-group">
+        <div class="topbar-right">
+            <button id="print-receipt-btn" class="btn-secondary btn-sm" type="button" data-i18n="print">Print</button>
+        </div>
+    </header>
+
+    <main class="page">
+        <div class="page-inner">
+            <section class="toolbar" aria-label="Report filters">
+                <div class="field">
                     <label for="report-type" data-i18n="report_type">Report Type:</label>
                     <select id="report-type">
                         <option value="day" data-i18n="today">Today</option>
                         <option value="party" data-i18n="whole_party">Whole Party</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label for="report-date" data-i18n="report_date_label">Date (for Today):</label>
+                <div class="field">
+                    <label for="report-date" data-i18n="report_date_label">Date</label>
                     <input type="date" id="report-date">
                 </div>
-                <button id="generate-report" class="btn-primary btn-sm btn-block" data-i18n="generate_report">Generate Report</button>
-                <button id="cash-close-btn" class="btn-secondary btn-sm btn-block" data-i18n="cash_close">Close Till</button>
-            </div>
-        </div>
-    </div>
+                <button id="generate-report" class="btn-primary" type="button" data-i18n="generate_report">Generate Report</button>
+                <button id="cash-close-btn" class="btn-secondary" type="button" data-i18n="cash_close">Close Till</button>
+            </section>
 
-    <!-- Main Content: Report Output -->
-    <div class="main-content">
-        <div id="report-content">
-            <div id="report-summary"></div>
-            <div id="report-tables"></div>
-            <h3 data-i18n="open_tabs" style="margin-top:24px">Open tabs</h3>
-            <p id="no-open-tabs" class="muted-text hidden" data-i18n="no_open_tabs">No open tabs</p>
-            <table class="data-table" id="tabs-table">
-                <thead><tr>
-                    <th data-i18n="guest">Guest</th>
-                    <th data-i18n="report_date_label">Date</th>
-                    <th data-i18n="operator">Operator</th>
-                    <th data-i18n="amount">Amount</th>
-                    <th></th>
-                </tr></thead>
-                <tbody></tbody>
-            </table>
-            <h3 data-i18n="till_history" style="margin-top:24px">Till counts</h3>
-            <table class="data-table" id="till-table">
-                <thead><tr>
-                    <th data-i18n="report_date_label">Date</th>
-                    <th data-i18n="expected_cash">Expected</th>
-                    <th data-i18n="counted_cash">Counted cash</th>
-                    <th data-i18n="difference">Difference</th>
-                </tr></thead>
-                <tbody></tbody>
-            </table>
-        </div>
-    </div>
+            <section class="stats-row" aria-label="Report summary">
+                <div class="stat-card">
+                    <span class="stat-label" data-i18n="stat_revenue">Total Revenue</span>
+                    <span class="stat-value" id="report-revenue">€0.00</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label" data-i18n="stat_orders">Total Orders</span>
+                    <span class="stat-value" id="report-orders">0</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label" data-i18n="stat_discounts">Total Discounts</span>
+                    <span class="stat-value" id="report-discounts">€0.00</span>
+                </div>
+            </section>
 
-    <!-- Right Sidebar: Summary stats -->
-    <div class="sidebar-right">
-        <div class="order-summary">
-            <h3 data-i18n="report_summary">Report Summary</h3>
-            <div class="cart-totals" id="report-totals">
-                <div class="total-row">
-                    <span data-i18n="revenue">Total Revenue:</span>
-                    <span id="report-revenue">€0.00</span>
+            <section class="page-section">
+                <div class="section-head">
+                    <h2 data-i18n="open_tabs">Open tabs</h2>
                 </div>
-                <div class="total-row">
-                    <span data-i18n="orders">Total Orders:</span>
-                    <span id="report-orders">0</span>
+                <p id="no-open-tabs" class="muted-text hidden" data-i18n="no_open_tabs">No open tabs</p>
+                <div class="table-wrap">
+                    <table class="data-table" id="tabs-table">
+                        <thead><tr>
+                            <th data-i18n="guest">Guest</th>
+                            <th data-i18n="report_date_label">Date</th>
+                            <th data-i18n="operator">Operator</th>
+                            <th class="num" data-i18n="amount">Amount</th>
+                            <th></th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
-                <div class="total-row">
-                    <span data-i18n="discounts">Total Discounts:</span>
-                    <span id="report-discounts">€0.00</span>
-                </div>
+            </section>
+
+            <div id="report-content">
+                <div id="report-summary"></div>
+                <div id="report-tables"></div>
             </div>
+
+            <section class="page-section">
+                <div class="section-head">
+                    <h2 data-i18n="till_history">Till counts</h2>
+                </div>
+                <p id="no-till-counts" class="muted-text hidden" data-i18n="no_till_counts">No till counts yet</p>
+                <div class="table-wrap">
+                    <table class="data-table" id="till-table">
+                        <thead><tr>
+                            <th data-i18n="report_date_label">Date</th>
+                            <th class="num" data-i18n="expected_cash">Expected</th>
+                            <th class="num" data-i18n="counted_cash">Counted cash</th>
+                            <th class="num" data-i18n="difference">Difference</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
         </div>
-    </div>
+    </main>
 </div>
 
 <!-- Receipt Print Modal -->
-<div id="print-receipt-modal" class="modal hidden">
+<div id="print-receipt-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="print-summary-title">
     <div class="modal-content">
-        <h3 data-i18n="print_summary">Print Summary Report</h3>
+        <div class="modal-header">
+            <h3 id="print-summary-title" data-i18n="print_summary">Print Summary Report</h3>
+        </div>
         <pre id="print-receipt-content" class="receipt"></pre>
         <div class="modal-buttons">
-            <button id="print-now-btn" class="btn-primary" data-i18n="print">Print</button>
-            <button id="close-print-modal" class="btn-secondary" data-i18n="close">Close</button>
+            <button id="print-now-btn" class="btn-primary" type="button" data-i18n="print">Print</button>
+            <button id="close-print-modal" class="btn-secondary" type="button" data-i18n="close">Close</button>
         </div>
     </div>
 </div>

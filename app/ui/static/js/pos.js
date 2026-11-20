@@ -17,6 +17,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const dashboardBtn = document.getElementById('dashboard-btn');
     const logoutBtn = document.getElementById('logout-btn');
     const partyNameEl = document.getElementById('party-name');
+    const connPill = document.getElementById('conn-pill');
+    const connLabel = document.getElementById('conn-label');
+    const cartCountEl = document.getElementById('cart-count');
+    const cartEmptyEl = document.getElementById('cart-empty');
+    const productsEmptyEl = document.getElementById('products-empty');
+    const posSectionTitle = document.getElementById('pos-section-title');
     const checkoutModal = document.getElementById('checkout-modal');
     const receiptModal = document.getElementById('receipt-modal');
     const cashTenderModal = document.getElementById('cash-tender-modal');
@@ -172,10 +178,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function translatePage() {
+        // Static labels (top bar, empty states, settings modal).
+        document.querySelectorAll('[data-i18n]').forEach(function(el) {
+            el.textContent = t(el.dataset.i18n);
+        });
+
         // Header buttons
         if (logoutBtn) logoutBtn.textContent = t('logout');
         if (dashboardBtn) dashboardBtn.textContent = t('reports');
-        if (adminBtn) adminBtn.textContent = t('admin_panel');
+        if (adminBtn) adminBtn.textContent = t('admin');
+        if (opSettingsBtn) opSettingsBtn.setAttribute('aria-label', t('settings'));
+        if (partyNameEl) partyNameEl.title = t('select_party');
+        if (connLabel) connLabel.textContent = t(connected ? 'online' : 'offline');
 
         // Cart sidebar
         var currentOrderEl = document.querySelector('.order-summary h3');
@@ -255,10 +269,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 subDiv.className = 'subsection';
                 subDiv.textContent = sub.name;
                 subDiv.dataset.subsectionId = sub.id;
+                subDiv.setAttribute('role', 'button');
+                subDiv.tabIndex = 0;
                 subDiv.addEventListener('click', () => {
-                    document.querySelectorAll('.subsection').forEach(s => s.classList.remove('active'));
+                    document.querySelectorAll('.subsection').forEach(s => {
+                        s.classList.remove('active');
+                        s.removeAttribute('aria-current');
+                    });
                     subDiv.classList.add('active');
+                    subDiv.setAttribute('aria-current', 'true');
+                    if (posSectionTitle) posSectionTitle.textContent = sub.name;
                     loadProducts(sub.id);
+                });
+                subDiv.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        subDiv.click();
+                    }
                 });
                 subsectionsDiv.appendChild(subDiv);
             });
@@ -286,8 +313,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderProducts(products) {
         productsGrid.innerHTML = '';
+        if (productsEmptyEl) productsEmptyEl.classList.toggle('hidden', products.length > 0);
         products.forEach(product => {
             const btn = document.createElement('button');
+            btn.type = 'button';
             btn.className = 'product-btn';
             btn.dataset.productId = product.id;
             
@@ -299,22 +328,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 btn.classList.add('out-of-stock');
             }
             
-            // Apply tag-based background color if any tag has bg_color
-            let bgStyle = '';
-            let textColor = '';
+            // Apply tag-based background color if any tag has bg_color.
+            // Text colour follows the client's tag setting when given; if
+            // not, pick ink or white from the background luminance so a
+            // dark category colour cannot make the price unreadable.
+            let tagStyle = null;
             let tagLabels = '';
             if (product.tags && product.tags.length > 0) {
-                // Use the first tag's bg_color/text_color for the product button background
                 const primaryTag = product.tags[0];
                 if (primaryTag.bg_color) {
-                    bgStyle = `background-color: ${primaryTag.bg_color};`;
-                    if (primaryTag.text_color) {
-                        textColor = `color: ${primaryTag.text_color};`;
-                    }
+                    tagStyle = {
+                        background: primaryTag.bg_color,
+                        color: primaryTag.text_color || readableTextColor(primaryTag.bg_color)
+                    };
+                    btn.dataset.tagStyled = '1';
                 }
                 // Build tag label badges
                 tagLabels = product.tags.map(t =>
-                    `<span class="tag-badge" style="background-color: ${escapeHtml(t.color || '#3498db')};">${escapeHtml(t.name)}</span>`
+                    `<span class="tag-badge" style="background-color: ${escapeHtml(t.color || '#136f55')};color: ${readableTextColor(t.color || '#136f55')};">${escapeHtml(t.name)}</span>`
                 ).join('');
             }
             
@@ -341,8 +372,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 ${availText ? `<div class="product-avail-row">${availText}</div>` : ''}
                 ${tagLabels ? `<div class="product-tags">${tagLabels}</div>` : ''}
             `;
-            if (bgStyle) {
-                btn.style.cssText = `${bgStyle}${textColor}`;
+            if (tagStyle) {
+                btn.style.backgroundColor = tagStyle.background;
+                btn.style.color = tagStyle.color;
             }
             
             // Right-click context menu for price/availability editing
@@ -403,14 +435,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     <span class="item-price">${formatCurrency(item.unit_price)} × ${item.quantity}</span>
                 </div>
                 <div class="item-controls">
-                    <button class="qty-btn qty-minus" data-id="${item.product_id}" title="Decrease">−</button>
-                    <button class="qty-btn qty-plus" data-id="${item.product_id}" title="Increase">+</button>
-                    <button class="remove-btn" data-id="${item.product_id}" title="Remove item">×</button>
+                    <button class="qty-btn qty-minus" type="button" data-id="${item.product_id}" title="${t('decrease')}" aria-label="${t('decrease')}">−</button>
+                    <button class="qty-btn qty-plus" type="button" data-id="${item.product_id}" title="${t('increase')}" aria-label="${t('increase')}">+</button>
+                    <button class="remove-btn" type="button" data-id="${item.product_id}" title="${t('remove')}" aria-label="${t('remove')}">×</button>
                     <span class="item-total">${formatCurrency(item.line_total)}</span>
                 </div>
             `;
             cartItemsEl.appendChild(div);
         });
+
+        if (cartCountEl) {
+            cartCountEl.textContent = cart.reduce((sum, item) => sum + item.quantity, 0);
+        }
+        if (cartEmptyEl) {
+            cartEmptyEl.classList.toggle('hidden', cart.length > 0);
+        }
 
         const subtotal = cart.reduce((sum, item) => sum + item.line_total, 0);
         const discountAmount = discount ? (
@@ -1269,6 +1308,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function setConnected(isConnected) {
         const wasOffline = !connected;
         connected = isConnected;
+        if (connPill) connPill.dataset.state = isConnected ? 'online' : 'offline';
+        if (connLabel) connLabel.textContent = t(isConnected ? 'online' : 'offline');
         if (isConnected) {
             if (offlineTimer) {
                 clearTimeout(offlineTimer);

@@ -57,7 +57,7 @@ posziona/
 │   │   │   ├── admin.html        # Products, parties, operators, tags, settings
 │   │   │   └── dashboard.html    # Reports (admin-only data) + till close (any operator) + print
 │   │   └── static/
-│   │       ├── css/style.css
+│   │       ├── css/style.css          # "banco pulito" tokens + one component system (shells, buttons, tables, modals)
 │   │       └── js/
 │   │           ├── app.js            # fetchJSON, formatCurrency, escapeHtml, auth check, toasts, banner
 │   │           │                   # + active-party helpers (get/set/switch, cart cleared on switch)
@@ -124,6 +124,7 @@ posziona/
 ```
 
 ### Notes
+- `docs/ui.md` is the UI contract (tokens, shells, responsive targets, verification). The templates and `style.css` follow it; keep them in sync.
 - `data/` is gitignored (runtime DBs + backups + `.secret_key` for session signing). This is the *source-mode* location (`app/data/`); **frozen builds** (PyInstaller/AppImage/EXE) use `~/.posziona/` instead, because the bundle's temp dir is wiped on exit — `POSZIONA_DATA_DIR` env var overrides both.
 - `data/backups/` holds timestamped `VACUUM INTO` snapshots (see backup scheduler).
 - There is **no** `app/models/` (removed Phase R: dead in prod) — order/party logic lives in `order_service.py` / `party_service.py` returning dicts. (Older docs mention models; they're gone.)

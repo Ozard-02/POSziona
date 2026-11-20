@@ -3,343 +3,409 @@
 {% block title %}Posziona - Admin{% endblock %}
 
 {% block content %}
-<div class="admin-layout">
-    <div class="admin-sidebar">
-            <div class="admin-sidebar-header">
-                <h2 data-i18n="admin_panel">Admin Panel</h2>
-                <div class="operator-identity" data-operator-identity></div>
-                <button id="back-to-pos" class="btn-secondary btn-sm" data-i18n="back_to_pos">← Back to POS</button>
-            </div>
-        <ul class="admin-nav">
-            <li><a href="#" data-section="dashboard" data-i18n="dashboard">Dashboard</a></li>
-            <li><a href="#" data-section="products" data-i18n="products">Products</a></li>
-            <li><a href="#" data-section="parties" data-i18n="parties">Parties</a></li>
-            <li><a href="#" data-section="operators" data-i18n="operators">Operators</a></li>
-            <li><a href="#" data-section="settings" data-i18n="settings">Settings</a></li>
-            <li><a href="#" data-section="tags" data-i18n="tags">Tags</a></li>
-            <li><a href="#" data-section="sections" data-i18n="sections">Sections</a></li>
-            <li><a href="#" data-section="backups" data-i18n="backups">Backups</a></li>
-            <li><button id="logout-admin" class="btn-secondary btn-sm" data-i18n="logout">Logout</button></li>
-        </ul>
-    </div>
-    <div class="admin-content">
-        <!-- Dashboard -->
-        <div id="admin-dashboard" class="admin-section active">
-            <h3 data-i18n="sales_dashboard">Sales Dashboard</h3>
-            <div class="dashboard-stats">
-                <div class="stat-card">
-                    <span class="stat-label" data-i18n="revenue">Total Revenue</span>
-                    <span class="stat-value" id="stat-revenue">€0.00</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label" data-i18n="orders">Total Orders</span>
-                    <span class="stat-value" id="stat-orders">0</span>
-                </div>
-            </div>
-            <h4 data-i18n="items_sold">Items Sold</h4>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <span></span>
-                <button id="export-recap-btn-dashboard" class="btn-secondary btn-sm" data-i18n="export_recap">Export Recap CSV</button>
-            </div>
-            <table class="data-table" id="items-sold-table">
-                <thead>
-                    <tr>
-                        <th data-i18n="product_col">Product</th>
-                        <th data-i18n="qty_col">Qty</th>
-                        <th data-i18n="amount_col">Amount</th>
-                        <th data-i18n="price_col">Price</th>
-                        <th data-i18n="stock_col">Stock</th>
-                        <th data-i18n="available_col">Available</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
+<div class="app-shell">
+    <header class="app-topbar">
+        <div class="topbar-left">
+            <h1 class="topbar-title" data-i18n="admin_panel">Admin Panel</h1>
+            <span class="party-chip" data-active-party>default</span>
+            <span class="operator-chip" data-operator-identity></span>
         </div>
+        <div class="topbar-right">
+            <button id="back-to-pos" class="btn-ghost btn-sm" type="button" data-i18n="back_to_pos">← Back to POS</button>
+        </div>
+    </header>
 
-        <!-- Products -->
-        <div id="admin-products" class="admin-section">
-            <div class="section-header">
-                <h3>Products</h3>
-                <div class="section-actions">
-                    <button id="add-product-btn" class="btn-primary btn-sm">Add Product</button>
-                    <button id="import-csv-btn" class="btn-secondary btn-sm">Import CSV</button>
-                    <a id="download-csv-template-btn" class="btn-secondary btn-sm" href="#" download="products_template.csv">Download Template</a>
-                    <button id="export-csv-btn" class="btn-secondary btn-sm">Export CSV</button>
+    <div class="admin-layout">
+        <aside class="admin-sidebar">
+            <div class="admin-brand">
+                <span class="brand-mark" aria-hidden="true">P</span>
+                <div class="admin-brand-text">Posziona<span data-i18n="admin">Admin</span></div>
+            </div>
+            <nav aria-label="Admin">
+                <ul class="admin-nav">
+                    <li><a href="#" class="active" aria-current="page" data-section="dashboard" data-i18n="dashboard">Dashboard</a></li>
+                    <li><a href="#" data-section="products" data-i18n="products">Products</a></li>
+                    <li><a href="#" data-section="parties" data-i18n="parties">Parties</a></li>
+                    <li><a href="#" data-section="operators" data-i18n="operators">Operators</a></li>
+                    <li><a href="#" data-section="settings" data-i18n="settings">Settings</a></li>
+                    <li><a href="#" data-section="tags" data-i18n="tags">Tags</a></li>
+                    <li><a href="#" data-section="sections" data-i18n="sections">Sections</a></li>
+                    <li><a href="#" data-section="backups" data-i18n="backups">Backups</a></li>
+                </ul>
+            </nav>
+            <button id="logout-admin" class="btn-ghost btn-sm admin-logout" type="button" data-i18n="logout">Logout</button>
+        </aside>
+
+        <main class="admin-content">
+            <!-- Dashboard -->
+            <div id="admin-dashboard" class="admin-section active">
+                <div class="section-header">
+                    <h2 data-i18n="sales_dashboard">Sales Dashboard</h2>
+                    <div class="section-actions">
+                        <button id="export-recap-btn-dashboard" class="btn-secondary btn-sm" type="button" data-i18n="export_recap">Export Recap CSV</button>
+                    </div>
+                </div>
+                <div class="dashboard-stats">
+                    <div class="stat-card">
+                        <span class="stat-label" data-i18n="stat_revenue">Total Revenue</span>
+                        <span class="stat-value" id="stat-revenue">€0.00</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label" data-i18n="stat_orders">Total Orders</span>
+                        <span class="stat-value" id="stat-orders">0</span>
+                    </div>
+                </div>
+
+                <div class="section-head">
+                    <h3 data-i18n="items_sold">Items Sold</h3>
+                </div>
+                <div class="table-wrap">
+                    <table class="data-table" id="items-sold-table">
+                        <thead>
+                            <tr>
+                                <th data-i18n="product_col">Product</th>
+                                <th class="num" data-i18n="qty_col">Qty</th>
+                                <th class="num" data-i18n="amount_col">Amount</th>
+                                <th class="num" data-i18n="price_col">Price</th>
+                                <th class="num" data-i18n="stock_col">Stock</th>
+                                <th data-i18n="available_col">Available</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <p id="no-items-sold" class="muted-text hidden" data-i18n="no_sales_data">No sales data</p>
+            </div>
+
+            <!-- Products -->
+            <div id="admin-products" class="admin-section">
+                <div class="section-header">
+                    <h2 data-i18n="products">Products</h2>
+                    <div class="section-actions">
+                        <button id="add-product-btn" class="btn-primary btn-sm" type="button" data-i18n="add_product">Add Product</button>
+                        <button id="import-csv-btn" class="btn-secondary btn-sm" type="button" data-i18n="import_csv">Import CSV</button>
+                        <a id="download-csv-template-btn" class="btn-secondary btn-sm" href="#" download="products_template.csv" data-i18n="download_template">Download Template</a>
+                        <button id="export-csv-btn" class="btn-secondary btn-sm" type="button" data-i18n="export_csv">Export CSV</button>
+                    </div>
+                </div>
+
+                <div class="product-filters">
+                    <input type="text" id="product-search" placeholder="Search by name or SKU..." class="filter-input" data-i18n-placeholder="search_products">
+                    <select id="filter-section" class="filter-select">
+                        <option value="" data-i18n="all_sections">All Sections</option>
+                    </select>
+                    <select id="filter-subsection" class="filter-select">
+                        <option value="" data-i18n="all_subsections">All Subsections</option>
+                    </select>
+                    <select id="filter-tag" class="filter-select">
+                        <option value="" data-i18n="all_tags">All Tags</option>
+                    </select>
+                    <select id="filter-active" class="filter-select">
+                        <option value="" data-i18n="all_statuses">All Statuses</option>
+                        <option value="true" data-i18n="active_only">Active Only</option>
+                        <option value="false" data-i18n="inactive_only">Inactive Only</option>
+                    </select>
+                    <button id="clear-filters-btn" class="btn-secondary btn-sm" type="button" data-i18n="clear_filters">Clear Filters</button>
+                </div>
+
+                <div id="bulk-edit-bar" class="bulk-edit-bar" style="display:none;">
+                    <span id="bulk-selected-count">0 selected</span>
+                    <button id="bulk-edit-btn" class="btn-primary btn-sm" type="button" data-i18n="bulk_edit">Bulk Edit Attributes...</button>
+                    <button id="bulk-assign-tags-btn" class="btn-secondary btn-sm" type="button" data-i18n="bulk_assign_tags">Assign Tags...</button>
+                    <button id="bulk-active-btn" class="btn-secondary btn-sm" type="button" data-i18n="mark_active">Mark Active</button>
+                    <button id="bulk-inactive-btn" class="btn-secondary btn-sm" type="button" data-i18n="mark_inactive">Mark Inactive</button>
+                    <button id="bulk-delete-btn" class="btn-danger btn-sm" type="button" data-i18n="delete_selected">Delete Selected</button>
+                    <button id="bulk-clear-selection" class="btn-secondary btn-sm" type="button" data-i18n="clear_selection">Clear Selection</button>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="data-table" id="products-table">
+                        <thead><tr>
+                            <th><input type="checkbox" id="select-all-products" aria-label="Select all"></th>
+                            <th data-i18n="name_col">Name</th>
+                            <th data-i18n="price_col" class="num">Price</th>
+                            <th data-i18n="section_col">Section > Subsection</th>
+                            <th data-i18n="tags">Tags</th>
+                            <th data-i18n="stock_col" class="num">Stock</th>
+                            <th data-i18n="status_col">Status</th>
+                            <th data-i18n="actions_col">Actions</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
             </div>
 
-            <!-- Filter Controls -->
-            <div class="product-filters">
-                <input type="text" id="product-search" placeholder="Search by name or SKU..." class="filter-input">
-                <select id="filter-section" class="filter-select">
-                    <option value="">All Sections</option>
-                </select>
-                <select id="filter-subsection" class="filter-select">
-                    <option value="">All Subsections</option>
-                </select>
-                <select id="filter-tag" class="filter-select">
-                    <option value="">All Tags</option>
-                </select>
-                <select id="filter-active" class="filter-select">
-                    <option value="">All Statuses</option>
-                    <option value="true">Active Only</option>
-                    <option value="false">Inactive Only</option>
-                </select>
-                <button id="clear-filters-btn" class="btn-secondary btn-sm">Clear Filters</button>
-            </div>
-
-            <!-- Bulk Edit Bar -->
-            <div id="bulk-edit-bar" class="bulk-edit-bar">
-                <span id="bulk-selected-count">0 selected</span>
-                <button id="bulk-edit-btn" class="btn-primary btn-sm">Bulk Edit Attributes...</button>
-                <button id="bulk-assign-tags-btn" class="btn-secondary btn-sm">Assign Tags...</button>
-                <button id="bulk-active-btn" class="btn-secondary btn-sm">Mark Active</button>
-                <button id="bulk-inactive-btn" class="btn-secondary btn-sm">Mark Inactive</button>
-                <button id="bulk-delete-btn" class="btn-danger btn-sm">Delete Selected</button>
-                <button id="bulk-clear-selection" class="btn-secondary btn-sm">Clear Selection</button>
-            </div>
-
-            <table class="data-table" id="products-table">
-                <thead><tr>
-                    <th><input type="checkbox" id="select-all-products"></th>
-                    <th>Name</th>
-                    <th>Price</th>
-                    <th>Section > Subsection</th>
-                    <th>Tags</th>
-                    <th>Stock</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr></thead>
-                <tbody></tbody>
-            </table>
-        </div>
-
-        <!-- Parties -->
-        <div id="admin-parties" class="admin-section">
-            <div class="section-header">
-                <h3 data-i18n="parties">Parties</h3>
-                <div class="section-actions">
-                    <button id="create-party-btn" class="btn-primary btn-sm" data-i18n="create_party">New Party</button>
-                    <button id="duplicate-party-btn" class="btn-secondary btn-sm" data-i18n="duplicate">Duplicate</button>
-                    <button id="export-recap-btn-party" class="btn-secondary btn-sm" data-i18n="export_recap">Export Recap CSV</button>
+            <!-- Parties -->
+            <div id="admin-parties" class="admin-section">
+                <div class="section-header">
+                    <h2 data-i18n="parties">Parties</h2>
+                    <div class="section-actions">
+                        <button id="create-party-btn" class="btn-primary btn-sm" type="button" data-i18n="create_party">New Party</button>
+                        <button id="duplicate-party-btn" class="btn-secondary btn-sm" type="button" data-i18n="duplicate">Duplicate</button>
+                        <button id="export-recap-btn-party" class="btn-secondary btn-sm" type="button" data-i18n="export_recap">Export Recap CSV</button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table class="data-table" id="parties-table">
+                        <thead><tr>
+                            <th data-i18n="name_col">Name</th>
+                            <th data-i18n="dates_col">Dates</th>
+                            <th data-i18n="actions_col">Actions</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
             </div>
-            <table class="data-table" id="parties-table">
-                <thead><tr><th data-i18n="name_col">Name</th><th data-i18n="dates_col">Dates</th><th data-i18n="actions_col">Actions</th></tr></thead>
-                <tbody></tbody>
-            </table>
-        </div>
 
-        <!-- Operators -->
-        <div id="admin-operators" class="admin-section">
-            <h3 data-i18n="operators">Operators</h3>
-            <button id="add-operator-btn" class="btn-primary btn-sm" data-i18n="add_operator">Add Operator</button>
-            <table class="data-table" id="operators-table">
-                <thead><tr><th data-i18n="name_col">Name</th><th data-i18n="role_col">Role</th><th data-i18n="pin_col">PIN</th><th data-i18n="actions_col">Actions</th></tr></thead>
-                <tbody></tbody>
-            </table>
-        </div>
-
-        <!-- Settings -->
-        <div id="admin-settings" class="admin-section">
-            <h3>Settings</h3>
-            <p class="section-help-text" data-i18n="settings_scope_note">The counter settings below apply to every party on this machine. Receipt and snapshot settings belong to the party selected above.</p>
-            <div class="form-group">
-                <label for="active-party-select" data-i18n="active_party">Active party:</label>
-                <select id="active-party-select"></select>
+            <!-- Operators -->
+            <div id="admin-operators" class="admin-section">
+                <div class="section-header">
+                    <h2 data-i18n="operators">Operators</h2>
+                    <div class="section-actions">
+                        <button id="add-operator-btn" class="btn-primary btn-sm" type="button" data-i18n="add_operator">Add Operator</button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table class="data-table" id="operators-table">
+                        <thead><tr>
+                            <th data-i18n="name_col">Name</th>
+                            <th data-i18n="role_col">Role</th>
+                            <th data-i18n="pin_col">PIN</th>
+                            <th data-i18n="actions_col">Actions</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
             </div>
-            <form id="settings-form">
-                <h4 data-i18n="settings_counter_scope">This counter — applies to every party</h4>
-                <details open>
-                <summary data-i18n="group_pos">Counter</summary>
+
+            <!-- Settings -->
+            <div id="admin-settings" class="admin-section">
+                <div class="section-header">
+                    <h2 data-i18n="settings">Settings</h2>
+                </div>
+                <p class="section-help-text" data-i18n="settings_scope_note">The counter settings below apply to every party on this machine. Receipt and snapshot settings belong to the party selected above.</p>
                 <div class="form-group">
-                    <label data-i18n="currency_label">Currency:</label>
-                    <input type="text" name="currency" value="€">
+                    <label for="active-party-select" data-i18n="active_party">Active party:</label>
+                    <select id="active-party-select"></select>
+                </div>
+                <form id="settings-form">
+                    <h3 class="settings-scope-title" data-i18n="settings_counter_scope">This counter — applies to every party</h3>
+                    <div class="settings-group">
+                        <details open>
+                        <summary data-i18n="group_pos">Counter</summary>
+                        <div class="form-group">
+                            <label data-i18n="currency_label">Currency:</label>
+                            <input type="text" name="currency" value="€">
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="language_label">Language:</label>
+                            <select name="language">
+                                <option value="en">English</option>
+                                <option value="it">Italiano</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="default_payment">Default Payment Method:</label>
+                            <select name="default_payment_method">
+                                <option value="" data-i18n="none_option">None (always ask)</option>
+                                <option value="cash" data-i18n="cash">Cash</option>
+                                <option value="card" data-i18n="card">Card</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <div class="setting-row">
+                                <span class="setting-label" data-i18n="skip_cash_tender">Skip cash tender screen (auto-accept exact amount)</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" name="skip_cash_tender" value="1" class="checkbox-input">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="setting-row">
+                                <span class="setting-label" data-i18n="auto_checkout_label">Auto checkout (when both toggles are on, checkout goes straight to receipt)</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" name="auto_checkout" value="1" class="checkbox-input">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        </details>
+                        <details>
+                        <summary data-i18n="group_printer">Printer</summary>
+                        <div class="form-group">
+                            <label data-i18n="printer_path">Printer device path (empty = browser print):</label>
+                            <input type="text" name="printer_path" placeholder="auto" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="printer_baud">Printer baud (serial only):</label>
+                            <select name="printer_baud">
+                                <option value="9600">9600</option>
+                                <option value="19200">19200</option>
+                                <option value="38400">38400</option>
+                                <option value="57600">57600</option>
+                                <option value="115200">115200</option>
+                            </select>
+                            <button type="button" id="detect-baud-btn" class="btn-secondary btn-sm" data-i18n="detect_baud">Detect</button>
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="printer_cols">Printer columns:</label>
+                            <input type="number" name="printer_cols" value="42" min="16" max="64">
+                        </div>
+                        <div class="form-group">
+                            <div class="setting-row">
+                                <span class="setting-label" data-i18n="printer_cut">Cut paper after receipt</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" name="printer_cut" value="1" class="checkbox-input">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        </details>
+                        <details>
+                        <summary data-i18n="group_system">System</summary>
+                        <div class="form-group">
+                            <label data-i18n="server_name_label">Server name shown to connecting clients (empty = machine name):</label>
+                            <input type="text" name="server_name" value="" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="snapshot_keep">Snapshots to keep:</label>
+                            <input type="number" name="snapshot_keep_count" value="12" min="1" max="100">
+                        </div>
+                        </details>
+                    </div>
+
+                    <h3 class="settings-scope-title" data-i18n="settings_party_scope">This party only</h3>
+                    <div class="settings-group">
+                        <details open>
+                        <summary data-i18n="group_receipt">Receipt</summary>
+                        <div class="form-group">
+                            <label data-i18n="receipt_header_label">Receipt header:</label>
+                            <input type="text" name="receipt_header" value="" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="receipt_footer_label">Receipt footer:</label>
+                            <input type="text" name="receipt_footer" value="">
+                        </div>
+                        <div class="form-group">
+                            <div class="setting-row">
+                                <span class="setting-label" data-i18n="split_receipts">Print one receipt per section</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" name="split_receipts" value="1" class="checkbox-input">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <div class="setting-row">
+                                <span class="setting-label" data-i18n="print_recovery_receipt">Print recovery receipt (always saved to logs)</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" name="print_recovery_receipt" value="1" class="checkbox-input">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        </details>
+                        <details>
+                        <summary data-i18n="group_snapshots">Snapshots</summary>
+                        <div class="form-group">
+                            <label data-i18n="snapshot_interval">Snapshot Interval (minutes):</label>
+                            <input type="number" name="snapshot_interval_minutes" value="5">
+                        </div>
+                        </details>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary" data-i18n="save_settings">Save Settings</button>
+                        <button type="button" id="test-print-btn" class="btn-secondary" data-i18n="test_print">Test print</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Tags -->
+            <div id="admin-tags" class="admin-section">
+                <div class="section-header">
+                    <h2 data-i18n="tags_styling">Tags &amp; Styling Rules</h2>
+                </div>
+                <p class="section-help-text" data-i18n="tags_help">Tags are assigned to products. Each tag can have a background color and text color that will be applied to products carrying that tag.</p>
+
+                <div class="tag-form">
+                    <div class="field">
+                        <label for="new-tag-name" data-i18n="tag_name">Name</label>
+                        <input type="text" id="new-tag-name" placeholder="Hot, Alcohol, ...">
+                    </div>
+                    <div class="field">
+                        <label for="new-tag-color" data-i18n="tag_badge">Badge</label>
+                        <input type="color" id="new-tag-color" value="#3498db">
+                    </div>
+                    <div class="field">
+                        <label for="new-tag-bg-color" data-i18n="tag_background">Background</label>
+                        <input type="color" id="new-tag-bg-color" value="#ffffff">
+                    </div>
+                    <div class="field">
+                        <label for="new-tag-text-color" data-i18n="tag_text">Text</label>
+                        <input type="color" id="new-tag-text-color" value="#333333">
+                    </div>
+                    <button id="create-tag-btn" class="btn-primary" type="button" data-i18n="create_tag">Create Tag</button>
+                </div>
+
+                <div class="tag-list" id="tag-list">
+                    <!-- Tags will be populated here -->
+                </div>
+
+                <div class="section-head">
+                    <h3 data-i18n="assign_tags_heading">Assign Tags to Products</h3>
                 </div>
                 <div class="form-group">
-                    <label data-i18n="language_label">Language:</label>
-                    <select name="language">
-                        <option value="en">English</option>
-                        <option value="it">Italiano</option>
+                    <label for="product-select" data-i18n="product_col">Product:</label>
+                    <select id="product-select">
+                        <option value="">-- Select a product --</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label data-i18n="default_payment">Default Payment Method:</label>
-                    <select name="default_payment_method">
-                        <option value="">None (always ask)</option>
-                        <option value="cash">Cash</option>
-                        <option value="card">Card</option>
+                    <label for="tag-select" data-i18n="tag_label">Add Tag:</label>
+                    <select id="tag-select">
+                        <option value="">-- Select a tag --</option>
                     </select>
+                    <button id="assign-tag-btn" class="btn-primary btn-sm" type="button" data-i18n="assign">Assign</button>
                 </div>
-                <div class="form-group">
-                    <div class="setting-row">
-                        <span class="setting-label" data-i18n="skip_cash_tender">Skip cash tender screen (auto-accept exact amount)</span>
-                        <label class="toggle-switch">
-                            <input type="checkbox" name="skip_cash_tender" value="1" class="checkbox-input">
-                            <span class="toggle-slider"></span>
-                        </label>
+                <div id="product-tags-display" class="product-tags-display">
+                    <!-- Current tags for selected product -->
+                </div>
+            </div>
+
+            <!-- Sections -->
+            <div id="admin-sections" class="admin-section">
+                <div class="section-header">
+                    <h2 data-i18n="sections">Sections</h2>
+                </div>
+                <p class="section-help-text" data-i18n="sections_help">Drag to reorder. Changes are saved automatically.</p>
+                <div id="sections-list" class="sections-list">
+                    <!-- Sections will be populated here -->
+                </div>
+            </div>
+
+            <!-- Backups -->
+            <div id="admin-backups" class="admin-section">
+                <div class="section-header">
+                    <h2 data-i18n="backups">Backups</h2>
+                    <div class="section-actions">
+                        <button id="snapshot-now-btn" class="btn-primary btn-sm" type="button" data-i18n="snapshot_now">Snapshot now</button>
                     </div>
                 </div>
-                <div class="form-group">
-                    <div class="setting-row">
-                        <span class="setting-label" data-i18n="auto_checkout_label">Auto checkout (when both toggles are on, checkout goes straight to receipt)</span>
-                        <label class="toggle-switch">
-                            <input type="checkbox" name="auto_checkout" value="1" class="checkbox-input">
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                </div>
-                </details>
-                <details>
-                <summary data-i18n="group_printer">Printer</summary>
-                <div class="form-group">
-                    <label data-i18n="printer_path">Printer device path (empty = browser print):</label>
-                    <input type="text" name="printer_path" placeholder="auto" autocomplete="off">
-                </div>
-                <div class="form-group">
-                    <label data-i18n="printer_baud">Printer baud (serial only):</label>
-                    <select name="printer_baud">
-                        <option value="9600">9600</option>
-                        <option value="19200">19200</option>
-                        <option value="38400">38400</option>
-                        <option value="57600">57600</option>
-                        <option value="115200">115200</option>
-                    </select>
-                    <button type="button" id="detect-baud-btn" class="btn-secondary" data-i18n="detect_baud">Detect</button>
-                </div>
-                <div class="form-group">
-                    <label data-i18n="printer_cols">Printer columns:</label>
-                    <input type="number" name="printer_cols" value="42" min="16" max="64">
-                </div>
-                <div class="form-group">
-                    <div class="setting-row">
-                        <span class="setting-label" data-i18n="printer_cut">Cut paper after receipt</span>
-                        <label class="toggle-switch">
-                            <input type="checkbox" name="printer_cut" value="1" class="checkbox-input">
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                </div>
-                </details>
-                <details>
-                <summary data-i18n="group_system">System</summary>
-                <div class="form-group">
-                    <label data-i18n="server_name_label">Server name shown to connecting clients (empty = machine name):</label>
-                    <input type="text" name="server_name" value="" autocomplete="off">
-                </div>
-                <div class="form-group">
-                    <label data-i18n="snapshot_keep">Snapshots to keep:</label>
-                    <input type="number" name="snapshot_keep_count" value="12" min="1" max="100">
-                </div>
-                </details>
-
-                <h4 data-i18n="settings_party_scope">This party only</h4>
-                <details open>
-                <summary data-i18n="group_receipt">Receipt</summary>
-                <div class="form-group">
-                    <label data-i18n="receipt_header_label">Receipt header:</label>
-                    <input type="text" name="receipt_header" value="" autocomplete="off">
-                </div>
-                <div class="form-group">
-                    <label data-i18n="receipt_footer_label">Receipt footer:</label>
-                    <input type="text" name="receipt_footer" value="">
-                </div>
-                <div class="form-group">
-                    <div class="setting-row">
-                        <span class="setting-label" data-i18n="split_receipts">Print one receipt per section</span>
-                        <label class="toggle-switch">
-                            <input type="checkbox" name="split_receipts" value="1" class="checkbox-input">
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <div class="setting-row">
-                        <span class="setting-label" data-i18n="print_recovery_receipt">Print recovery receipt (always saved to logs)</span>
-                        <label class="toggle-switch">
-                            <input type="checkbox" name="print_recovery_receipt" value="1" class="checkbox-input">
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                </div>
-                </details>
-                <details>
-                <summary data-i18n="group_snapshots">Snapshots</summary>
-                <div class="form-group">
-                    <label data-i18n="snapshot_interval">Snapshot Interval (minutes):</label>
-                    <input type="number" name="snapshot_interval_minutes" value="5">
-                </div>
-                </details>
-                <button type="submit" class="btn-primary" data-i18n="save_settings">Save Settings</button>
-                <button type="button" id="test-print-btn" class="btn-secondary" data-i18n="test_print">Test print</button>
-            </form>
-        </div>
-
-        <!-- Tags -->
-        <div id="admin-tags" class="admin-section">
-            <h3>Tags &amp; Styling Rules</h3>
-            <p class="section-help-text">
-              Tags are assigned to products. Each tag can have a background color
-              and text color that will be applied to products carrying that tag.
-            </p>
-
-            <!-- Create New Tag -->
-            <div class="tag-form">
-                <input type="text" id="new-tag-name" placeholder="Tag name (e.g. Hot, Alcohol, etc.)">
-                <input type="color" id="new-tag-color" value="#3498db">
-                <input type="color" id="new-tag-bg-color" value="#ffffff">
-                <input type="color" id="new-tag-text-color" value="#333333">
-                <button id="create-tag-btn" class="btn-primary">Create Tag</button>
-            </div>
-
-            <!-- Tag List -->
-            <div class="tag-list" id="tag-list">
-                <!-- Tags will be populated here -->
-            </div>
-
-            <!-- Assign Tags to Products -->
-            <h4>Assign Tags to Products</h4>
-            <div class="form-group">
-                <label for="product-select">Product:</label>
-                <select id="product-select">
-                    <option value="">-- Select a product --</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="tag-select">Add Tag:</label>
-                <select id="tag-select">
-                    <option value="">-- Select a tag --</option>
-                </select>
-                <button id="assign-tag-btn" class="btn-primary btn-sm">Assign</button>
-            </div>
-            <div id="product-tags-display" class="product-tags-display">
-                <!-- Current tags for selected product -->
-            </div>
-        </div>
-
-        <!-- Sections -->
-        <div id="admin-sections" class="admin-section">
-            <h3>Sections</h3>
-            <p class="section-help-text">Drag to reorder. Changes are saved automatically.</p>
-            <div id="sections-list" class="sections-list">
-                <!-- Sections will be populated here -->
-            </div>
-        </div>
-
-        <!-- Backups -->
-        <div id="admin-backups" class="admin-section">
-            <div class="section-header">
-                <h3 data-i18n="backups">Backups</h3>
-                <div class="section-actions">
-                    <button id="snapshot-now-btn" class="btn-primary btn-sm" data-i18n="snapshot_now">Snapshot now</button>
+                <p class="section-help-text hidden" data-i18n="no_snapshots" id="no-snapshots-hint">No snapshots yet — take one before the party starts.</p>
+                <div class="table-wrap">
+                    <table class="data-table" id="backups-table">
+                        <thead><tr>
+                            <th data-i18n="name_col">Name</th>
+                            <th data-i18n="size_col">Size</th>
+                            <th data-i18n="actions_col">Actions</th>
+                        </tr></thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
             </div>
-            <p class="section-help-text" data-i18n="no_snapshots" id="no-snapshots-hint" style="display:none">No snapshots yet — take one before the party starts.</p>
-            <table class="data-table" id="backups-table">
-                <thead><tr><th data-i18n="name_col">Name</th><th data-i18n="size_col">Size</th><th data-i18n="actions_col">Actions</th></tr></thead>
-                <tbody></tbody>
-            </table>
-        </div>
+        </main>
     </div>
 </div>
 {% endblock %}

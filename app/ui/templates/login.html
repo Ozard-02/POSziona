@@ -3,14 +3,21 @@
 {% block title %}Posziona - Login{% endblock %}
 
 {% block content %}
-<div class="login-screen">
-    <h1>Posziona</h1>
+<main class="auth-shell">
+    <div class="auth-card">
+        <header class="auth-brand">
+            <span class="brand-mark" aria-hidden="true">P</span>
+            <div>
+                <div class="brand-name">Posziona</div>
+                <div class="brand-tagline" data-i18n="brand_tagline">Point of sale</div>
+            </div>
+        </header>
 
-    <!-- Startup screen: mode + server selection -->
-    <div id="startup-screen" class="startup-screen">
-        <div class="startup-card">
-            <h2 id="startup-title">Posziona</h2>
-            <p id="startup-subtitle">Select startup mode</p>
+        <!-- Startup screen: mode + server selection -->
+        <div id="startup-screen" class="auth-panel">
+            <p class="auth-kicker" data-i18n="start_shift">Start the shift</p>
+            <h1 id="startup-title">Posziona</h1>
+            <p id="startup-subtitle" class="auth-sub">Select startup mode</p>
             <p id="server-identity" class="server-identity hidden"></p>
 
             <div id="recent-servers" class="recent-servers hidden">
@@ -19,40 +26,74 @@
             </div>
 
             <div class="mode-options" id="mode-options">
-                <button id="mode-local" class="btn-primary mode-btn">
-                    <span class="mode-label">This Server</span>
-                    <span class="mode-desc">Log in on the server in the address bar</span>
+                <button id="mode-local" class="mode-btn mode-btn-primary" type="button">
+                    <span class="mode-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+                    </span>
+                    <span class="mode-text">
+                        <span class="mode-label">This Server</span>
+                        <span class="mode-desc">Log in on the server in the address bar</span>
+                    </span>
+                    <span class="mode-chevron" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+                    </span>
                 </button>
-                <button id="mode-remote" class="btn-secondary mode-btn">
-                    <span class="mode-label">Connect to Remote</span>
-                    <span class="mode-desc">Ask at the main till — type the address shown on its screen</span>
+                <button id="mode-remote" class="mode-btn" type="button">
+                    <span class="mode-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18"/></svg>
+                    </span>
+                    <span class="mode-text">
+                        <span class="mode-label">Connect to Remote</span>
+                        <span class="mode-desc">Ask at the main till — type the address shown on its screen</span>
+                    </span>
+                    <span class="mode-chevron" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+                    </span>
                 </button>
             </div>
 
             <div id="remote-connect" class="remote-connect hidden">
-                <input type="text" id="server-input" placeholder="192.168.1.10" autocomplete="off">
-                <p id="remote-error" class="error hidden"></p>
-                <button id="connect-btn" class="btn-primary">Connect</button>
-                <button id="back-to-modes" class="btn-secondary">Back</button>
+                <div class="form-group">
+                    <label for="server-input" data-i18n="till_address">Till address</label>
+                    <input type="text" id="server-input" placeholder="192.168.1.10" autocomplete="off">
+                    <p class="form-help-text" data-i18n="till_address_hint">Ask at the main till, then type the address shown on its screen.</p>
+                </div>
+                <p id="remote-error" class="error hidden" role="alert"></p>
+                <button id="connect-btn" class="btn-primary" type="button">Connect</button>
+                <button id="back-to-modes" class="btn-secondary" type="button">Back</button>
+            </div>
+        </div>
+
+        <!-- Login form (hidden until mode is chosen) -->
+        <div id="login-form-container" class="login-form-container auth-panel hidden">
+            <p class="auth-kicker" data-i18n="welcome_back">Welcome back</p>
+            <h1 data-i18n="sign_in">Sign in</h1>
+            <p class="auth-sub" data-i18n="sign_in_hint">Choose the party and your name, then enter your PIN.</p>
+            <div class="login-form">
+                <div class="form-group">
+                    <label for="party-select" data-i18n="group_party">Party</label>
+                    <select id="party-select" aria-label="Party">
+                        <option value="" disabled selected data-i18n="loading">Loading…</option>
+                    </select>
+                </div>
+                <!-- Which operator: chosen, not guessed from the PIN. Hidden
+                     when the party has a single active operator. -->
+                <div class="form-group hidden" id="operator-field">
+                    <label for="operator-select" data-i18n="operator">Operator</label>
+                    <select id="operator-select" class="hidden" aria-label="Operator"></select>
+                </div>
+                <div class="form-group">
+                    <label for="pin-input">PIN</label>
+                    <input type="password" id="pin-input" placeholder="••••" maxlength="4"
+                           autocomplete="off" inputmode="numeric" aria-label="PIN">
+                </div>
+                <p id="no-operators" class="error hidden" role="alert"></p>
+                <p id="login-error" class="error hidden" role="alert"></p>
+                <button id="login-btn" class="btn-primary" type="button">Login</button>
             </div>
         </div>
     </div>
-
-    <!-- Login form (hidden until mode is chosen) -->
-    <div id="login-form-container" class="login-form-container hidden">
-        <div class="login-form">
-            <select id="party-select" aria-label="Party"></select>
-            <!-- Which operator: chosen, not guessed from the PIN. Hidden
-                 when the party has a single active operator. -->
-            <select id="operator-select" class="hidden" aria-label="Operator"></select>
-            <input type="password" id="pin-input" placeholder="PIN" maxlength="4"
-                   autocomplete="off" inputmode="numeric" aria-label="PIN">
-            <p id="no-operators" class="error hidden"></p>
-            <p id="login-error" class="error hidden"></p>
-            <button id="login-btn" class="btn-primary">Login</button>
-        </div>
-    </div>
-</div>
+</main>
 {% endblock %}
 
 {% block scripts_extra %}
@@ -124,12 +165,16 @@ document.addEventListener('DOMContentLoaded', function() {
             if (loginBtn) loginBtn.disabled = empty;
             if (pinInput) pinInput.disabled = empty;
             operatorSelect.classList.toggle('hidden', roster.length <= 1);
+            var operatorField = document.getElementById('operator-field');
+            if (operatorField) operatorField.classList.toggle('hidden', roster.length <= 1);
             if (stealFocus !== false) focusFirstField();
             return roster;
         }).catch(function() {
             // Roster unavailable (server going down): the PIN still can be
             // typed and the login request reports the real failure.
             operatorSelect.classList.add('hidden');
+            var operatorField = document.getElementById('operator-field');
+            if (operatorField) operatorField.classList.add('hidden');
             if (noOperators) noOperators.classList.add('hidden');
             if (loginBtn) loginBtn.disabled = false;
             if (pinInput) pinInput.disabled = false;
@@ -222,7 +267,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 var ver = (st && st.version) ? ' (v' + st.version + ')' : '';
                 var screens = (st && st.connected_screens) || 0;
                 ident.textContent = t('this_server') + ': ' + name + ver +
-                    ' · ' + screens + ' ' + t('screens_connected');
+                    ' · ' + screens + ' ' + t(screens === 1 ? 'screen_connected' : 'screens_connected');
                 ident.classList.remove('hidden');
             }
         }).catch(function() { renderRecent(); });

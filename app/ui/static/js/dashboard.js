@@ -1,6 +1,9 @@
 /* Dashboard / Reports screen JavaScript */
 document.addEventListener('DOMContentLoaded', function() {
     const db = getActiveDb();
+    document.querySelectorAll('[data-active-party]').forEach(function(el) {
+        el.textContent = db;
+    });
 
     const reportType = document.getElementById('report-type');
     const reportDate = document.getElementById('report-date');
@@ -19,6 +22,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const reportTables = document.getElementById('report-tables');
     const cashCloseBtn = document.getElementById('cash-close-btn');
     const tillBody = document.querySelector('#till-table tbody');
+    const noTill = document.getElementById('no-till-counts');
+    const tillWrap = tillBody ? tillBody.closest('.table-wrap') : null;
 
     // Set default date to today — the LOCAL calendar day, like the
     // server's ?date= filter (toISOString() is UTC: right after midnight
@@ -68,6 +73,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // up in the till or in the payment report.
     const tabsBody = document.querySelector('#tabs-table tbody');
     const noTabs = document.getElementById('no-open-tabs');
+    const tabsWrap = tabsBody ? tabsBody.closest('.table-wrap') : null;
 
     async function loadOpenTabs() {
         if (!tabsBody) return;
@@ -75,6 +81,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const tabs = await fetchJSON(`${API_BASE}/orders/tabs?db=${db}`);
             tabsBody.innerHTML = '';
             if (noTabs) noTabs.classList.toggle('hidden', tabs.length > 0);
+            if (tabsWrap) tabsWrap.classList.toggle('hidden', tabs.length === 0);
             tabs.forEach(function(tab) {
                 const tr = document.createElement('tr');
                 const guest = document.createElement('td');
@@ -84,6 +91,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const op = document.createElement('td');
                 op.textContent = tab.operator_name || '';
                 const total = document.createElement('td');
+                total.className = 'num';
                 total.textContent = formatCurrency(tab.total);
 
                 const action = document.createElement('td');
@@ -146,15 +154,23 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             const rows = await fetchJSON(`${API_BASE}/orders/cash-counts?db=${db}`);
             tillBody.innerHTML = '';
+            if (noTill) noTill.classList.toggle('hidden', rows.length > 0);
+            if (tillWrap) tillWrap.classList.toggle('hidden', rows.length === 0);
             rows.forEach(function(r) {
                 const tr = document.createElement('tr');
                 const diff = Number(r.difference) || 0;
                 tr.innerHTML = `<td></td><td></td><td></td><td></td>`;
                 tr.children[0].textContent = (r.timestamp || '').slice(0, 16).replace('T', ' ');
+                tr.children[1].className = 'num';
                 tr.children[1].textContent = formatCurrency(r.expected_cash);
+                tr.children[2].className = 'num';
                 tr.children[2].textContent = formatCurrency(r.counted_cash);
                 tr.children[3].textContent = (diff > 0 ? '+' : '') + formatCurrency(diff);
-                if (diff !== 0) tr.children[3].style.color = '#c0392b';
+                if (diff !== 0) {
+                    tr.children[3].className = 'num ' + (diff > 0 ? 'amount-positive' : 'amount-negative');
+                } else {
+                    tr.children[3].className = 'num';
+                }
                 tillBody.appendChild(tr);
             });
         } catch (e) {
@@ -255,28 +271,26 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function renderReport(data) {
-        // Update summary sidebar
+        // The three figures live in the stat cards above; the summary line
+        // only names the period, so the same numbers are not printed twice.
         revenueEl.textContent = formatCurrency(data.summary.total_revenue || 0);
         ordersEl.textContent = data.summary.total_orders || 0;
         discountsEl.textContent = formatCurrency(data.summary.total_discounts || 0);
 
-        // Render header
+        // Render period label
         const periodLabel = data.type === 'day' ? t('today') + ' (' + data.date + ')' : t('whole_party');
         reportSummary.innerHTML = `
-            <h3>${t('summary')}: ${periodLabel}</h3>
-            <div class="total-row"><span>${t('revenue')}:</span><span>${formatCurrency(data.summary.total_revenue || 0)}</span></div>
-            <div class="total-row"><span>${t('orders')}:</span><span>${data.summary.total_orders || 0}</span></div>
-            <div class="total-row"><span>${t('discounts')}:</span><span>${formatCurrency(data.summary.total_discounts || 0)}</span></div>
+            <p class="report-period">${t('summary')} · ${periodLabel}</p>
         `;
 
         // Render items table
-        let html = '<h4>' + t('items_sold') + '</h4>';
+        let html = '<h3>' + t('items_sold') + '</h3>';
         if (data.items.length > 0) {
-            html += '<table class="data-table"><thead><tr><th>' + t('product_col') + '</th><th>' + t('qty_col') + '</th><th>' + t('unit_price_col') + '</th><th>' + t('amount_col') + '</th></tr></thead><tbody>';
+            html += '<div class="table-wrap"><table class="data-table"><thead><tr><th>' + t('product_col') + '</th><th class="num">' + t('qty_col') + '</th><th class="num">' + t('unit_price_col') + '</th><th class="num">' + t('amount_col') + '</th></tr></thead><tbody>';
             data.items.forEach(item => {
-                html += '<tr><td>' + escapeHtml(item.product_name) + '</td><td>' + item.total_quantity + '</td><td>' + formatCurrency(item.current_price || 0) + '</td><td>' + formatCurrency(item.total_amount) + '</td></tr>';
+                html += '<tr><td>' + escapeHtml(item.product_name) + '</td><td class="num">' + item.total_quantity + '</td><td class="num">' + formatCurrency(item.current_price || 0) + '</td><td class="num">' + formatCurrency(item.total_amount) + '</td></tr>';
             });
-            html += '</tbody></table>';
+            html += '</tbody></table></div>';
         } else {
             html += '<p class="muted-text">' + t('no_sales_data') + '</p>';
         }
