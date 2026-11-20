@@ -187,7 +187,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (logoutBtn) logoutBtn.textContent = t('logout');
         if (dashboardBtn) dashboardBtn.textContent = t('reports');
         if (adminBtn) adminBtn.textContent = t('admin');
-        if (opSettingsBtn) opSettingsBtn.setAttribute('aria-label', t('settings'));
+        if (opSettingsBtn) {
+            opSettingsBtn.setAttribute('aria-label', t('settings'));
+            opSettingsBtn.title = t('settings');
+        }
         if (partyNameEl) partyNameEl.title = t('select_party');
         if (connLabel) connLabel.textContent = t(connected ? 'online' : 'offline');
 

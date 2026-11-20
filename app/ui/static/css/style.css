@@ -691,6 +691,10 @@ input[type="color"] {
     flex: 0 0 auto;
 }
 
+.party-chip:empty {
+    display: none;
+}
+
 .topbar-nav {
     display: flex;
     align-items: center;

@@ -426,6 +426,7 @@ document.addEventListener('DOMContentLoaded', function() {
         dialog.className = 'dialog-content';
         dialog.setAttribute('role', 'dialog');
         dialog.setAttribute('aria-modal', 'true');
+        dialog.setAttribute('aria-label', title);
         dialog.innerHTML = `
             <h3>${title}</h3>
             <div id="dialog-content">${htmlContent}</div>
